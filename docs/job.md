@@ -232,31 +232,23 @@ another file of yours is already on its way to the same machine. "This machine i
 already being sent a file. Wait until that one is done and press again; nothing has
 been sent." Two at once interleave into one file made of two jobs.
 
-A second one of the same kind, and this one is about the engine rather than about
-you: "This machine is already being sent something on this line. Wait until that is
-done and press again; nothing has been sent." Sending takes the line for itself for
-as long as it lasts, because it has to. A Ruida that has been running for a while
-has a queue of status questions standing in front of your file — measured on a
-KH-5030: fifty of them, growing, because the machine acknowledges every question and
-answers none of them, and each unanswered one costs the engine a second and a half of
-waiting. Left alone, your first block would be behind all of them and the transfer
-would be refused before it began. So the questions are dropped and the asking is held
-off until the file is through; nobody was waiting for those answers. If the line will
-not come free within two seconds, that is the engine sending a file of its own, and
-then you get the sentence above instead of a wait without end.
+Sending holds the engine's status monitor off while the file is transferred. Existing
+commands are allowed to finish; the queue is never cleared to make room for a file.
+If the line cannot be claimed within two seconds, the request refuses before sending.
 
-And it needs the machine on the other end: "There is no connection to the machine,
-so the file cannot be sent. Connect first; nothing has been sent."
+Every UDP packet waits for the controller's acknowledgement before the next packet is
+submitted, including the final packet. USB has no equivalent ACK: there the engine
+confirms that its transport write completed. Neither result proves a physical burn.
+A missing acknowledgement stops the transfer and reports its uncertain outcome;
+the app does not resend that packet or continue the file after reconnecting.
 
-That one waits before it says so. A Ruida falls silent for a few seconds at a time
-and comes back on its own with nothing having changed — measured on a KH-5030 over
-three minutes of an idle connection: four gaps, of 3.9, 4.5 and 4.6 seconds and one
-too short to see. The wire says the machine simply stops answering, and then answers
-again. So a press that lands in such a gap is not sent away: the line is given eight
-seconds to come back, and only a machine that is still quiet after that gets the
-refusal. A gap that falls between two blocks does not abandon the file either — the
-blocks carry on where they stopped, and the silence is not counted against the ten
-seconds a block is allowed to take.
+A disconnected session is given up to eight seconds to reconnect before an upload
+begins. This does not hide the disconnection on screen. If it stays disconnected:
+"There is no connection to the machine, so the file cannot be sent. Connect first;
+nothing has been sent."
+
+Sending requires the bundled Ruida session update. An older engine refuses before
+sending any bytes instead of guessing whether its queue has drained.
 
 The refusal for a job on the machine is written out as a whole sentence as well — "A
 job is on this machine — burning, or waiting in the queue to start. Wait until it is
@@ -760,41 +752,23 @@ a series is going. See [Variable text](variable-text.md#a-series-with-print-and-
 
 ## Connect and disconnect
 
-The connection to the laser lives in the status bar at the bottom left, beside
-the machine state. It reads one of five things, and only the last one is a
-promise:
+The status bar reports the controller connection independently of the local job:
 
-- **Machine unknown** — this page is not talking to OpenKerf, so nobody can say.
-- **Machine not connected** — the engine is running, no machine attached.
-- **The line is faltering** — the machine has gone quiet for a moment. Hover the
-  text: "The machine has gone quiet for a moment. A Ruida does that by itself and
-  answers again within a few seconds; there is nothing to do."
-- **Connection unknown** — the driver does not say. Hover the text and it explains
-  itself: "The engine is running, but this driver does not report whether a machine
-  is attached. You will notice on the first job: it stays in the queue if nothing
-  is listening."
-- **Connected to the laser**.
+- **Machine unknown** — the page cannot reach OpenKerf.
+- **Machine not connected** — the server is reachable but the controller is not confirmed connected.
+- **Connection unknown** — the driver does not report its connection.
+- **Connected to the laser** — the driver reports a confirmed connection.
 
-The faltering one is worth a paragraph, because it looks like a fault and is not.
-A Ruida stops answering for a few seconds at a time and then carries on as if
-nothing happened. Measured on a KH-5030 over three minutes of an idle connection:
-four such gaps, holding for 3.9, 4.5 and 4.6 seconds and once for less than a
-sample. On the wire our side keeps asking straight through them — seven packets
-went out in one gap with no answer at all — and then the replies resume with
-nothing in between to explain it. Nothing is unplugged and nothing needs doing.
-The bar used to read "Machine not connected" at each of those, twice a minute,
-which is how a warning stops being read. It only says that now when the silence
-has lasted more than eight seconds; under that it says the line is faltering, and
-the dot stays the working colour because the machine is working.
+Connection loss is shown immediately in the next status snapshot, even with a running
+or paused job. There is no eight-second green grace period. The job's progress and
+pause/stop controls remain separate; a local spooler entry is not proof of a working
+connection. Head coordinates are marked as last seen while the connection is unconfirmed.
 
-Beside it, when the driver has a command for it, a button. **Connect** ("Open the
-connection to the machine. This moves nothing.") goes straight through.
-**Disconnect** asks first: "Disconnect? Reconnecting afterwards does not always
-work; sometimes only a restart of the server helps." — with **Leave it** and
-**Disconnect**, the way out first as in every other question.
-
-That warning is measured, not cautious wording. On a real machine, reconnecting
-after a disconnect sometimes works and sometimes does not.
+**Connect** asks the session worker to establish the connection. **Disconnect** keeps
+the repaired Ruida session disconnected until the user connects again. Its confirmation
+reads "Disconnect from the machine? Its physical state may change while disconnected;
+check it before reconnecting." Stop and inspect the machine itself if you cannot
+confirm its state through the connection.
 
 **When it goes wrong.**
 
@@ -803,9 +777,7 @@ after a disconnect sometimes works and sometimes does not.
   work goes to it."
 - A failed attempt reports what the engine said, or, when it says nothing:
   "Connecting did not work, and the engine does not say why. Is the machine on,
-  and is the address in the machine settings right?" — followed by a note that
-  something switched or disconnected during the session can leave only a server
-  restart as the way back.
+  and is the address in the machine settings right?" The connection has not been confirmed.
 - On the far right of the status bar, **OpenKerf live** or **OpenKerf away** — the
   line between this page and the server, which can break on its own.
 - If the server restarts while the page is open: "The server has restarted" and
@@ -820,7 +792,7 @@ layers. It monitors and it stops. At the bottom: "You design on the desktop — 
 screen keeps an eye on the machine."
 
 The top line never scrolls: a coloured dot, the machine state (**Ready**,
-**Busy**, **Paused**, **Alarm**, **Not connected**, **Line faltering**, or **No
+**Busy**, **Paused**, **Alarm**, **Not connected**, **Connection unknown**, or **No
 connection** when the
 server is away) and the machine's name.
 

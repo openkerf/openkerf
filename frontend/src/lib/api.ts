@@ -51,7 +51,7 @@ export type Connection = {
 	state: 'connected' | 'disconnected' | 'unknown';
 	detail: string | null;
 	/** How long this reading has read the same, in milliseconds. Absent from a server
-	 *  older than the field; see `machineState`, which then keeps the old meaning. */
+	 *  older than the field. Diagnostic only; it does not hide connection loss. */
 	held_ms?: number;
 };
 
@@ -169,82 +169,33 @@ export type SnapshotEvent = { type: 'snapshot'; data: Snapshot };
 export type HelloEvent = { type: 'hello'; instance: string };
 export type ApiEvent = SignalEvent | SnapshotEvent | HelloEvent;
 
-/**
- * Machine state as the UI shows it — doubly encoded, never colour alone.
- *
- * `offline` and `unplugged` are two different disasters and ask for two different
- * actions. `offline`: the app cannot reach the OpenKerf server — restart the server,
- * or you are on the wrong address. `unplugged`: the server is running fine, but no
- * machine is attached — check the cable or switch it on. One word for both sends
- * half the people to the
- * verkeerde kabel.
- */
+/** Controller reachability is independent of any locally queued or running job. */
+export type MachineConnection = 'offline' | 'unplugged' | 'unknown' | 'connected';
 export type MachineState =
 	| 'offline'
 	| 'unplugged'
-	| 'faltering'
+	| 'unknown'
 	| 'ready'
 	| 'busy'
 	| 'paused'
 	| 'alarm';
 
-/**
- * How long a machine may be silent before it counts as gone.
- *
- * A Ruida stops answering for seconds at a time and comes back with nothing having
- * changed. Measured on a KH-5030 over UDP on 11 September 2026, three minutes of an
- * idle connection sampled every 0.3 s: four gaps, holding "disconnected" for 3.9,
- * 4.5 and 4.6 s and once for less than a sample. The wire says the controller simply
- * goes quiet — seven of our ENQ packets went out in one gap with no answer at all —
- * and then answers again.
- *
- * Eight seconds therefore sits above every gap measured and below the point where a
- * person standing at the laser would rather be told. Under it the bar says the line
- * is faltering; over it, that the machine is not connected. The same number the
- * upload waits out (`RuidaUpload.line_gap_seconds`), because they are answering one
- * question.
- */
-export const LINE_GAP_MS = 8000;
+export function machineConnection(device: Device | null, serverConnected: boolean): MachineConnection {
+	if (!serverConnected || !device) return 'offline';
+	if (device.connection?.state === 'connected') return 'connected';
+	if (device.connection?.state === 'disconnected') return 'unplugged';
+	return 'unknown';
+}
 
-/**
- * What the machine is doing.
- *
- * `laser_status` on its own is not a trustworthy source: MeerK40t's Ruida driver sets
- * that field nowhere (verified with a grep over `meerk40t/ruida/`), so on our target
- * machine it stays "idle" forever. A green "Ready" above a burning laser is exactly
- * the failure you must not make here, which is why a running job in the spooler
- * counts just as heavily.
- */
+/** The machine badge prioritises reachability; jobPhase keeps the job's own state. */
 export function machineState(device: Device | null, connected: boolean): MachineState {
-	if (!connected || !device) return 'offline';
-	// currentJob and not runningJob: a paused Lihuiyu job has `running === false` and
-	// therefore fell out of sight — pause and all.
+	const link = machineConnection(device, connected);
+	if (link !== 'connected') return link;
 	const job = currentJob(device);
-	if (device.laser_status === 'pause' || device.laser_status === 'paused') return 'paused';
-	// The driver itself, and that is the only hard source (see `StatusReader.paused`).
-	// It counts without a job too: a machine that is paused does not start the next
-	// piece of work, and then "Ready" is a promise that does not come true.
-	if (device.paused === true) return 'paused';
-	// The drivers do not signal a pause back (FEATURE-GAPS P3), so a job that has run
-	// and now stands still is the only evidence we get. Without this the bar said
-	// "Busy" next to a button labelled "Resume".
+	if (device?.laser_status === 'pause' || device?.laser_status === 'paused' || device?.paused)
+		return 'paused';
 	if (isStalled(job)) return 'paused';
-	if (device.laser_status === 'active') return 'busy';
-	if (job || device.spooler.idle === false) return 'busy';
-	// Only here, and not earlier: a machine that is burning is connected by
-	// definition, and a driver that does not report its connection must not write off a
-	// running job as "not connected". But a quiet machine without a cable is *not*
-	// "Ready" — that was a green dot above a dead port.
-	if (device.connection?.state === 'disconnected') {
-		// How long it has said so decides which of the two it is. A machine that is off
-		// and a machine between two breaths report the identical flag, and the age is
-		// the only thing that separates them — see `LINE_GAP_MS`. Without the field, an
-		// older server, the old reading stands: say not connected rather than invent a
-		// gap that is about to end.
-		const held = device.connection.held_ms;
-		if (typeof held === 'number' && held < LINE_GAP_MS) return 'faltering';
-		return 'unplugged';
-	}
+	if (device?.laser_status === 'active' || job || device?.spooler.idle === false) return 'busy';
 	return 'ready';
 }
 
@@ -479,7 +430,7 @@ const DONE = 0.995;
 
 export function jobPhase(device: Device | null, job: Job | null, designEmpty: boolean): JobPhase {
 	if (!job) return designEmpty ? 'nothing' : 'ready';
-	if (isPaused(job)) return 'paused';
+	if (isPaused(job) || device?.paused || device?.laser_status === 'pause' || device?.laser_status === 'paused') return 'paused';
 	if (job.running) return 'burning';
 	if ((job.progress ?? 0) >= DONE) return 'done';
 	// Started but standing still is a pause; nothing done yet is waiting its turn.
@@ -517,7 +468,7 @@ export function transportAllowed(
 		phase,
 		blocked
 	}: {
-		able: { pause: boolean; resume: boolean; stop: boolean } | undefined;
+		able: { pause: boolean; resume: boolean; stop: boolean } | null | undefined;
 		phase: JobPhase;
 		blocked: boolean;
 	}
@@ -581,6 +532,7 @@ export const PAUSE_KEY = 'Pause';
  * not reach it. Everything that a user reads goes through the catalogue.
  */
 export function machineStateLabel(state: MachineState): string {
+	if (state === 'unknown') return t('status.machine.connectionUnknown');
 	return t(`machine.state.${state}` as never);
 }
 
@@ -590,7 +542,7 @@ export function machineStateLabel(state: MachineState): string {
  * sentence that belongs underneath it.
  */
 export function machineStateHint(state: MachineState): string | undefined {
-	if (state === 'offline' || state === 'unplugged' || state === 'alarm' || state === 'faltering')
+	if (state === 'offline' || state === 'unplugged' || state === 'alarm' || state === 'unknown')
 		return t(`machine.hint.${state}` as never);
 	return undefined;
 }

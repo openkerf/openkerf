@@ -1,6 +1,7 @@
 <script lang="ts">
 	import {
 		formatDuration,
+		machineConnection,
 		formatMm,
 		remainingSeconds,
 		totalSeconds,
@@ -79,83 +80,16 @@
 		? Math.round(job.progress * 100)
 		: null);
 
-	// Without a connection every number below is a memory, not a measurement. They
-	// stay — they still say where the head was — but they must not present
-	// themselves as current.
-	let fresh = $derived(connected);
-
-	/**
-	 * What the bar says about the connection, in the right order of bad news.
-	 *
-	 * There used to be one sentence: "Connected to the laser", or not. It was
-	 * untrue three ways over. It said "connected" while no cable was plugged in, on
-	 * a dropped server it pointed at the laser while the problem was the server —
-	 * and then you state there checking a USB cable that is perfectly fine — and it
-	 * said it even when nobody *could* know.
-	 *
-	 * That last one was gap E3. For grbl, newly and the dummy device the engine
-	 * reports `connection.state === "unknown"`: there is simply no source. Our bar
-	 * turned that into "Connected to the laser", with a green dot beside it, even
-	 * straight after the wizard — while the wizard itself says the connection is
-	 * only made on the first job. Two screens contradicting each other, in the
-	 * place you trust most.
-	 *
-	 * Now the bar says "connected" only when the driver reports it itself. If
-	 * nobody knows, that is what it says: "Connection unknown". That is not a fault
-	 * and not a promise, and it is the only thing that is true.
-	 *
-	 * Tempting but wrong: taking a running job as proof. Measured on this very
-	 * server — the Job panel showed a job at 80% while the engine underneath
-	 * reported "USB connection did not exist". The spooler runs happily on without
-	 * a machine; it is therefore not a handshake.
-	 */
-	let unknown = $derived(
-		connected &&
-			machineState !== 'unplugged' &&
-			machineState !== 'faltering' &&
-			device?.connection?.state !== 'connected'
-	);
-	/**
-	 * Twee indicatoren, twee onderwerpen.
-	 *
-	 * The bar said it twice: here it read "Machine not connected" and at the far
-	 * right "Not connected" — the same message, twice, 700 px apart. And the one
-	 * thing it did *not* say was whether the page itself is still attached to the
-	 * server; you only saw that because this text went red.
-	 *
-	 * So: the machine here (with the button beside it, because that is where you
-	 * can do something), and the line to OpenKerf on the right. Two things that can
-	 * break separately get two places that can say so separately.
-	 */
+	let link = $derived(machineConnection(device, connected));
+	let fresh = $derived(link === 'connected');
+	let unknown = $derived(link === 'unknown');
 	let verbindingstekst = $derived(
-		!connected
-			? t('status.machine.unknown')
-			: machineState === 'unplugged'
-				? t('status.machine.notConnected')
-				: // A machine that has just gone quiet is not an unknown one: it answered a
-					// moment ago and will answer again. Saying "unknown" about it is the
-					// vaguest of the four sentences here and the least true.
-					machineState === 'faltering'
-					? t('status.machine.faltering')
-					: unknown
-						? t('status.machine.connectionUnknown')
-						: t('status.machine.connected')
+		link === 'offline' ? t('status.machine.unknown')
+			: link === 'unplugged' ? t('status.machine.notConnected')
+				: unknown ? t('status.machine.connectionUnknown')
+					: t('status.machine.connected')
 	);
-	/**
-	 * The button beside the state.
-	 *
-	 * The bar could read that no machine was on the line and do nothing about it —
-	 * "not connected" without a button. Only visible when the driver knows it: grbl
-	 * opens by itself as soon as work goes to it, and then there should be no button
-	 * that means nothing.
-	 *
-	 * Disconnecting asks for confirmation, connecting does not. Measured on the real
-	 * KH-5030, reconnecting after a disconnect sometimes works and sometimes does
-	 * not: on a server with only curl talking to it, it failed three out of three;
-	 * with the app attached the connection was open again by itself within ~6 s.
-	 * What reopens it has not been found. As long as that is so, disconnecting must
-	 * not be a one-click button — and the text must not promise more than we know.
-	 */
+	// Keep controller connection actions independent of the local job status.
 	let hangt = $derived(device?.connection?.state === 'connected');
 	let kanVerbinden = $derived(
 		connected &&
@@ -249,7 +183,7 @@
 	     whether the laser is listening, not whether a socket is open. -->
 	<span
 		class:offline={!connected}
-		class:onthecht={connected && machineState === 'unplugged'}
+		class:onthecht={link === 'unplugged'}
 		class:afwachtend={Boolean(verbindingsuitleg)}
 		title={verbindingsuitleg}
 	>

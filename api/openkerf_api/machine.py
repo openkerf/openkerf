@@ -9,6 +9,8 @@ does not have to assume it stays that way.
 
 import json
 
+import time
+
 from .busy import a_job_is_running, refuse_while_a_file_is_being_sent
 from .commands import CommandRunner
 from .edits import DesignError, _finite
@@ -158,6 +160,13 @@ class MachineControl:
             )
         output = self.runner.run(command)
         state = self._connection()
+        session = getattr(self.kernel.device, "active_session", None)
+        if verb == "connect" and getattr(session, "supports_write_completion", False):
+            # open() requests the worker handshake; it no longer reads the UDP socket here.
+            deadline = time.monotonic() + 3.0
+            while state["state"] == "disconnected" and time.monotonic() < deadline:
+                time.sleep(0.02)
+                state = self._connection()
 
         # The engine reports a failed connection only on the channel and then
         # returns quietly (`ruida/device.py:452`). The state afterwards is therefore
@@ -170,9 +179,7 @@ class MachineControl:
                 if klacht
                 else f"{verb.capitalize()}ing did not work, and the engine does not say why. "
                 "Is the machine on, and is the address in the machine settings right? "
-                "Also possible: something was disconnected or switched in this session "
-                "— the Ruida session does not always survive that, and then only "
-                "a restart of the server helps."
+                "The connection is not confirmed; check the machine before trying again."
             )
         return {"connection": state, "output": output}
 

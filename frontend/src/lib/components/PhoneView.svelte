@@ -78,18 +78,8 @@
 	// of "the job the controls are about".
 	let current = $derived<Job | null>(currentJob(device));
 	let running = $derived(Boolean(current?.running));
-	/**
-	 * Is work standing still? One source: `machineState()`, which already calls
-	 * `isStalled()` and takes the device side (`laser_status === "pause"`) into
-	 * account as well.
-	 *
-	 * There used to be a variant of its own here that dropped the requirement "there
-	 * was progress already" (gap J8). Consequence: a freshly spooled job is not
-	 * running yet and on the phone was called "Paused" for one polling round, while
-	 * the rest of the app saw it sitting in the queue. Two screens saying different
-	 * things about one job.
-	 */
-	let quiet = $derived(machineState === 'paused');
+	// A disconnected controller must not erase the local job's pause state.
+	let quiet = $derived(jobPhase(device, current, false) === 'paused');
 	/**
 	 * The phase, from the same function the desktop uses.
 	 *

@@ -392,19 +392,15 @@ supposed to do.
 This is normal on the first day, and the app is explicit about it rather than
 silent.
 
-The strip at the bottom of the window is where the truth lives, and it is where
-the connection is written out in words. It reads one of five things: **Machine
-unknown** (this page is not talking to OpenKerf, so nobody can say), **Machine not
-connected**, **The line is faltering** (the machine has gone quiet for a moment and
-will answer again — see the handbook page on the job), **Connection unknown** or
-**Connected to the laser**. Where the
-driver has a command for it, a **Connect** button stands next to that text, and
-its tooltip promises "Open the connection to the machine. This moves nothing."
+The bottom status bar reports **Machine unknown** when OpenKerf is unreachable,
+**Machine not connected** when the controller connection is lost, **Connection unknown**
+when the driver cannot report it, or **Connected to the laser** when confirmed.
+Controller loss remains visible while a local job is running or paused. The server's
+own connection is shown separately as **OpenKerf live** or **OpenKerf away**.
 
-The machine chip at the far left of the top bar carries the state as a coloured
-dot beside the machine's name; the word itself is in the chip's tooltip, together
-with the bed size — **Offline**, **Not connected**, **Line faltering**, **Ready**,
-**Busy**, **Paused** or **Alarm**. Hover the chip to read it.
+The machine chip also prioritises connection problems over local job activity.
+It never uses a queued job as evidence that a controller is connected. Job progress
+and pause/stop controls continue to describe the local job independently.
 
 Clicking the chip takes you to the machine setup — except while a job is under
 way. Then it is not a link, and says so: "The machine is burning. The setup opens
@@ -419,8 +415,7 @@ start is the connection, not the job.
 
 Some drivers do not report whether anything is listening. The strip then says
 "Connection unknown", and hovering that text explains why: "The engine is running,
-but this driver does not report whether a machine is attached. You will notice on
-the first job: it stays in the queue if nothing is listening."
+but this driver does not report whether a machine is attached. Check the machine before starting."
 
 > **When OpenKerf itself is gone.** A card appears: "No connection to OpenKerf"
 > and "The server is not responding. What you draw or set now does not arrive, and
@@ -429,9 +424,8 @@ the first job: it stays in the queue if nothing is listening."
 > button on the machine itself now." There is a **Try again now** button, and it
 > retries by itself as well.
 
-> **Before you disconnect on purpose.** OpenKerf asks, because reconnecting is not
-> guaranteed: "Disconnect? Reconnecting afterwards does not always work; sometimes
-> only a restart of the server helps."
+> **Before you disconnect on purpose.** OpenKerf asks: "Disconnect from the machine?
+> Its physical state may change while disconnected; check it before reconnecting."
 
 Connecting, disconnecting and the jog controls beside them are covered in
 [Burning](job.md#connect-and-disconnect).

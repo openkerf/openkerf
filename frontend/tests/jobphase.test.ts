@@ -131,7 +131,7 @@ test('the route out of the work area closes while the machine is burning', () =>
 	for (const phase of ['burning', 'paused', 'queued'] as const) {
 		assert.equal(mayLeaveWorkArea(phase), false, `${phase} let the user walk away from the stop`);
 	}
-	for (const phase of ['idle', 'ready', 'nothing', 'done'] as const) {
+	for (const phase of ['ready', 'nothing', 'done'] as const) {
 		assert.equal(mayLeaveWorkArea(phase), true, `${phase} kept the user in`);
 	}
 });

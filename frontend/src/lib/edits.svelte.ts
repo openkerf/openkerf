@@ -451,6 +451,7 @@ export class EditController {
 		skipped: number;
 		/** Islands with nowhere to put a bridge of this width. They fall out. */
 		unbridged: number;
+		open_contours: number;
 	} | null> {
 		if (!preview) this.busy = true;
 		this.error = null;

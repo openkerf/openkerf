@@ -151,7 +151,6 @@ export const nl: Catalogue = {
 	'status.machine.notConnected': 'Machine niet verbonden',
 	'status.machine.connectionUnknown': 'Verbinding onbekend',
 	'status.machine.connected': 'Verbonden met de laser',
-	'status.machine.faltering': 'De lijn hapert',
 	'status.machine.connectionUnknown.hint':
 		'De engine draait, maar deze driver meldt niet of er een machine aan hangt. Bij de eerste job merk je het: die blijft in de wachtrij staan als er niets luistert.',
 	'status.connect': 'Verbinden',
@@ -161,7 +160,7 @@ export const nl: Catalogue = {
 	'status.disconnect.busy': 'Verbreken…',
 	'status.disconnect.title': 'De verbinding met de machine vrijgeven',
 	'status.disconnect.ask':
-		'Verbreken? Opnieuw verbinden lukt daarna niet altijd; soms helpt alleen een herstart van de server.',
+		'Verbinding met de machine verbreken? Controleer de machine voordat je opnieuw verbindt.',
 	'status.disconnect.keep': 'Laten hangen',
 	'status.needsToken': 'Eerst een token invullen',
 	'status.openkerf.live': 'OpenKerf live',
@@ -173,15 +172,13 @@ export const nl: Catalogue = {
 	// ── Machinetoestand ────────────────────────────────────────────────────────
 	'machine.state.offline': 'Offline',
 	'machine.state.unplugged': 'Niet verbonden',
-	'machine.state.faltering': 'Lijn hapert',
+	'machine.hint.unknown': 'De verbinding met de controller kan niet worden bevestigd. Controleer de machine voordat je start.',
 	'machine.state.ready': 'Gereed',
 	'machine.state.busy': 'Bezig',
 	'machine.state.paused': 'Gepauzeerd',
 	'machine.state.alarm': 'Alarm',
 	'machine.hint.offline': 'Geen verbinding met OpenKerf. Kijk of de engine nog draait.',
 	'machine.hint.unplugged': 'De engine draait, maar er hangt geen machine aan.',
-	'machine.hint.faltering':
-		'De machine is even stil. Een Ruida doet dat uit zichzelf en antwoordt binnen een paar seconden weer; er hoeft niets te gebeuren.',
 	'machine.hint.alarm': 'De machine meldt een alarm. Ontgrendel hem voor je iets start.',
 
 	// ── De job ─────────────────────────────────────────────────────────────────
@@ -2637,6 +2634,7 @@ export const nl: Catalogue = {
 		'Er staat een job op deze machine — hij brandt, of hij wacht in de rij om te beginnen. Wacht tot die klaar is, of stop hem: het bestand zou over dezelfde verbinding gaan die die job gebruikt. Er is niets verstuurd.',
 	'api.upload.busy':
 		'Naar deze machine wordt al een bestand gestuurd. Wacht tot dat klaar is en druk opnieuw; er is niets verstuurd.',
+	'api.upload.engineUpgrade': 'Deze engine kan de aflevering van pakketten niet bevestigen. Installeer de Ruida-sessie-update voordat je bestanden verstuurt; er is niets verzonden.',
 	'api.upload.lineInUse':
 		'Naar deze machine gaat al iets over deze lijn. Wacht tot dat klaar is en druk opnieuw; er is niets verstuurd.',
 	'api.upload.emptyFile':

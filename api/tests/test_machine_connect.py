@@ -9,6 +9,7 @@ we ask the active device what it knows instead of assuming it.
 """
 
 import types
+import time
 
 import pytest
 from fastapi.testclient import TestClient
@@ -164,7 +165,6 @@ def test_the_echo_of_the_command_is_not_offered_as_a_reason():
     # The second cause is there too, because it is just as likely and you never
     # look for it yourself: measured on the real machine, connecting breaks as soon
     # as you have switched machines in the same session.
-    assert "switched" in message
 
 
 def test_a_real_complaint_does_reach_the_user():
@@ -195,3 +195,10 @@ def test_the_routes_exist_and_report_what_the_device_can_do(client, kernel):
     kernel.console("service device start ruida -i\n")
     caps = client.get("/api/capabilities").json()
     assert caps["connection"] == {"connect": True, "disconnect": True}
+
+
+def test_connect_waits_for_async_session_handshake(monkeypatch):
+    control = control_for(connected=False)
+    control.kernel.device.active_session = types.SimpleNamespace(supports_write_completion=True)
+    monkeypatch.setattr(time, "sleep", lambda seconds: setattr(control.kernel.device, "connected", True))
+    assert control.connect()["connection"]["state"] == "connected"

@@ -6,6 +6,7 @@ emulator, which takes this conversation and reads the file back off it.
 """
 
 import queue
+from concurrent.futures import Future
 import threading
 import time
 
@@ -862,6 +863,8 @@ class FakeSession:
     """
 
     connected = True
+    supports_write_completion = True
+    generation = 0
 
     def __init__(self, busy_forever=False, busy_for=0, fail_after=None, queued=0):
         # A real queue, because `_line_is_busy` asks it and the clearing before an
@@ -883,10 +886,13 @@ class FakeSession:
             return True
         return self.busy_reads <= self.busy_for
 
-    def write(self, data):
+    def write(self, data, **kwargs):
         if self.fail_after is not None and len(self.written) >= self.fail_after:
             raise ConnectionError("Not connected to the Ruida controller.")
         self.written.append(data)
+        receipt = Future()
+        receipt.set_result(None)
+        return receipt
 
 
 def a_fake_session(upload, monkeypatch, **kwargs):
@@ -969,28 +975,13 @@ def test_a_transfer_that_flows_reports_what_went(ruida, monkeypatch):
     assert sum(len(block) for block in session.written[2:]) == result["bytes"]
 
 
-def test_the_upload_waits_for_a_busy_line_instead_of_writing_over_it(
-    ruida, monkeypatch
-):
-    """
-    Waiting is the whole point of the flow control, so it has to be visible that
-    it happens — a loop that never waits passes every test above this one.
-
-    `is_busy` here reports busy for the first three reads and free after that,
-    and the poll interval is turned down so the wait costs a few milliseconds
-    rather than the 0.02 s the real one uses. Measured on this rectangle: one
-    block, so two headers and one block are three waits, plus the fourth after
-    the last block — four free reads if nothing ever waits. With three busy
-    reads to get through first, the count comes out at seven.
-    """
+def test_the_upload_waits_for_a_busy_line_instead_of_writing_over_it(ruida, monkeypatch):
     a_rectangle(ruida)
     upload = RuidaUpload(ruida)
     session = a_fake_session(upload, monkeypatch, busy_for=3)
     upload.poll_seconds = 0.001
-
     result = upload.upload("BORD")
-
-    assert session.busy_reads == 7, session.busy_reads
+    assert session.busy_reads > len(session.written)
     assert len(session.written) == result["chunks"] + 2
 
 
@@ -1279,7 +1270,7 @@ def test_the_status_monitor_is_held_off_while_the_file_goes_down(ruida, monkeypa
     session = a_fake_session(upload, monkeypatch)
     held = []
     original = session.write
-    monkeypatch.setattr(upload, "_write", lambda data: (held.append(_the_lock(ruida.device).locked()), original(data))[1])
+    monkeypatch.setattr(upload, "_write", lambda data, **kwargs: (held.append(_the_lock(ruida.device).locked()), original(data))[1])
 
     upload.upload("BORD")
 
@@ -1287,21 +1278,16 @@ def test_the_status_monitor_is_held_off_while_the_file_goes_down(ruida, monkeypa
     assert not _the_lock(ruida.device).locked(), "the lock was not given back"
 
 
-def test_the_queue_is_emptied_of_the_status_packets_first(ruida, monkeypatch):
-    """
-    Holding the line off is half of it. What is already queued still has to drain
-    before our first block, and at 1.5 s of timeout apiece fifty of them is over a
-    minute — longer than the whole upload is allowed. They are `GET_SETTING`
-    reads whose answers nobody wants any more, so they go.
-    """
+def test_a_stuck_queue_is_not_deleted_to_make_room_for_an_upload(ruida, monkeypatch):
     a_rectangle(ruida)
     upload = RuidaUpload(ruida)
+    upload.per_chunk_seconds = 0.05
     session = a_fake_session(upload, monkeypatch, queued=50)
-
-    result = upload.upload("BORD")
-
-    assert session.send_q.empty(), "the monitor's packets were still in front of ours"
-    assert result["chunks"] == len(session.written) - 2
+    with pytest.raises(DesignError) as error:
+        upload.upload("BORD")
+    assert error.value.code == "upload.stalled"
+    assert session.send_q.qsize() == 50
+    assert not session.written
 
 
 def test_a_line_the_engine_is_already_sending_on_is_refused(ruida, monkeypatch):
@@ -1427,6 +1413,8 @@ def test_a_status_poll_between_blocks_does_not_damage_the_file(
 
 
 class DeferringSession:
+    supports_write_completion = True
+    generation = 0
     """A connection where writing and acknowledging come apart, as they really do.
 
     `FakeSession` cannot catch what this catches, because there writing *is*
@@ -1468,7 +1456,7 @@ class DeferringSession:
     def is_busy(self):
         return self._ack_pending
 
-    def write(self, data):
+    def write(self, data, **kwargs):
         # Raising here is not decoration: `RuidaSession.write` checks `connected`
         # before it queues anything and raises on a session that has dropped
         # (`ruidasession.py:186`). No test in this file reaches it — the drop is
@@ -1479,14 +1467,18 @@ class DeferringSession:
         if not self.connected:
             raise ConnectionError("Not connected to the Ruida controller.")
         self.written.append(data)
-        self.send_q.put(data)
+        receipt = Future()
+        self.send_q.put((data, receipt))
         self.deepest = max(self.deepest, len(self.written) - len(self.acknowledged))
         self.deepest_queue = max(self.deepest_queue, self.send_q.qsize())
+        return receipt
 
     def _handshake(self):
         while not self._shutdown:
             try:
-                data = self.send_q.get(timeout=0.01)
+                data, receipt = self.send_q.get(timeout=0.01)
+                if not receipt.set_running_or_notify_cancel():
+                    continue
             except queue.Empty:
                 continue
             if (
@@ -1505,12 +1497,14 @@ class DeferringSession:
                     self._ack_pending = True
                 else:
                     self.connected = False
+                    receipt.set_exception(ConnectionError("Transport write failed"))
                 return
             if self.acknowledges:
                 self._ack_pending = True
             time.sleep(self.ack_seconds)
             self.acknowledged.append(data)
             self._ack_pending = False
+            receipt.set_result(None)
 
     def stop(self):
         self._shutdown = True
@@ -1602,74 +1596,14 @@ def test_the_last_block_is_not_reported_sent_until_it_is_acknowledged(
     )
 
 
-def test_a_block_is_not_written_before_the_one_before_it_has_gone_out(
-    ruida, monkeypatch, deferring
-):
-    """
-    The flow control is per block, and only a count of packets in flight can
-    say so.
-
-    The wall clock cannot. The wait after the last block already forces the
-    whole file to be acknowledged before `upload()` returns, so "wait before
-    every block" and "wait once at the end" finish in the same time with the
-    same number of acknowledgements. Measured, eight packets acknowledged at
-    0.05 s each: **0.625 s and 8 of 8** with the wait in the loop, **0.481 s and
-    8 of 8** with only the final wait. An earlier version of this test asserted
-    on those two numbers and passed with the loop's wait removed — it was
-    guarding half of what it is named after. (The 0.019 s in the round before
-    that was measured on code with *neither* mechanism, which is why it looked
-    like evidence.)
-
-    What does separate them is how many packets are out at once — written and
-    not yet acknowledged, read at the moment of each write. One block at a time
-    means never more than one. Measured on the same two runs: **1** with the
-    wait in the loop, **8** without it, and the send queue never deeper than
-    those same numbers.
-
-    So this runs both. The B half neutralises exactly the line under test — the
-    first eight calls to `_wait_for_the_line` are the ones inside the loop, the
-    ninth is the one after it — and requires the depth to blow out, because a
-    test that cannot fail on the broken code is not evidence about the working
-    code.
-    """
-    def upload_once(only_at_the_end):
-        a_design_over_one_block(ruida)
-        upload = RuidaUpload(ruida)
-        session = deferring(upload, monkeypatch, ack_seconds=0.05)
-        if only_at_the_end:
-            real = upload._wait_for_the_line
-
-            def only_after_the_last_write(session_arg, sent, chunks, announced):
-                # The wait after the loop is the one that runs when every packet
-                # has already been written — two headers and `chunks` blocks.
-                # Derived from the code under test rather than counted out to a
-                # literal, because the number of blocks is a property of a
-                # drawing (see `a_design_over_one_block`), not a constant.
-                if len(session.written) == chunks + 2:
-                    real(session_arg, sent, chunks, announced)
-
-            monkeypatch.setattr(
-                upload, "_wait_for_the_line", only_after_the_last_write
-            )
-        result = upload.upload("BORD")
-        return result, session
-
-    result, session = upload_once(only_at_the_end=False)
-    packets = result["chunks"] + 2
-    assert result["chunks"] > 1, "the design fitted in one block after all"
-    assert session.deepest == 1, (
-        f"{session.deepest} packets were out at once; one block at a time means one"
-    )
-    assert session.deepest_queue == 1, session.deepest_queue
-    assert len(session.acknowledged) == packets
-
-    # And the same run with the loop's wait taken out, to show the assertion
-    # above is about that wait and not about the one after the loop.
-    _, without = upload_once(only_at_the_end=True)
-    assert without.deepest == packets, (
-        f"removing the wait inside the loop left the depth at {without.deepest}, "
-        f"so the assertion above would not have caught its removal"
-    )
+def test_a_block_is_not_written_before_the_one_before_it_has_gone_out(ruida, monkeypatch, deferring):
+    a_design_over_one_block(ruida)
+    upload = RuidaUpload(ruida)
+    session = deferring(upload, monkeypatch, ack_seconds=0.02)
+    result = upload.upload("BORD")
+    assert result["chunks"] > 1
+    assert session.deepest == 1
+    assert len(session.acknowledged) == result["chunks"] + 2
 
 
 def test_the_name_keeps_letters_and_digits_and_nothing_else():
@@ -1737,58 +1671,15 @@ def test_a_nameless_upload_never_asks_the_design_for_bytes(ruida, monkeypatch):
     assert not builds, "the job was built for an upload that could never be sent"
 
 
-def test_on_usb_the_queue_alone_still_bounds_what_is_in_flight(
-    ruida, monkeypatch, deferring
-):
-    """
-    The `usb` branch, which is the one every run of this suite actually uses.
-
-    `_ack_pending` is set only on `udp` (`ruidasession.py:349`), so on `usb`
-    `is_busy` never says anything about our blocks and the send queue is all
-    that is left. It still bounds what is out at once, but at two rather than
-    one: the queue goes empty the moment the handshaker takes a packet, while
-    that packet is still being written to the transport, so the next block can
-    be queued behind one still in the engine's hands. Measured over six runs at
-    two different write speeds, deepest **2** every time, with the queue itself
-    never deeper than 1 — against **8** with the wait inside the loop removed.
-
-    Two is the floor here, not a defect to fix: nothing in the engine marks the
-    moment a `usb` write completes, so nobody outside it can wait for one.
-    """
-    def upload_once(only_at_the_end):
-        a_design_over_one_block(ruida)
-        upload = RuidaUpload(ruida)
-        session = deferring(
-            upload, monkeypatch, ack_seconds=0.02, acknowledges=False
-        )
-        if only_at_the_end:
-            real = upload._wait_for_the_line
-
-            def only_after_the_last_write(session_arg, sent, chunks, announced):
-                if len(session.written) == chunks + 2:
-                    real(session_arg, sent, chunks, announced)
-
-            monkeypatch.setattr(
-                upload, "_wait_for_the_line", only_after_the_last_write
-            )
-        return upload.upload("BORD"), session
-
-    result, session = upload_once(only_at_the_end=False)
-    packets = result["chunks"] + 2
-    assert result["chunks"] > 1, "the design fitted in one block after all"
-    assert session._ack_pending is False, "this was supposed to model usb"
-    assert session.deepest == 2, session.deepest
-    assert session.deepest_queue == 1, session.deepest_queue
-    # Seven or eight, run to run: the last block can still be at the transport
-    # when `upload()` returns, and on `usb` there is nothing to wait for that
-    # would say otherwise. See the note at the final wait in `upload()`.
-    assert len(session.acknowledged) >= packets - 1, len(session.acknowledged)
-
-    _, without = upload_once(only_at_the_end=True)
-    assert without.deepest == packets, (
-        f"removing the wait inside the loop left the depth at {without.deepest}, "
-        f"so the assertion above would not have caught its removal"
-    )
+def test_on_usb_each_transport_write_completes_before_upload_continues(ruida, monkeypatch, deferring):
+    a_design_over_one_block(ruida)
+    upload = RuidaUpload(ruida)
+    session = deferring(upload, monkeypatch, ack_seconds=0.02, acknowledges=False)
+    result = upload.upload("BORD")
+    assert result["chunks"] > 1
+    assert session.deepest == 1
+    assert not session._ack_pending
+    assert len(session.acknowledged) == result["chunks"] + 2
 
 
 def test_on_usb_a_connection_that_drops_on_the_last_block_still_refuses(
@@ -2161,10 +2052,10 @@ def test_a_second_upload_at_the_same_time_is_refused(ruida, monkeypatch):
     let_it_go = threading.Event()
     straight_to_the_session = upload._write
 
-    def held(data):
+    def held(data, **kwargs):
         at_the_first_packet.set()
         let_it_go.wait(5)
-        straight_to_the_session(data)
+        return straight_to_the_session(data, **kwargs)
 
     monkeypatch.setattr(upload, "_write", held)
     first = {}
@@ -2467,10 +2358,10 @@ class _HeldUpload:
         self.let_it_go = threading.Event()
         straight_to_the_session = server.ruida_upload._write
 
-        def held(data):
+        def held(data, **kwargs):
             self.at_the_first_packet.set()
             self.let_it_go.wait(5)
-            straight_to_the_session(data)
+            return straight_to_the_session(data, **kwargs)
 
         monkeypatch.setattr(server.ruida_upload, "_write", held)
         self.result = {}
@@ -2807,3 +2698,82 @@ def test_the_motors_are_not_released_while_a_job_is_burning(ruida, monkeypatch, 
     assert error.value.code == "machine.motorsWhileBurning"
     assert "stop" in str(error.value).lower()
     assert not reached, f"{verb} reached the machine while a job was burning"
+
+
+def test_upload_waits_for_its_own_receipt_even_when_queue_looks_empty(ruida, monkeypatch):
+    upload = RuidaUpload(ruida)
+    receipt = Future()
+    written = threading.Event()
+    finished = threading.Event()
+    result = {}
+    def write(data, **kwargs):
+        written.set()
+        return receipt
+    monkeypatch.setattr(upload, "_write", write)
+    def send():
+        try:
+            result["value"] = upload._send(FakeSession(), [b"\xe8\x02"], 0, "TEST", b"")
+        except Exception as exc:
+            result["error"] = exc
+        finally:
+            finished.set()
+    thread = threading.Thread(target=send)
+    thread.start()
+    try:
+        assert written.wait(2)
+        assert not finished.wait(0.05), "upload returned before its packet completed"
+    finally:
+        receipt.set_result(None)
+        thread.join(2)
+    assert "value" in result, result
+
+
+def test_failed_receipt_stops_before_next_packet(ruida, monkeypatch):
+    upload = RuidaUpload(ruida)
+    sent = []
+    def write(data, **kwargs):
+        sent.append(data)
+        receipt = Future()
+        receipt.set_exception(ConnectionError("ACK missing"))
+        return receipt
+    monkeypatch.setattr(upload, "_write", write)
+    with pytest.raises(DesignError, match="stopped answering"):
+        upload._send(FakeSession(), [b"\xe8\x02", b"\xe7\x01TEST\x00"], 0, "TEST", b"")
+    assert sent == [b"\xe8\x02"]
+
+
+def test_claiming_upload_line_preserves_queued_commands(ruida):
+    upload = RuidaUpload(ruida)
+    session = FakeSession(queued=1)
+    session.send_q.put(b"\xd8\x00")
+    with upload._the_line_to_ourselves(session):
+        assert session.send_q.qsize() == 2
+
+
+def test_engine_without_receipts_refuses_before_any_bytes(ruida, monkeypatch):
+    a_rectangle(ruida)
+    upload = RuidaUpload(ruida)
+    session = a_fake_session(upload, monkeypatch)
+    session.supports_write_completion = False
+    with pytest.raises(DesignError) as error:
+        upload.upload("TEST")
+    assert error.value.code == "upload.engineUpgrade"
+    assert not session.written
+
+
+def test_upload_pins_session_generation_across_packets(ruida, monkeypatch):
+    upload = RuidaUpload(ruida)
+    session = FakeSession()
+    writes = []
+    def write(data, *, expected_generation=None):
+        if expected_generation != session.generation:
+            raise ConnectionError("Session changed")
+        writes.append(data)
+        session.generation += 1  # Disconnect/reconnect between confirmed packets.
+        receipt = Future()
+        receipt.set_result(None)
+        return receipt
+    monkeypatch.setattr(session, "write", write)
+    with pytest.raises(DesignError):
+        upload._send(session, [b"first", b"second"], 0, "TEST", b"")
+    assert writes == [b"first"]

@@ -7,9 +7,9 @@ A modern interface for a laser cutter, built on top of the
 
 MeerK40t drives the machine and does it well. OpenKerf is the part in front of it: a
 browser interface for drawing, laying out and burning, and a small API layer that talks
-to the engine as an ordinary plugin. Nothing in the engine is forked or patched — the
-whole of OpenKerf hangs off MeerK40t's own `meerk40t.extension` entry point, so the
-engine can be updated without a merge.
+to the engine through its `meerk40t.extension` entry point. The pinned engine currently
+requires the small Ruida session patch in `deploy/patches/ruida-session.patch`; Docker
+applies it during the build. See [engine setup](docs/running-in-docker.md) for local installation.
 
 The machine it was written for is a 5030 CO₂ laser with a Ruida controller, and that is
 the machine it has cut and engraved on. Anything MeerK40t drives should work; only Ruida
@@ -42,7 +42,7 @@ screenshot taken by a script so the pages cannot quietly drift from the app.
 You need Python 3.9+ (developed on 3.14) and Node 20+.
 
 ```bash
-# the engine, as an ordinary dependency
+# install the patched engine first, as described in docs/running-in-docker.md
 python3 -m venv .venv
 .venv/bin/pip install -e api
 

@@ -158,9 +158,8 @@ export const en = {
 	'status.machine.notConnected': 'Machine not connected',
 	'status.machine.connectionUnknown': 'Connection unknown',
 	'status.machine.connected': 'Connected to the laser',
-	'status.machine.faltering': 'The line is faltering',
 	'status.machine.connectionUnknown.hint':
-		'The engine is running, but this driver does not report whether a machine is attached. You will notice on the first job: it stays in the queue if nothing is listening.',
+		'The engine is running, but this driver does not report whether a machine is attached. Check the machine before starting.',
 	'status.connect': 'Connect',
 	'status.connect.busy': 'Connecting…',
 	'status.connect.title': 'Open the connection to the machine. This moves nothing.',
@@ -168,7 +167,7 @@ export const en = {
 	'status.disconnect.busy': 'Disconnecting…',
 	'status.disconnect.title': 'Release the connection to the machine',
 	'status.disconnect.ask':
-		'Disconnect? Reconnecting afterwards does not always work; sometimes only a restart of the server helps.',
+		'Disconnect from the machine? Its physical state may change while disconnected; check it before reconnecting.',
 	'status.disconnect.keep': 'Leave it',
 	'status.needsToken': 'Fill in a token first',
 	'status.openkerf.live': 'OpenKerf live',
@@ -180,15 +179,13 @@ export const en = {
 	// ── Machine state ──────────────────────────────────────────────────────────
 	'machine.state.offline': 'Offline',
 	'machine.state.unplugged': 'Not connected',
-	'machine.state.faltering': 'Line faltering',
+	'machine.hint.unknown': 'The controller connection cannot be confirmed. Check the machine before starting.',
 	'machine.state.ready': 'Ready',
 	'machine.state.busy': 'Busy',
 	'machine.state.paused': 'Paused',
 	'machine.state.alarm': 'Alarm',
 	'machine.hint.offline': 'No connection to OpenKerf. Check whether the engine is running.',
-	'machine.hint.unplugged': 'The engine is running, but no machine is attached.',
-	'machine.hint.faltering':
-		'The machine has gone quiet for a moment. A Ruida does that by itself and answers again within a few seconds; there is nothing to do.',
+	'machine.hint.unplugged': 'The server is running, but the controller connection is not confirmed. Check the machine and its connection.',
 	'machine.hint.alarm': 'The machine reports an alarm. Unlock it before starting anything.',
 
 	// ── The job ────────────────────────────────────────────────────────────────
@@ -2844,6 +2841,7 @@ export const en = {
 		'A job is on this machine — burning, or waiting in the queue to start. Wait until it is done, or stop it: the file would go down the same connection that job uses. Nothing has been sent.',
 	'api.upload.busy':
 		'This machine is already being sent a file. Wait until that one is done and press again; nothing has been sent.',
+	'api.upload.engineUpgrade': 'This engine cannot confirm packet delivery. Install the Ruida session update before sending files; nothing has been sent.',
 	'api.upload.lineInUse':
 		'This machine is already being sent something on this line. Wait until that is done and press again; nothing has been sent.',
 	'api.upload.emptyFile': 'The job came out empty, so there is nothing to send. Nothing has been sent.',

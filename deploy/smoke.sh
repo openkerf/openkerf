@@ -3,7 +3,7 @@
 #
 #   deploy/smoke.sh ghcr.io/openkerf/openkerf:latest
 #
-# Five checks, each one a claim the handbook makes: the API answers, the frontend build
+# Checks the runtime packaging: the API answers, the frontend build
 # is inside the image, OpenCV imports, a start without a token is refused with a
 # sentence, and the token given with -t never lands in the container log. Exits non-zero
 # on the first failure. Uses port 18080 so a running OpenKerf on 8080 is left alone.
@@ -46,5 +46,8 @@ echo "5. the token is not in the container log"
 if docker logs "$NAME" 2>&1 | grep -q smoke; then
   echo "   the token 'smoke' appears in docker logs"; exit 1
 fi
+
+echo "6. the patched Ruida completion API is installed"
+docker run --rm --entrypoint python "$IMAGE" -c "import inspect; from meerk40t.ruida.ruidasession import RuidaSession; assert RuidaSession.supports_write_completion; assert 'expected_generation' in inspect.signature(RuidaSession.write).parameters"
 
 echo "ok"

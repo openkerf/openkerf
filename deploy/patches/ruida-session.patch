@@ -1,0 +1,1276 @@
+diff --git a/meerk40t/ruida/controller.py b/meerk40t/ruida/controller.py
+index 8966f38..fa7d427 100644
+--- a/meerk40t/ruida/controller.py
++++ b/meerk40t/ruida/controller.py
+@@ -4,6 +4,7 @@ Ruida Controller
+ The Ruida Controller occupies the Presentation Layer (Layer 6) and the
+ Application Layer (Layer 7) of the OSI model.
+ """
++from concurrent.futures import Future
+ import threading
+ import time
+ 
+@@ -122,14 +123,19 @@ class RuidaController:
+         This is a transient thread which is created after job data has been
+         queued. This runs until the queue is empty at which point it
+         terminates.'''
+-        self._job_lock.acquire()
+-        while self._send_queue:
+-            data = self._send_queue.pop(0)
+-            self.write(data)
+-        self._send_queue.clear()
+-        self._send_thread = None
+-        self.events("File Sent.")
+-        self._job_lock.release()
++        try:
++            with self._job_lock:
++                while self._send_queue:
++                    data = self._send_queue.pop(0)
++                    completion = self.write(data)
++                    if isinstance(completion, Future):
++                        completion.result()
++            self.events("File Sent.")
++        except (OSError, ConnectionError) as error:
++            self.events(f"File send failed: {error}")
++        finally:
++            self._send_queue.clear()
++            self._send_thread = None
+         if self.job.low_power_warning:
+             self.events(f'WARNING: Power less than 10% may not fire CO2.')
+         if self.job.high_power_warning:
+@@ -168,25 +174,18 @@ class RuidaController:
+         NOTE: This thread is blocked while _data_sender is running.'''
+         time.sleep(3) # Wait for controller window to init. Need a semaphore.
+         while True:
+-            # if not self.is_busy and not self.service.is_busy:
+             if self.service.connected and not self.service.is_busy:
+-                self._job_lock.acquire() # Wait if sending a job.
+-                self._waiting = True
+-                # Step through a series of commands and send/recv each one
+-                # by one. When received, recv will update the UI.
+-                _status = self.STATUS_ADDRESSES[self._next]
+-                try:
+-                    self.job.get_setting(
+-                        _status, output=self.write)
+-                except OSError:
+-                    pass
+-                self._job_lock.release()
+-                self._next += 1
+-                if self._next >= len(self.STATUS_ADDRESSES):
+-                    self._next = 0
+-            else:
+-                self._waiting = True
+-                self.service.connect()
++                with self._job_lock:
++                    # The connection may have changed while waiting for a job.
++                    if self.service.connected and not self.service.is_busy:
++                        self._waiting = True
++                        try:
++                            self.job.get_setting(self.STATUS_ADDRESSES[self._next], output=self.write)
++                        except OSError:
++                            self._waiting = False
++                        self._next = (self._next + 1) % len(self.STATUS_ADDRESSES)
++            elif not self.service.connected:
++                self._waiting = False
+                 self.card_id = ''
+             time.sleep(self._status_thread_sleep)
+ 
+@@ -316,7 +315,7 @@ class RuidaController:
+         else:
+             # Comm failure -- timeout.
+             self._connected = False
+-            pass
++            self._waiting = False
+ 
+     def start_record(self):
+         self.job.get_setting(MEM_CARD_ID, output=self.write)
+@@ -407,7 +406,8 @@ class RuidaController:
+     def sync(self):
+         '''Resync the status monitor.'''
+         self.wait_idle()
+-        self.service.active_session.close() # Reconnects automatically.
++        self.service.active_session.close()
++        self.service.active_session.open()
+ 
+     def abort(self):
+         self.mode = "rapid"
+diff --git a/meerk40t/ruida/device.py b/meerk40t/ruida/device.py
+index a3b6662..a849c63 100644
+--- a/meerk40t/ruida/device.py
++++ b/meerk40t/ruida/device.py
+@@ -462,7 +462,7 @@ class RuidaDevice(Service, Status):
+             help=_("Disconnects from the device."),
+         )
+         def ruida_disconnect(command, channel, _, data=None, **kwargs):
+-            if self.connected:
++            if self.active_session is not None:
+                 self.active_session.close()
+                 channel("Connection closed")
+ 
+@@ -664,9 +664,7 @@ class RuidaDevice(Service, Status):
+         return self.active_session.is_connecting if self.active_session else False
+ 
+     def connect(self):
+-        """
+-        WARNING: this will not return until connected or error.
+-        Call from a thread."""
++        """Request connection; the session worker performs the handshake."""
+         if self.active_session:
+             try:
+                 self.active_session.connect()
+diff --git a/meerk40t/ruida/ruidasession.py b/meerk40t/ruida/ruidasession.py
+index d1679bb..77b3ff0 100644
+--- a/meerk40t/ruida/ruidasession.py
++++ b/meerk40t/ruida/ruidasession.py
+@@ -28,119 +28,98 @@ import queue
+ import struct
+ import time
+ import threading
++from concurrent.futures import Future, InvalidStateError
+ 
+ from meerk40t.kernel import Service
+-
+ from .rdjob import ACK, NAK, ENQ, GET_SETTING, MEM_MACHINE_STATUS
+-
+-from .ruidatransport import RuidaTransport, TransportTimeout, TransportError
++from .ruidatransport import TransportTimeout, TransportError
+ import meerk40t.ruida.udp_transport as udp
+ import meerk40t.ruida.usb_transport as usb
+-# TODO: Define Session exceptions.
++
+ 
+ class RuidaSession:
++    """One worker owns transport I/O, including opening and closing it."""
++
++    supports_write_completion = True
++
+     def __init__(self, service: Service):
+         self.service = service
+         self.interface = service.interface
+-        name = self.service.safe_label
++        name = service.safe_label
+         self.recv = service.channel(f"{name}/recv", pure=True)
+         self.send = service.channel(f"{name}/send", pure=True)
+         self.events = service.channel(f"{name}/events", pure=True)
+-
+         self.transport = None
+-
+-        # Ruida data
+-        # TODO: Tune the queue size.
+-        self.send_q = queue.Queue(2 ** 18) # Power of 2 for efficiency.
+-        self._q_to = 0.25 # Queue timeout.
+-        self.swizzle = None
+-        self.unswizzle = None
+-
+-        # Status
+-        self._responding = False
+-        self._ack_pending = False
+-        self._reply_pending = False
+-
+-        # Stats for test and debug.
+-        self.sends = 0
+-        self.acks = 0
+-        self.naks = 0
+-        self.replies = 0
+-        self.enqs = 0
++        self.send_q = queue.Queue(2 ** 18)
++        self._q_to = 0.25
++        self.swizzle = self.unswizzle = None
++        self._responding = self._ack_pending = self._reply_pending = False
++        self.sends = self.acks = self.naks = self.replies = self.enqs = 0
+         self.dropped_packets = 0
+-
+-        # Session thread.
+-        self._handshake_thread = None
+         self._timeout = 0.25
+         self._tries = 4
+-        self._is_shutdown = True
++        self._state = threading.Condition(threading.RLock())
++        self._pending = set()
++        self._enabled = False
++        self._generation = 0
+         self._shutdown = False
+-        if self._handshake_thread is None:
+-            self._handshake_thread = threading.Thread(
+-                    target=self._ruida_handshaker,
+-                    daemon=True) # TODO: Can this leave connections open?
+-            self._handshake_thread.start()
++        self._is_shutdown = False
++        self._handshake_thread = threading.Thread(target=self._ruida_handshaker, daemon=True)
++        self._handshake_thread.start()
+ 
+     def __del__(self):
+         self.shutdown()
+ 
+     def set_swizzles(self, swizzle, unswizzle):
+-        self.swizzle = swizzle
+-        self.unswizzle = unswizzle
++        with self._state:
++            self.swizzle, self.unswizzle = swizzle, unswizzle
++            self._state.notify_all()
+ 
+     def open(self):
+-        '''This is a stub because the connect opens the transport.'''
+-        return
+-
+-    def _open(self):
+-        if self.is_open:
+-            return
+-        if self.transport is None:
+-            if self.interface == 'udp':
+-                self.transport = udp.UDPTransport(self.service)
+-            elif self.interface == 'usb':
+-                self.transport = usb.USBTransport(self.service)
+-            else:
+-                raise AttributeError(
+-                    f'Unsupported transport interface: {self.interface}')
+-        try:
+-            self.transport.open()
+-        except TransportError:
+-            return
+-        self.transport.set_timeout(self._timeout)
+-        # TODO: usb_status is a misnomer.
+-        self.service.signal("pipe;usb_status", "Opened")
+-        self.events("Disconnected")
++        with self._state:
++            if self._shutdown:
++                raise ConnectionError("Ruida session has shut down.")
++            self._enabled = True
++            self._state.notify_all()
++
++    def connect(self):
++        """Request connection; only the worker performs the handshake."""
++        self.open()
+ 
+     def close(self):
+-        if self.transport is None:
+-            return
+-        self.transport.close()
+-        self.transport = None
+-        self.service.signal("pipe;usb_status", "Disconnected")
+-        self.events("Disconnected")
++        with self._state:
++            self._enabled = False
++            self._generation += 1
++            self._responding = False
++            self._fail_pending(ConnectionError("Ruida session closed."))
++            self._state.notify_all()
++            if threading.current_thread() is not self._handshake_thread:
++                self._state.wait_for(lambda: self.transport is None or self._is_shutdown,
++                                     timeout=self._timeout + 1)
++        self.update_connect_status()
+ 
+     def shutdown(self, *args, **kwargs):
+-        if not self._is_shutdown:
++        with self._state:
+             self._shutdown = True
+-            while not self._is_shutdown:
+-                continue
+-            self._handshake_thread.join()
+-            self._handshake_thread = None
+-            self.close()
++            self._enabled = False
++            self._generation += 1
++            self._responding = False
++            self._fail_pending(ConnectionError("Ruida session shut down."))
++            self._state.notify_all()
++        thread = self._handshake_thread
++        if thread is not None and thread is not threading.current_thread():
++            thread.join(self._timeout + 1)
+ 
+-    def set_timeout(self, seconds):
+-        '''Set the receive timeout.
++    def abort_connect(self):
++        self.close()
+ 
+-        NOTE: This changes the number of tries for receiving data. It doesn't
+-        change the timeout of the transport interface.
+-        '''
+-        self._tries = int(seconds / self._timeout)
++    def set_timeout(self, seconds):
++        self._tries = max(1, int(seconds / self._timeout))
+ 
+     def location(self):
+         if self.transport is not None:
+             return self.transport.location()
+-        raise AttributeError # This is excepted in devicepanel.py.
++        raise AttributeError
+ 
+     @property
+     def is_open(self):
+@@ -148,58 +127,49 @@ class RuidaSession:
+ 
+     @property
+     def is_connecting(self):
+-        return not self._responding
++        return self._enabled and not self._shutdown and not self.connected
+ 
+     @property
+     def connected(self):
+-        return (not self._is_shutdown
+-                and self._responding
+-                and (self.transport is not None
+-                     and self.transport.connected))
++        return (self._enabled and not self._shutdown and self._responding
++                and self.transport is not None and self.transport.connected)
+ 
+     @property
+     def is_busy(self):
+-        return self._reply_pending or self._ack_pending
++        # Includes queued and dequeued work, without a gap before its first write.
++        with self._state:
++            return bool(self._pending)
+ 
+-    def abort_connect(self):
+-        if self.transport is not None:
+-            self.transport.close()
+-            self.transport = None
+-            self._open()
+-
+-    def write(self, data):
+-        '''Provide double buffered data transmission.
+-
+-        This blocks for a short time when the queue is full and retries a number
+-        of times for a total of approximately 4 seconds before giving up.
+-
+-        TODO: What does the calling method do in the case of timeout? How to
+-        inform the calling method a timeout occurred?
+-        '''
+-        # Blocks when queue is full.
+-        _tries = 12 # Approximately 4 seconds.
+-        while _tries:
++    @property
++    def generation(self):
++        with self._state:
++            return self._generation
++
++    def write(self, data, *, expected_generation=None):
++        """Queue bytes and return their completion Future.
++
++        UDP requires ACK; USB requires a successful write. Memory reads also
++        require a matching reply. Failure discards every queued operation from
++        this session; callers must explicitly decide whether to try again.
++        Bind a multi-packet transfer to generation with expected_generation.
++        """
++        with self._state:
+             if not self.connected:
+-                # Callers of this method should be ready for this and retry
+-                # if necessary. Don't want to wait here for a connection to
+-                # be established -- the controller could be powered down.
+-                raise ConnectionError('Not connected to the Ruida controller.')
++                raise ConnectionError("Not connected to the Ruida controller.")
++            if expected_generation is not None and expected_generation != self._generation:
++                raise ConnectionError("Ruida session changed during transmission.")
++            future = Future()
+             try:
+-                self.send_q.put(data, timeout=self._q_to)
+-                break
+-            except queue.Full:
+-                _tries -= 1
+-                if _tries <= 0:
+-                    self.service.signal("warning", "Ruida", "Send queue FULL")
+-                continue
+-        # self.send(data) # TODO: Where this goes is not known at this time.
++                self.send_q.put_nowait((bytes(data), future, self._generation))
++            except queue.Full as error:
++                raise ConnectionError("Ruida send queue is full.") from error
++            self._pending.add(future)
++            self._state.notify_all()
++            return future
+ 
+     def _package(self, data):
+-        _data = self.swizzle(data)
+-        if self.interface == 'udp':
+-            return struct.pack(">H", sum(_data) & 0xFFFF) + _data
+-        else:
+-            return _data
++        data = self.swizzle(data)
++        return struct.pack(">H", sum(data) & 0xFFFF) + data if self.interface == "udp" else data
+ 
+     def update_connect_status(self):
+         if self.connected:
+@@ -213,207 +183,155 @@ class RuidaSession:
+             self.service.signal("pipe;usb_status", _msg)
+             self.events(_msg)
+         else:
+-            self.service.signal("pipe;usb_status", "Connecting")
+-            self.events("Connecting")
+-
+-    def connect(self):
+-        '''Initiate or restore comms session with the Ruida controller.
+-
+-        This happens during startup and when a comms failure occurs. All
+-        other comms stop until the connection has been verified.
+-
+-        NOTE: This is intended to run only in the context of the handshaker
+-         or status monitor (controller.py) threads.
+-        '''
+-        # Wait for init to complete. Need the swizzle method from RDJob.
+-        # TODO: Has the chicken/egg been resolved?
+-        while self.swizzle is None or self.unswizzle is None:
+-            time.sleep(0.25)
+-        if not self.connected:
+-            self.update_connect_status()
+-            self._open()
+-            if self.interface == 'udp':
+-                _enq = self._package(ENQ)
+-                _ack = ACK  # True at least for the 6442S. Other controllers
+-                            # may actually reply with an ENQ?
+-            elif self.interface == 'usb':
+-                # When comms is via USB there are no ACK responses so read
+-                # mem to get a response.
+-                _enq = self._package(GET_SETTING + MEM_MACHINE_STATUS)
+-                _ack = b'\xDA\x01' # Indicates a memory read reply.
+-            else:
+-                raise TransportError(
+-                    f'Interface {self.interface} not supported.')
+-            while not self.connected and not self._shutdown:
+-                self._ack_pending = True # This causes a is_busy to be True.
+-                # When the controller is running it should respond immediately.
++            message = "Connecting" if self.is_connecting else "Disconnected"
++            self.service.signal("pipe;usb_status", message)
++            self.events(message)
++
++    def _check_active(self, generation):
++        if self._shutdown or not self._enabled or generation != self._generation:
++            raise ConnectionError("Ruida session interrupted.")
++
++    def _fail_pending(self, error):
++        # Called with _state held, so a new writer cannot race queue invalidation.
++        self._ack_pending = self._reply_pending = False
++        for future in tuple(self._pending):
++            if not future.done():
+                 try:
+-                    self.transport.write(_enq)
+-                    self.enqs += 1
+-                    _data = self.transport.read(len(_ack))
+-                    _reply = self.unswizzle(_data)
+-                    if len(_reply) == len(_ack) and _reply == _ack:
+-                        self._ack_pending = False
+-                        self._reply_pending = False
+-                        self._responding = True
+-
+-                except (TransportTimeout, TransportError, AttributeError):
+-                    # Still not responding.
+-                    time.sleep(1)
+-                    if self.interface == 'usb':
+-                        # Try until the OS figures out the USB device.
+-                        try:
+-                            if self.transport is None:
+-                                self._open()
+-                            else:
+-                                self.transport.close()
+-                            self.transport.open()
+-                        except TransportError:
+-                            pass
++                    future.set_exception(error)
++                except InvalidStateError:
++                    # cancel() may win between the check and set_exception().
++                    if not future.cancelled():
++                        raise
++        self._pending.clear()
++        while True:
++            try:
++                self.send_q.get_nowait()
++            except queue.Empty:
++                break
++
++    def _close_transport(self):
++        if self.transport is not None:
++            try:
++                self.transport.close()
++            except (OSError, TransportError):
++                pass
++            self.transport = None
++        with self._state:
++            self._responding = False
++            self._state.notify_all()
++
++    def _exchange(self, message, generation):
++        packet = self._package(message)
++        memory = message[2:4] if message.startswith(GET_SETTING) and len(message) == 4 else None
++        self._ack_pending = self.interface == "udp"
++        self._reply_pending = memory is not None
++        deadline = time.monotonic() + self._timeout * self._tries
++        retries = 0
++        with self._state:
++            self._check_active(generation)
++            self.transport.write(packet)
++            self.sends += 1
++        reply = None
++        while self._ack_pending or self._reply_pending:
++            self._check_active(generation)
++            if time.monotonic() >= deadline:
++                # An absent ACK does not prove the controller rejected the data.
++                # Never resend file blocks after an uncertain timeout.
++                raise ConnectionError("Ruida acknowledgement or reply timed out.")
++            try:
++                data = self.unswizzle(self.transport.read(9 if memory is not None else 1))
++            except TransportTimeout:
++                continue
++            self._check_active(generation)
++            if data.startswith(ACK):
++                if self._ack_pending:
++                    self.acks += 1
++                    self._ack_pending = False
++                data = data[1:]
++                if not data:
+                     continue
+-                # Drop any replies the controller had been saving to confuse
+-                # drivers with.
+-                # Put try/except TransportError and set responding False.
+-                try:
+-                    _data = self.transport.purge()
+-                    self.dropped_packets += 1
+-                except TransportError:
+-                    self._responding = False
+-            # Prime the pump to get things rolling.
+-            self.send_q.put(_enq, timeout=self._q_to)
+-            self.update_connect_status()
++            if data == NAK:
++                self.naks += 1
++                retries += 1
++                if not self._ack_pending or retries >= self._tries:
++                    raise ConnectionError("Ruida rejected the packet.")
++                with self._state:
++                    self._check_active(generation)
++                    self.transport.write(packet)
++                    self.sends += 1
++            elif (memory is not None and len(data) == 9
++                  and data[:4] == b"\xda\x01" + memory):
++                reply = data
++                self._reply_pending = False
++            else:
++                self.dropped_packets += 1
++        if reply is not None:
++            self.replies += 1
++            self.recv(reply)
+ 
+     def _ruida_handshaker(self):
+-        '''This is a thread which handles the SEND - ACK - REPLY handshake.
+-
+-        The purpose is to guarantee message sync and graceful failure handling.
+-        Sync is required because UDP is a fire and forget protocol and does
+-        not support sequence numbers.
+-
+-        The Ruida protocol is a speak only when spoken to protocol meaning
+-        the Ruida controller doesn't send anything unless it receives a command.
+-        In most cases the response is a simple ACK but with some commands the
+-        controller follows the ACK with data.
+-
+-        Because it is necessary to know when reply data is expected, swizzling
+-        occurs in this thread.
+-
+-        This is a brute force state machine containing 3 states:
+-            IDLE            Waiting for data to be sent.
+-            ACK_PENDING     Data has been sent and need an acknowledge.
+-            REPLY_PENDING   A command was sent which requires a reply from the
+-                            controller.
+-
+-        Some internal stats are maintained to aid failure diagnosis.
+-            sends   Number of messages sent.
+-            acks    Number of ACKs received in reply
+-            naks    The number of NAKs triggering a resend of a message.
+-            replies The number of reply data packets received.
+-        '''
+-        self._ack_pending = False
+-        self._responding = False
+-        self._is_shutdown = False
+-        while not self._shutdown:
+-            try:
+-                # Be sure to allow context switching so the GUI remains
+-                # responsive.
+-                # Also shutdown can happen any time this thread is waiting.
+-                # IDLE
+-                _message = None
+-                self.connect()
+-                while self.connected and not self._shutdown:
+-                    # Block here for IDLE state.
+-                    try: # NOTE: The queue will be empty if not opened.
+-                        # Don't block forever because some earlier versions
+-                        # of Python and on Windows will not respond to
+-                        # a keyboard interrupt.
+-                        _message = self.send_q.get(timeout=self._q_to)
+-                        break
+-                    except queue.Empty:
++        generation = -1
++        try:
++            while not self._shutdown:
++                with self._state:
++                    reset = generation != self._generation
++                    generation = self._generation
++                if reset or not self._enabled:
++                    self._close_transport()
++                with self._state:
++                    if not self._enabled or self.swizzle is None or self.unswizzle is None:
++                        self._state.wait(self._q_to)
+                         continue
+-                    # TODO: Could add a sanity check on connect state.
+-                if self._shutdown or _message is None:
+-                    continue
+-                # Transition
+-                # Check for only KNOWN command expecting a reply.
+-                if (_message[0] == 0xDA
+-                        and _message[1] != 0x01): # 0x01 is a memory set -- no reply.
+-                    self._reply_pending = True
+-                _packet = self._package(_message)
+                 try:
+-                    self.transport.write(_packet)
+-                except TransportError:
+-                    self._responding = False
+-                self.sends += 1
+-                if self.interface == 'udp':
+-                    self._ack_pending = True
+-
+-                # ACK_PENDING
+-                _tries = self._tries
+-                while self._ack_pending:
+-                    try:
+-                        _data = self.transport.read(1)
+-                    except (TransportTimeout, TransportError, AttributeError):
+-                        # Handle a receive timeout. This may be the result of a
+-                        # loss of sync or the controller is no longer responding.
+-                        # NOTE: This will occur while the controller is executing
+-                        # a physical home.
+-                        _tries -= 1
+-                        if _tries:
+-                            continue
+-                        else:
+-                            # Comms failure.
+-                            self._responding = False
+-                            self._ack_pending = False
+-                            self._reply_pending = False
+-                            break
+-                    _ack = self.unswizzle(_data)
+-                    if len(_ack) == 1:
+-                        if _ack == ACK:
+-                            # Signal that the next message can be sent.
++                    if not self.connected:
++                        self.update_connect_status()
++                        if self.transport is None:
++                            if self.interface == "udp":
++                                self.transport = udp.UDPTransport(self.service)
++                            elif self.interface == "usb":
++                                self.transport = usb.USBTransport(self.service)
++                            else:
++                                raise TransportError(f"Unsupported interface: {self.interface}")
++                        self.transport.open()
++                        self.transport.set_timeout(self._timeout)
++                        self._check_active(generation)
++                        probe = ENQ if self.interface == "udp" else GET_SETTING + MEM_MACHINE_STATUS
++                        self.enqs += 1
++                        self._exchange(probe, generation)
++                        with self._state:
++                            self._check_active(generation)
+                             self._responding = True
+-                            self._ack_pending = False
+-                            self.acks += 1
+-                        elif _ack == NAK:
+-                            try:
+-                                self.transport.write(_packet)
+-                            except TransportError:
+-                                self._responding = False
+-                                self._ack_pending = False
+-                            self.naks += 1
+-                        elif _ack == ENQ:
+-                            self.enqs += 1
+-                    else:
+-                        if len(_ack) > 0:
+-                            self.events('Reply data when expecting ACK.')
+-                            # Reply data in response to a command. Forward to be
+-                            # processed.
+-                            self.replies += 1
+-                            self._reply_pending = False
+-                            # TODO: May need a way to restore sync.
+-                            self.recv(_ack) # Just in case
+-
+-                # REPLY_PENDING
+-                _tries = self._tries
+-                while self._reply_pending:
+-                    try:
+-                        _data = self.transport.read(9) # Length is USB only.
+-                        self._reply_pending = False
+-                        self.replies += 1
+-                        _reply = self.unswizzle(_data)
+-                        self.recv(_reply) # Forward to client.
+-                    except (TransportTimeout, AttributeError):
+-                        if _tries >= 0:
+-                            _tries -= 1
+-                        else:
+-                            self._responding = False
+-                            self.recv(None) # Inform the upper layer of failure.
+-                            self.events('Time out when expecting data.')
+-                            break
+-            except OSError:
+-                if self._responding:
+-                    self.service.signal(
+-                        "pipe;usb_status", "Ruida comms ERROR")
+-                    self.events("Ruida comms error.")
+-                    self._responding = False
+-        self._is_shutdown = True
++                        self.update_connect_status()
++                    with self._state:
++                        try:
++                            message, future, queued_generation = self.send_q.get_nowait()
++                        except queue.Empty:
++                            self._state.wait(self._q_to)
++                            continue
++                        if not future.set_running_or_notify_cancel():
++                            self._pending.discard(future)
++                            continue
++                    self._exchange(message, queued_generation)
++                    with self._state:
++                        self._check_active(queued_generation)
++                        self._pending.discard(future)
++                        if not future.done():
++                            future.set_result(None)
++                except (TransportError, OSError, ConnectionError) as error:
++                    with self._state:
++                        self._responding = False
++                        self._generation += 1
++                        generation = self._generation
++                        self._fail_pending(ConnectionError(str(error)))
++                    self._close_transport()
++                    self.recv(None)
++                    self.events(f"Disconnected: {error}")
++                    self.service.signal("pipe;usb_status", "Disconnected")
++                    with self._state:
++                        if self._enabled and not self._shutdown:
++                            self._state.wait(0.5)
++        finally:
++            self._close_transport()
++            with self._state:
++                self._is_shutdown = True
++                self._state.notify_all()
+diff --git a/meerk40t/ruida/udp_transport.py b/meerk40t/ruida/udp_transport.py
+index 56a3284..6f55e85 100644
+--- a/meerk40t/ruida/udp_transport.py
++++ b/meerk40t/ruida/udp_transport.py
+@@ -1,6 +1,7 @@
+ '''Transport layer interface for UDP comms.'''
+ 
+ import socket
++import time
+ 
+ from meerk40t.kernel import Service
+ 
+@@ -33,11 +34,13 @@ class UDPTransport(RuidaTransport):
+         if self.is_open:
+             return
+         try:
++            self._peer = socket.gethostbyname(self.send_address)
+             self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+             self.socket.settimeout(self._s_to)
+             self.socket.bind(("", self.listen_port))
+-        except OSError:
+-            raise TransportError
++        except OSError as error:
++            self.close()
++            raise TransportError(str(error)) from error
+ 
+     def close(self):
+         '''Close the transport interface.'''
+@@ -58,18 +61,23 @@ class UDPTransport(RuidaTransport):
+         '''
+         if not self.is_open:
+             raise TransportError
++        deadline = time.monotonic() + self._s_to
+         try:
+-            _data, _ = self.socket.recvfrom(1024)
++            while time.monotonic() < deadline:
++                data, peer = self.socket.recvfrom(1024)
++                if peer == (self._peer, self.send_port):
++                    return data
++                self.dropped_packets += 1
+         except (socket.timeout, AttributeError, OSError):
+-            raise TransportTimeout
+-        return _data
++            pass
++        raise TransportTimeout
+ 
+     def write(self, data: bytes):
+         '''Send the data using the transport interface.'''
+         if not self.is_open:
+             raise TransportError
+         try:
+-            self.socket.sendto(data, (self.send_address, self.send_port))
++            self.socket.sendto(data, (self._peer, self.send_port))
+         except OSError:
+             raise TransportError
+ 
+@@ -103,8 +111,7 @@ class UDPTransport(RuidaTransport):
+     @property
+     def is_open(self):
+         '''Return True if the transport interface has been opened.'''
+-        return (self.socket is not None
+-                and self.socket.getsockname() != '0.0.0.0')
++        return self.socket is not None
+ 
+     @property
+     def connected(self) -> bool:
+diff --git a/meerk40t/ruida/usb_transport.py b/meerk40t/ruida/usb_transport.py
+index 15718b2..1714b45 100644
+--- a/meerk40t/ruida/usb_transport.py
++++ b/meerk40t/ruida/usb_transport.py
+@@ -50,6 +50,7 @@ class USBTransport(RuidaTransport):
+                 self.serial_port,
+                 115200,  # self.baud, # Baud doesn't seem to matter much.
+                 timeout=self._s_to,
++                write_timeout=self._s_to,
+                 rtscts=True,
+                 dsrdtr=True,
+             )
+@@ -93,10 +94,10 @@ class USBTransport(RuidaTransport):
+         if not self.is_open:
+             raise TransportError
+         try:
+-            self.serial.write(data)
+-            pass  # For debug
+-        except SerialException:
+-            pass
++            if self.serial.write(data) != len(data):
++                raise TransportError("Incomplete USB write.")
++        except SerialException as error:
++            raise TransportError(str(error)) from error
+ 
+     def set_timeout(self, seconds: float):
+         """Set the receive timeout.
+@@ -107,6 +108,7 @@ class USBTransport(RuidaTransport):
+         self._s_to = seconds
+         if self.is_open:
+             self.serial.timeout = self._s_to
++            self.serial.write_timeout = self._s_to
+ 
+     def purge(self):
+         """Purge the comms transport data.
+diff --git a/test/test_ruida_session.py b/test/test_ruida_session.py
+new file mode 100644
+index 0000000..3064e72
+--- /dev/null
++++ b/test/test_ruida_session.py
+@@ -0,0 +1,425 @@
++"""Session regressions: all transport I/O is fake; no kernel or sockets."""
++import queue
++import threading
++import time
++import unittest
++from concurrent.futures import Future
++from types import SimpleNamespace
++from unittest.mock import patch, Mock
++
++from meerk40t.ruida.rdjob import ACK, NAK, ENQ, GET_SETTING, MEM_MACHINE_STATUS, MEM_CURRENT_X
++from meerk40t.ruida.ruidasession import RuidaSession
++from meerk40t.ruida.ruidatransport import TransportError, TransportTimeout
++
++
++def wait_for(predicate, timeout=2):
++    deadline = time.monotonic() + timeout
++    while time.monotonic() < deadline:
++        if predicate():
++            return
++        time.sleep(0.005)
++    raise AssertionError("Timed out waiting for session state")
++
++
++class FakeTransport:
++    def __init__(self, service):
++        self.is_open = False
++        self.connected = False
++        self.writes = []
++        self.owners = set()
++        self.incoming = queue.Queue()
++        self.fail_opens = 0
++        self.opens = 0
++        self.respond = lambda data: [ACK]
++        self.on_write = None
++
++    def touch(self):
++        self.owners.add(threading.get_ident())
++
++    def open(self):
++        self.touch()
++        self.opens += 1
++        if self.fail_opens:
++            self.fail_opens -= 1
++            raise TransportError("bind failed")
++        self.is_open = self.connected = True
++
++    def close(self):
++        self.touch()
++        self.is_open = self.connected = False
++        while not self.incoming.empty():
++            self.incoming.get_nowait()
++
++    def set_timeout(self, timeout):
++        self.touch()
++
++    def write(self, data):
++        self.touch()
++        if not self.is_open:
++            raise TransportError("closed")
++        self.writes.append(data)
++        if self.on_write:
++            self.on_write(data)
++        for reply in self.respond(data):
++            self.incoming.put(reply)
++
++    def read(self, size):
++        self.touch()
++        try:
++            return self.incoming.get(timeout=0.02)
++        except queue.Empty:
++            raise TransportTimeout()
++
++    def purge(self):
++        self.touch()
++        while not self.incoming.empty():
++            self.incoming.get_nowait()
++
++
++class TestRuidaSession(unittest.TestCase):
++    def setUp(self):
++        self.received = []
++        def channel(name, **kwargs):
++            return self.received.append if name.endswith("/recv") else lambda *a: None
++        self.service = SimpleNamespace(interface="udp", safe_label="test", channel=channel,
++                                       signal=lambda *a: None)
++        self.transport = FakeTransport(self.service)
++        self.patch = patch("meerk40t.ruida.ruidasession.udp.UDPTransport", return_value=self.transport)
++        self.patch.start()
++        self.session = RuidaSession(self.service)
++        self.session.set_swizzles(bytes, bytes)
++        self.session._tries = 2
++        self.session.open()
++        wait_for(lambda: self.session.connected)
++
++    def tearDown(self):
++        self.session.shutdown()
++        self.patch.stop()
++
++    def test_write_returns_acknowledgement_future(self):
++        future = self.session.write(b"file block")
++        self.assertIsInstance(future, Future)
++        future.result(2)
++        self.assertFalse(self.session.is_busy)
++        self.assertEqual(self.transport.writes[-1], self.session._package(b"file block"))
++
++    def test_no_double_packaged_probe(self):
++        time.sleep(0.08)
++        self.assertEqual(self.transport.writes, [self.session._package(ENQ)])
++
++    def test_close_stays_closed_until_open(self):
++        self.session.close()
++        wait_for(lambda: not self.transport.is_open)
++        count = len(self.transport.writes)
++        time.sleep(0.1)
++        self.assertFalse(self.session.connected)
++        self.assertFalse(self.session.is_connecting)
++        self.assertEqual(len(self.transport.writes), count)
++        self.session.open()
++        wait_for(lambda: self.session.connected)
++        self.assertEqual(len(self.transport.owners), 1)
++
++    def test_reply_before_ack_and_wrong_address(self):
++        right = b"\xda\x01" + MEM_MACHINE_STATUS + b"\x00" * 5
++        wrong = b"\xda\x01" + MEM_CURRENT_X + b"\x00" * 5
++        self.transport.respond = lambda data: [wrong, right, ACK]
++        future = self.session.write(GET_SETTING + MEM_MACHINE_STATUS)
++        self.assertIsInstance(future, Future)
++        future.result(2)
++        self.assertEqual(self.received, [right])
++        self.assertFalse(self.session.is_busy)
++
++    def test_missing_ack_fails_queue_without_resending_file(self):
++        self.transport.respond = lambda data: []
++        first = self.session.write(b"first block")
++        second = self.session.write(b"second block")
++        self.assertIsInstance(first, Future)
++        with self.assertRaises(ConnectionError):
++            first.result(2)
++        with self.assertRaises(ConnectionError):
++            second.result(2)
++        self.assertEqual(self.transport.writes.count(self.session._package(b"first block")), 1)
++        self.assertNotIn(self.session._package(b"second block"), self.transport.writes)
++        self.assertFalse(self.session.is_busy)
++
++    def test_reply_timeout_clears_busy_and_recovers(self):
++        future = self.session.write(GET_SETTING + MEM_MACHINE_STATUS)
++        self.assertIsInstance(future, Future)
++        with self.assertRaises(ConnectionError):
++            future.result(2)
++        self.assertFalse(self.session.is_busy)
++        wait_for(lambda: self.session.connected)
++        self.session.write(b"later block").result(2)
++
++    def test_nak_is_bounded(self):
++        self.transport.respond = lambda data: [NAK]
++        future = self.session.write(b"bad block")
++        self.assertIsInstance(future, Future)
++        with self.assertRaises(ConnectionError):
++            future.result(2)
++        self.assertLessEqual(self.transport.writes.count(self.session._package(b"bad block")), 3)
++
++    def test_retry_failed_bind(self):
++        self.session.close()
++        self.transport.fail_opens = 1
++        self.session.open()
++        wait_for(lambda: self.session.connected)
++        self.assertGreaterEqual(self.transport.opens, 3)
++
++    def test_shutdown_without_swizzles_terminates(self):
++        self.session.shutdown()
++        other = RuidaSession(self.service)
++        other.open()
++        thread = other._handshake_thread
++        other.shutdown()
++        self.assertFalse(thread.is_alive())
++
++    def test_external_connect_never_reads_transport(self):
++        threads = [threading.Thread(target=self.session.connect) for _ in range(4)]
++        for thread in threads:
++            thread.start()
++        for thread in threads:
++            thread.join(1)
++            self.assertFalse(thread.is_alive())
++        self.assertEqual(len(self.transport.owners), 1)
++
++    def test_failed_queue_tolerates_concurrent_future_cancellation(self):
++        self.transport.respond = lambda data: []
++        first = self.session.write(b"active")
++        wait_for(lambda: self.session._package(b"active") in self.transport.writes)
++        queued = self.session.write(b"queued")
++        original_done = queued.done
++        def cancel_during_check():
++            done = original_done()
++            queued.cancel()
++            return done
++        queued.done = cancel_during_check
++        self.session.close()
++        self.assertTrue(queued.cancelled())
++        self.assertIsInstance(first.exception(), ConnectionError)
++        self.assertFalse(self.session.is_busy)
++        self.assertTrue(self.session._handshake_thread.is_alive())
++
++    def test_old_generation_cannot_continue_upload_after_reconnect(self):
++        generation = self.session.generation
++        self.session.write(b"first", expected_generation=generation).result(2)
++        self.session.close()
++        self.session.open()
++        wait_for(lambda: self.session.connected)
++        with self.assertRaises(ConnectionError):
++            self.session.write(b"remainder", expected_generation=generation)
++        self.assertNotIn(self.session._package(b"remainder"), self.transport.writes)
++        self.session.write(b"new transfer", expected_generation=self.session.generation).result(2)
++
++    def test_close_emits_disconnected_status(self):
++        self.service.signal = Mock()
++        self.session.close()
++        self.service.signal.assert_called_with("pipe;usb_status", "Disconnected")
++
++    def test_closed_session_reports_disconnected(self):
++        self.session.close()
++        self.service.signal = Mock()
++        self.session.update_connect_status()
++        self.service.signal.assert_called_with("pipe;usb_status", "Disconnected")
++
++    def test_full_queue_fails_caller_without_blocking_worker(self):
++        self.transport.respond = lambda data: []
++        self.session.send_q = queue.Queue(1)
++        first = self.session.write(b"active")
++        wait_for(lambda: self.session._package(b"active") in self.transport.writes)
++        second = self.session.write(b"queued")
++        with self.assertRaises(ConnectionError):
++            self.session.write(b"overflow")
++        self.session.close()
++        self.assertIsInstance(first.exception(), ConnectionError)
++        self.assertIsInstance(second.exception(), ConnectionError)
++
++    def test_queued_cancellation_never_sends_later(self):
++        self.transport.respond = lambda data: []
++        first = self.session.write(b"active")
++        wait_for(lambda: self.session._package(b"active") in self.transport.writes)
++        self.assertTrue(self.session.is_busy)
++        self.assertFalse(first.cancel())
++        second = self.session.write(b"cancelled")
++        self.assertTrue(second.cancel())
++        self.transport.incoming.put(ACK)
++        first.result(2)
++        wait_for(lambda: not self.session.is_busy)
++        self.assertNotIn(self.session._package(b"cancelled"), self.transport.writes)
++
++    def test_delayed_reply_after_ack_keeps_transaction_busy(self):
++        future = self.session.write(GET_SETTING + MEM_MACHINE_STATUS)
++        wait_for(lambda: self.session.acks >= 2)
++        self.assertTrue(self.session.is_busy)
++        self.assertFalse(future.done())
++        reply = b"\xda\x01" + MEM_MACHINE_STATUS + b"\x00" * 5
++        self.transport.incoming.put(reply)
++        future.result(2)
++        self.assertEqual(self.received, [reply])
++        self.assertFalse(self.session.is_busy)
++
++    def test_nak_then_ack_retries_only_rejected_packet(self):
++        replies = iter([[NAK], [ACK]])
++        self.transport.respond = lambda data: next(replies)
++        self.session.write(b"block").result(2)
++        self.assertEqual(self.transport.writes.count(self.session._package(b"block")), 2)
++
++    def test_close_interrupts_long_reply_wait_and_fails_future(self):
++        self.session.set_timeout(40)
++        future = self.session.write(GET_SETTING + MEM_MACHINE_STATUS)
++        wait_for(lambda: self.session._reply_pending)
++        self.session.close()
++        with self.assertRaises(ConnectionError):
++            future.result(1)
++        self.assertFalse(self.session.is_busy)
++        self.assertFalse(self.session._reply_pending)
++        self.assertFalse(self.session._ack_pending)
++
++    def test_usb_requires_matching_probe_reply_but_no_data_ack(self):
++        self.session.shutdown()
++        self.service.interface = "usb"
++        reply = b"\xda\x01" + MEM_MACHINE_STATUS + b"\x00" * 5
++        self.transport.respond = lambda data: [reply] if data.startswith(GET_SETTING) else []
++        with patch("meerk40t.ruida.ruidasession.usb.USBTransport", return_value=self.transport):
++            self.session = RuidaSession(self.service)
++            self.session.set_swizzles(bytes, bytes)
++            self.session.open()
++            wait_for(lambda: self.session.connected)
++            self.session.write(b"file block").result(2)
++            self.assertEqual(self.transport.writes[-1], b"file block")
++            self.assertIn(reply, self.received)
++            self.session.shutdown()
++
++    def test_many_status_reads_do_not_accumulate_queue(self):
++        def respond(data):
++            command = data[2:]
++            if command.startswith(GET_SETTING):
++                return [ACK, b"\xda\x01" + command[2:4] + b"\x00" * 5]
++            return [ACK]
++        self.transport.respond = respond
++        for _ in range(50):
++            self.session.write(GET_SETTING + MEM_MACHINE_STATUS).result(2)
++            self.assertFalse(self.session.is_busy)
++            self.assertTrue(self.session.send_q.empty())
++        self.assertEqual(self.session.replies, 50)
++
++
++class TestRuidaTransport(unittest.TestCase):
++    def test_failed_udp_bind_closes_socket(self):
++        from meerk40t.ruida.udp_transport import UDPTransport
++        service = SimpleNamespace(name="test", interface="udp", address="192.0.2.1")
++        sock = Mock()
++        sock.bind.side_effect = OSError("busy")
++        with patch("meerk40t.ruida.udp_transport.socket.socket", return_value=sock):
++            transport = UDPTransport(service)
++            with self.assertRaises(TransportError):
++                transport.open()
++            self.assertIsNone(transport.socket)
++            sock.close.assert_called_once()
++
++    def test_udp_writes_to_resolved_peer(self):
++        from meerk40t.ruida.udp_transport import UDPTransport
++        service = SimpleNamespace(name="test", interface="udp", address="laser.invalid")
++        sock = Mock()
++        with patch("meerk40t.ruida.udp_transport.socket.socket", return_value=sock), \
++             patch("meerk40t.ruida.udp_transport.socket.gethostbyname", return_value="192.0.2.1"):
++            transport = UDPTransport(service)
++            transport.open()
++            transport.write(b"block")
++            sock.sendto.assert_called_once_with(b"block", ("192.0.2.1", 50200))
++            transport.close()
++
++    def test_udp_ignores_foreign_sender(self):
++        from meerk40t.ruida.udp_transport import UDPTransport
++        service = SimpleNamespace(name="test", interface="udp", address="192.0.2.1")
++        sock = Mock()
++        sock.recvfrom.side_effect = [(b"wrong", ("192.0.2.2", 50200)),
++                                     (b"right", ("192.0.2.1", 50200))]
++        with patch("meerk40t.ruida.udp_transport.socket.socket", return_value=sock), \
++             patch("meerk40t.ruida.udp_transport.socket.gethostbyname", return_value=service.address):
++            transport = UDPTransport(service)
++            transport.open()
++            self.assertEqual(transport.read(1), b"right")
++            transport.close()
++
++    def test_usb_open_bounds_write_wait_for_shutdown(self):
++        from meerk40t.ruida.usb_transport import USBTransport
++        service = SimpleNamespace(name="test", interface="usb", baud_rate=115200, serial_port="fake")
++        with patch("meerk40t.ruida.usb_transport.serial_open") as serial_open:
++            transport = USBTransport(service)
++            transport.open()
++            self.assertEqual(serial_open.call_args.kwargs.get("write_timeout"), 0.25)
++            transport.close()
++
++    def test_usb_write_failure_is_not_success(self):
++        from meerk40t.ruida.usb_transport import USBTransport, SerialException
++        service = SimpleNamespace(name="test", interface="usb", baud_rate=115200, serial_port="fake")
++        transport = USBTransport(service)
++        transport.serial = Mock()
++        transport.serial.write.side_effect = SerialException("disconnected")
++        with self.assertRaises(TransportError):
++            transport.write(b"block")
++        transport.serial.write.side_effect = None
++        transport.serial.write.return_value = 1
++        with self.assertRaises(TransportError):
++            transport.write(b"block")
++        transport.close()
++
++
++class TestRuidaController(unittest.TestCase):
++    def test_sender_releases_lock_and_does_not_report_failed_file_sent(self):
++        from meerk40t.ruida.controller import RuidaController
++        controller = RuidaController.__new__(RuidaController)
++        controller._job_lock = threading.Lock()
++        controller._send_queue = [b"first", b"second"]
++        controller._send_thread = object()
++        controller.job = SimpleNamespace(low_power_warning=False, high_power_warning=False)
++        events = []
++        controller.events = events.append
++        future = Future()
++        future.set_exception(ConnectionError("missing ACK"))
++        controller.write = Mock(return_value=future)
++        controller._data_sender()
++        self.assertEqual(controller.write.call_count, 1)
++        self.assertNotIn("File Sent.", events)
++        self.assertFalse(controller._job_lock.locked())
++        self.assertEqual(controller._send_queue, [])
++        self.assertIsNone(controller._send_thread)
++
++    def test_monitor_does_not_reconnect_disconnected_session(self):
++        from meerk40t.ruida.controller import RuidaController
++        controller = RuidaController.__new__(RuidaController)
++        controller.service = SimpleNamespace(connected=False, is_busy=False, connect=Mock())
++        controller._status_thread_sleep = 0.2
++        with patch("meerk40t.ruida.controller.time.sleep", side_effect=[None, InterruptedError]):
++            with self.assertRaises(InterruptedError):
++                controller._status_monitor()
++        controller.service.connect.assert_not_called()
++
++    def test_sync_explicitly_reopens_session(self):
++        from meerk40t.ruida.controller import RuidaController
++        controller = RuidaController.__new__(RuidaController)
++        controller.wait_idle = Mock()
++        session = Mock()
++        controller.service = SimpleNamespace(active_session=session)
++        controller.sync()
++        session.close.assert_called_once()
++        session.open.assert_called_once()
++
++
++class TestRuidaDisconnectCommand(unittest.TestCase):
++    def test_disconnect_cancels_retry_without_a_connected_device(self):
++        # Execute the actual nested console handler without creating a kernel,
++        # loading user settings, or constructing any hardware service.
++        import ast
++        from pathlib import Path
++        source = Path(__file__).parents[1] / "meerk40t/ruida/device.py"
++        tree = ast.parse(source.read_text())
++        handler = next(node for node in ast.walk(tree)
++                       if isinstance(node, ast.FunctionDef) and node.name == "ruida_disconnect")
++        handler.decorator_list = []
++        session = Mock()
++        namespace = {"self": SimpleNamespace(connected=False, active_session=session)}
++        exec(compile(ast.Module(body=[handler], type_ignores=[]), str(source), "exec"), namespace)
++        namespace["ruida_disconnect"](None, Mock(), None)
++        session.close.assert_called_once()

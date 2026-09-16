@@ -6,7 +6,8 @@
 #
 # The engine is installed from upstream git at the revision the working copy pins (see
 # MEERK40T_REV below), not from PyPI; the meerk40t/ working copy in the checkout is not
-# part of the build context (see .dockerignore).
+# part of the build context (see .dockerignore). The explicit patch below repairs
+# Ruida session ownership and packet completion; a changed base must pass git apply --check.
 
 # ── Stage 1: the frontend ──────────────────────────────────────────────────────────────
 FROM node:24-alpine AS frontend
@@ -49,13 +50,18 @@ ARG MEERK40T_REV=5f68a45
 # does not declare: Pillow (the rasteriser and images) and ezdxf (DXF import). numpy,
 # pyserial and pyusb come with meerk40t itself. `[camera]` is opencv-python-headless.
 COPY api/ /app/api/
+COPY deploy/patches/ruida-session.patch /tmp/ruida-session.patch
 RUN apt-get update \
  && apt-get install -y --no-install-recommends git \
- && pip install --no-cache-dir "meerk40t @ git+https://github.com/meerk40t/meerk40t.git@${MEERK40T_REV}" \
+ && git clone https://github.com/meerk40t/meerk40t.git /tmp/meerk40t \
+ && git -C /tmp/meerk40t checkout "${MEERK40T_REV}" \
+ && git -C /tmp/meerk40t apply --check /tmp/ruida-session.patch \
+ && git -C /tmp/meerk40t apply /tmp/ruida-session.patch \
+ && pip install --no-cache-dir /tmp/meerk40t \
  && pip install --no-cache-dir "/app/api[camera]" "Pillow>=10" "ezdxf>=1.1" \
  && apt-get purge -y git \
  && apt-get autoremove -y \
- && rm -rf /var/lib/apt/lists/* /app/api
+ && rm -rf /var/lib/apt/lists/* /app/api /tmp/meerk40t /tmp/ruida-session.patch
 
 COPY --from=frontend /src/build /app/frontend
 COPY deploy/entrypoint.sh /app/entrypoint.sh

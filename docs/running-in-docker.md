@@ -138,6 +138,24 @@ against PyPI 0.9.9100, 193 of 1625 API tests fail. The revision is the `MEERK40T
 build argument in `deploy/Dockerfile`. Bumping it is a deliberate step taken together
 with this repository's working copy, not something to do on its own.
 
+The build applies `deploy/patches/ruida-session.patch` to that exact engine revision
+before installing it. This fixes Ruida transport ownership, reconnect and per-packet
+completion. It includes the offline regression tests for review/upstream submission.
+An incompatible base fails the build at `git apply --check`; no unpatched fallback is
+installed. A local engine checkout is still excluded from the image.
+
+For exact local installation commands, see [the patch README](../deploy/patches/README.md).
+Use a clean checkout of `5f68a45`, apply the same
+patch with `git apply`, then install that checkout before `pip install -e api`.
+Do not apply it twice to an already patched checkout. File upload explicitly refuses
+an engine without completion tracking.
+
+Before using a new image beside the machine, keep the old image digest for rollback.
+Verify idle status, explicit disconnect/reconnect, and sending a file without starting
+it. Delayed or missing controller acknowledgements stop the transfer; inspect the file
+on the machine if its completion was not confirmed. These are required hardware checks,
+not claims made by the offline test suite.
+
 ## Updating
 
 ```bash
