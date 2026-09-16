@@ -158,3 +158,12 @@ Not the engine's bugs, but worth knowing:
 This drives a laser. Never start a job to test something; never move the head to see if a
 route works. The pre-flight, the estimate and the cut-path window all exist so that a
 mistake is found before the material is in the machine, and none of them touch the machine.
+
+## Mac runtime decision — 2026-09-16
+
+User chose native Mac operation and stopped Debian network investigation.
+Use the existing Mac KH-5030 profile and library; do not migrate Docker data.
+See docs/running-on-mac.md and Start OpenKerf.command. Structural session and
+Job sidebar changes are retained; experimental read retry stays separate.
+Steps 1/2 still need physical link interruption and upload-without-start checks.
+Do not resume Debian experiments without a new request.
