@@ -1714,7 +1714,7 @@ import { SeriesStore } from '$lib/series.svelte';
 		<span class="vw">{panelOpen ? t('panel.collapse') : t('panel.expand')}</span>
 	</button>
 {/if}
-<aside class="panel" class:gone={tablet && !panelOpen} aria-label={t('panel.aria')}>
+<aside class="panel" class:job-panel={tab === 'job'} class:gone={tablet && !panelOpen} aria-label={t('panel.aria')}>
 		<!-- The bell is in the same row but outside the tablist: according to ARIA a
 		     tablist may only contain tabs, and axe otherwise counted the bell as a
 		     missing child (aria-required-children). -->
@@ -2044,7 +2044,7 @@ import { SeriesStore } from '$lib/series.svelte';
 <!-- The prompt card floats and does not block: a job has just started, and that
      must not disappear behind a modal window. -->
 {#if !onPhone && promptOpen && notifications.shouldAsk}
-	<div class="vraagkaart">
+	<div class="vraagkaart" class:job-panel={tab === 'job'}>
 		<NotificationCard {notifications} variant="prompt" onDone={() => (promptOpen = false)} />
 	</div>
 {/if}
@@ -2369,6 +2369,13 @@ import { SeriesStore } from '$lib/series.svelte';
 	@media (max-width: 1199px), (pointer: coarse) {
 		.panel {
 			width: clamp(280px, 38vw, 324px);
+		}
+	}
+	@media (min-width: 1200px) and (pointer: fine) {
+		.panel.job-panel { width: 320px; }
+		.vraagkaart.job-panel {
+			right: calc(320px + var(--space-4));
+			width: min(360px, calc(100vw - 340px - 2 * var(--space-4)));
 		}
 	}
 	.panel.gone { display: none; }

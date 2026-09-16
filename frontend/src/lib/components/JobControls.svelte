@@ -609,6 +609,10 @@
 	 */
 	let phase = $derived(jobPhase(device, job, empty));
 	let busyWithWork = $derived(jobBusy(phase));
+	let machineOpen = $state(false);
+	$effect(() => {
+		if (busyWithWork) machineOpen = false;
+	});
 	let progressPart = $derived.by(() => {
 		const part = job?.progress;
 		if (part === null || part === undefined || !Number.isFinite(part)) return null;
@@ -781,6 +785,18 @@
 		{busyWithWork || phase === 'done' ? t('job.section.theJob') : t('job.section.preparing')}
 	</h2>
 
+	{#if control.canAdjust && Object.values(control.adjust).some(value => value !== null && value !== 1)}
+		<div class="pf-warn strong adjust-status" role="status">
+			<strong>{t('job.adjust.title')}</strong>
+			{#each ADJUSTABLE as axis (axis.what)}
+				{@const level = control.adjust[axis.what]}
+				{#if level !== null && level !== 1}
+					<div>{t(axis.key)}: <span class="mono">{level > 1 ? '+' : '−'}{i18n.number(Math.abs(Math.round((level - 1) * 100)))}%</span></div>
+				{/if}
+			{/each}
+		</div>
+	{/if}
+
 	{#if control.tokenProbleem}
 		<!-- The API is reachable from the network; without a token everything stays
 		     read-only. A refused token counts too: it *was* in the browser, so this
@@ -874,6 +890,14 @@
 								>{size(control.origin.x_mm)},&#8239;{size(control.origin.y_mm)} mm</span
 							>
 						</div>
+					{/if}
+					{#if cut?.aligned}
+						<div class="pf-time sheet">
+							<span class="muted">{t('job.printcut')}</span>
+							<span class="v mono">{size(cut.offset_mm?.x_mm ?? 0)}, {size(cut.offset_mm?.y_mm ?? 0)} mm · {i18n.number(Math.round((cut.angle_deg ?? 0) * 100) / 100)}°</span>
+						</div>
+					{:else if cut?.lapsed}
+						<p class="pf-warn">{t(cut.lapsed === 'gone' ? 'job.printcut.lapsed.marks' : 'job.printcut.lapsed.machine')}</p>
 					{/if}
 					{#if rotaryText}
 						<!-- The rotary changes the shape of what comes out, so it belongs on
@@ -1394,11 +1418,11 @@
 			This is getting-ready work. It used to sit above the progress and, during a
 			running job, took up the whole visible panel — while its buttons are
 			precisely then disabled, because you do not jog with a burning laser. Now it
-			sits *under* what is happening, and folds shut as soon as work is under way.
+			sits *under* what is happening, starts closed, and folds shut when work begins.
 			Shut and not gone: it has to be there the moment you need it again, and a
 			block that disappears is not one you learn to find back.
 		-->
-		<details class="fold machinevouw" open={!busyWithWork}>
+		<details class="fold machinevouw" bind:open={machineOpen}>
 			<summary>
 				{t('job.machineControls')}
 				{#if busyWithWork}<span class="why">— {t('job.machineControls.notNow')}</span>{/if}
@@ -1463,8 +1487,8 @@
 			     has "Go to Origin" and saved positions; whoever has a jig on the bed
 			     otherwise jogs that corner together again every session. -->
 			{#if control.capabilities?.motion?.move}
-				<div class="points">
-					<span class="rot-label">{t('job.toPoint')}</span>
+				<details class="fold machine-group points">
+					<summary>{t('job.toPoint')}<span class="group-value mono">{posities.length}</span></summary>
 					<div class="puntrij">
 						<button
 							class="btn mini"
@@ -1536,7 +1560,7 @@
 							{t('job.keepSpot')}
 						</button>
 					{/if}
-				</div>
+				</details>
 			{/if}
 			<!-- The zero point (gap J12). LightBurn has Set Origin / Clear Origin / Go
 			     to Origin; here "To origin" was literally 0,0 of the bed and there was
@@ -1548,8 +1572,8 @@
 			     the saved positions say "go there", this says "measure from there".
 			     Among the spots it would read as one more spot. -->
 			{#if control.capabilities?.motion?.move}
-				<div class="origin" class:gezet={control.origin !== null}>
-					<span class="rot-label">{t('job.workOrigin')}</span>
+				<details class="fold machine-group origin" class:gezet={control.origin !== null} open={control.origin !== null}>
+					<summary>{t('job.workOrigin')}<span class="group-value mono">{control.origin ? `${size(control.origin.x_mm)}, ${size(control.origin.y_mm)} mm` : t('job.state.off')}</span></summary>
 					{#if control.origin}
 						<!-- The number is always with it. A zero point you cannot read off is
 						     a setting that quietly moves your work, and that is exactly the
@@ -1607,7 +1631,7 @@
 							</button>
 						{/if}
 					</div>
-				</div>
+				</details>
 			{/if}
 
 			<!-- Print and cut (gap H2). The same family as the zero point above and
@@ -1619,8 +1643,8 @@
 			     something you do on the drawing, and a second shape picker inside this
 			     panel would be a second way to do one thing. -->
 			{#if control.capabilities?.motion?.move}
-				<div class="origin" class:gezet={cut?.aligned === true}>
-					<span class="rot-label">{t('job.printcut')}</span>
+				<details class="fold machine-group origin printcut" class:gezet={cut?.aligned === true} open={Boolean(cut?.aligned || cut?.lapsed || cutMarks.length)}>
+					<summary>{t('job.printcut')}<span class="group-value">{cut?.aligned ? t('job.printcut.pose', { angle: i18n.number(Math.round((cut.angle_deg ?? 0) * 100) / 100) }) : cutMarks.length ? `${cut?.marks.filter((m) => m.measured).length ?? 0} / 2` : t('job.state.off')}</span></summary>
 					{#if cut?.aligned}
 						<p class="originPoint">
 							<span class="mono"
@@ -1701,7 +1725,7 @@
 							{/if}
 						{/if}
 					</div>
-				</div>
+				</details>
 			{/if}
 
 			<!-- Adjusting during a running job (gap J11).
@@ -1715,8 +1739,8 @@
 			     nothing next to a burning laser is worse than no button. See
 			     FEATURE-GAPS J11. -->
 			{#if control.canAdjust}
-				<div class="bijstellen">
-					<span class="rot-label">{t('job.adjust.title')}</span>
+				<details class="fold machine-group bijstellen" open={Object.values(control.adjust).some(value => value !== null && value !== 1)}>
+					<summary>{t('job.adjust.title')}</summary>
 					{#each ADJUSTABLE as axis (axis.what)}
 						{#if control.capabilities?.adjust?.[axis.what]}
 							{@const level = control.adjust[axis.what] ?? 1}
@@ -1757,7 +1781,7 @@
 						{/if}
 					{/each}
 					<p class="hint">{t('job.adjust.hint')}</p>
-				</div>
+				</details>
 			{/if}
 			{#if !control.capabilities?.motion?.focus && profile?.has_z}
 				<!-- The profile says this machine has a Z axis, but the engine's driver
@@ -1853,10 +1877,8 @@
 		font-size: var(--text-sm);
 	}
 	.section-title {
-		font-size: var(--text-xs);
+		font-size: var(--text-md);
 		font-weight: 600;
-		text-transform: uppercase;
-		letter-spacing: 0.06em;
 		color: var(--text-2);
 		margin: 0 0 var(--space-2);
 	}
@@ -1896,11 +1918,10 @@
 		width: 100%;
 		margin: 0 0 var(--space-3);
 	}
-	.preflight {
-		border: 1px solid var(--line);
-		border-radius: var(--radius-card);
-		padding: var(--space-3);
-	}
+	.preflight { padding: 0; }
+	.machine-group > summary { display: flex; align-items: baseline; gap: var(--space-2); }
+	.group-value { margin-left: auto; color: var(--text-2); font-size: var(--text-xs); font-weight: 400; }
+	.machine-group > summary ~ :global(*) { margin-top: var(--space-3); }
 	.pf-layers {
 		width: 100%;
 		border-collapse: collapse;
@@ -2190,7 +2211,6 @@
 		color: var(--text-2);
 	}
 	.btn.danger.dood:disabled { opacity: 1; }
-	.btn.danger.dood strong { color: var(--text-1); }
 	.hint {
 		margin: var(--space-2) 0 0;
 		font-size: var(--text-xs);

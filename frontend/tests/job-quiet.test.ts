@@ -196,14 +196,16 @@ test('the panel as it opens holds no paragraph about a feature that is off', asy
 /**
  * The two "Off" values in `Operate machine`, at one width: what they say, whether the
  * dotted underline that promises a sentence actually computes, and whether the sentence
- * itself is on the screen. The fold is open by rule, so no click is needed beyond the tab.
+ * itself is on the screen. Open the machine section and its two setup folds before inspecting their help.
  */
 async function offValues(width: number) {
 	browser = await chromium.launch();
 	const page = await browser.newPage({ viewport: { width, height: 1000 } });
 	await page.goto(BASE, { waitUntil: 'networkidle' });
 	await page.click('.panel .tab:has-text("Job")');
-	await page.waitForSelector('.origin p.hint[title]', { timeout: 20000 });
+	await page.locator('.machinevouw > summary').click();
+		for (const summary of await page.locator('.machinevouw details.origin > summary').all()) await summary.click();
+		await page.waitForSelector('.origin p.hint[title]', { timeout: 20000 });
 	await page.waitForTimeout(500);
 	return page.evaluate(() =>
 		[...document.querySelectorAll('.origin')].map((block) => {

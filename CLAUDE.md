@@ -8,6 +8,13 @@ centre) and is not needed to work on the code. Older comments in the code point 
 (`DESIGN-SYSTEM.md`, `BESLISSINGEN.md`, `GAUNTLET-LOG.md`); the measurements they rely on
 are repeated below.
 
+## Pending hardware validation
+
+Steps 1–2 (Ruida connection repair and honest connection status) are **not yet validated
+on the physical controller**. Validate at home on the Ubuntu Docker host and Cisco
+switch: idle polling, explicit disconnect/reconnect, interrupted UDP, and upload without
+starting. Offline tests and UI work do not close this task.
+
 ## What this is
 
 A browser interface and an API layer **beside** the MeerK40t engine.

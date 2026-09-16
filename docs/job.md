@@ -33,12 +33,12 @@ tab and arms the pre-flight that was standing there anyway.
 
 ## The pre-flight
 
-As long as nothing is in flight, the Job tab is headed **GETTING READY** and
+As long as nothing is in flight, the Job tab is headed **Getting ready** and
 shows the preparation in full. You do not have to press anything to see it, and
 it follows your drawing: change a shape and the estimate is worked out again
 about half a second later.
 
-![The OpenKerf window with the Job tab open on the pre-flight: at the top the row "Material" reading "not filled in for this sheet", an amber box saying the machine is not responding, a second amber box reading "3 layers use presets that were not verified on a test grid. On unknown material: try a scrap first.", under that a "Show cut path" button heading the whole layer table with speed, power, passes and a Source column, and under that a small drawing of the sheet with red rectangles, a circle, two dashed grey squares and a green block, "Sheet 1 500 × 300 mm", "work 295 × 176 mm" and a note that two shapes are in a layer that is switched off — the foot of that drawing runs on under the strip. At the foot of the panel that strip, which stays put while the rest scrolls: a green "Start job 1:19" with a narrower green button carrying a downward arrow joined to its right-hand end, and nothing else.](images/12-job-preflight.png)
+![Job review in an isolated test installation: material and connection warnings, four layers with their settings, the drawing preview, the start button and the collapsed machine section.](images/12-job-preflight.png)
 
 ### Time, material and zero point
 
@@ -614,10 +614,20 @@ do not need them."
 
 ## Operate machine
 
-Under everything else, **Operate machine**. It is open when the machine is idle
-and folds shut while work is in flight, with the reason beside its title: *— not
-during a job*. Folded shut, not gone: a block that disappears is not one you learn
-to find again.
+![The machine section open in an isolated UI test: jog controls followed by collapsed position, zero point and print-and-cut groups.](images/49-machine-controls.png)
+
+Below the job, **Operate machine** starts collapsed. Open it when positioning the
+head or setting up the work. It closes when a job begins and stays closed when the
+job ends, with *— not during a job* shown while work is in flight. Opening the
+section does not issue a machine command.
+
+Inside, the jog pad and step size are immediately available. **Go to a point**,
+**Zero point of the work**, **Print and cut** and, where supported, speed/power
+adjustments each have their own fold. Open the group you need. A set zero point or
+print-and-cut setup opens its group and remains identified in the summary when you
+collapse it. The Job panel is slightly wider on desktop to give warnings and values
+more space; job warnings and the start checklist remain outside these setup folds. Active speed
+or power corrections are shown above the job, even while machine controls are closed.
 
 **Move** is an inverted T of arrows, laid out like the arrow keys on a keyboard,
 with **Home** beside it. On a machine with a Z axis there are two more buttons in

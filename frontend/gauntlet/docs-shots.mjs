@@ -705,6 +705,11 @@ await scene('12-job-preflight.png', '/?tab=job', {}, async (page) => {
 	await page.waitForTimeout(3500);
 });
 
+await scene('49-machine-controls.png', '/?tab=job', { selector: '.panel' }, async (page) => {
+	await page.locator('.machinevouw > summary').click();
+	await page.locator('.machinevouw').scrollIntoViewIfNeeded();
+});
+
 /**
  * Sending the job to the machine's own memory: the window with the name field.
  *
@@ -1394,6 +1399,7 @@ if (wanted('34')) {
 			}
 		},
 		async (page) => {
+			await page.locator('.machinevouw > summary').click();
 			await page.waitForTimeout(900);
 		}
 	);
