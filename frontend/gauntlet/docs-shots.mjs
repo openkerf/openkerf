@@ -1,3 +1,4 @@
+import { scratchFetch as fetch, assertScratch } from './scratch.mjs';
 /**
  * The screenshot set for the handbook.
  *
@@ -26,7 +27,8 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
-const BASE = process.env.OK_BASE ?? 'http://localhost:5199';
+const BASE = process.env.OK_BASE ?? 'http://127.0.0.1:8092';
+await assertScratch(BASE);
 // Relative to this script, so it works from `frontend/` and on somebody else's
 // machine. It was an absolute path with a home directory in it, which in a public
 // repository is both a name nobody needs and a script that only runs here.
@@ -103,7 +105,7 @@ async function theHandbookMachineIsActive() {
  * picture after that has a modal in it. That cost the i18n round a set of shots.
  */
 async function clear() {
-	await fetch(BASE + '/api/design/autosave', { method: 'DELETE' }).catch(() => {});
+	await fetch(BASE + '/api/design/autosave', { method: 'DELETE' });
 	// A list attached for the series pictures would still be attached for every
 	// picture after them: the names stay on the bed, the Job tab keeps its block
 	// about a series nobody started here, and the next person to open the app in
@@ -399,7 +401,7 @@ async function open(path = '/', { width = 1440, height = 900, route = null } = {
 	await page.goto(BASE + path, { waitUntil: 'domcontentloaded', timeout: 30000 });
 	// Not `networkidle`: the status connection stays open for as long as the app
 	// runs, so that state never arrives. Wait for the app to have drawn instead.
-	await page.waitForSelector('.statusbar, .setup, .card, .phone', { timeout: 20000 }).catch(() => {});
+	await page.waitForSelector('.statusbar, .setup, .card, .phone', { timeout: 20000 });
 	await page.waitForTimeout(900);
 	// The notification prompt floats over the bottom right when it turns up. It is
 	// about this browser profile, not about the app, so it does not belong in the

@@ -765,3 +765,15 @@ test('no message is resolved once and kept', () => {
 		assert.deepEqual(frozen, [], `resolved at import instead of at render: ${frozen.join(', ')}`);
 	}
 });
+
+
+test('generator and layer choices follow language changes in mounted panels', () => {
+	// These panels stay mounted while language changes. Component constants capture
+	// the initial translation just as module constants do.
+	for (const [file, name] of [['Generators.svelte', 'TABS'], ['DesignPanel.svelte', 'LAYER_TYPES']]) {
+		const source = readFileSync(join(SRC, 'lib/components', file), 'utf8');
+		const declaration = source.slice(source.indexOf(`let ${name}`)).split(']);')[0];
+		assert.ok(declaration.includes('$derived(['), `${file}: translated choices must be reactive`);
+		assert.ok(declaration.includes('label: t('), `${file}: labels resolve inside the derived value`);
+	}
+});

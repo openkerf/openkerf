@@ -1,5 +1,7 @@
 # Getting started
 
+In Save as, the name field and Save action remain visible below the project list. Use name copies an existing project name into the field; Rename is available in the row menu.
+
 This page walks the road from a fresh installation to the first burn: telling
 OpenKerf which laser stands in your workshop, saying what is lying on the bed,
 getting a drawing onto it, giving that drawing a speed and a power, and checking
@@ -81,9 +83,7 @@ it that offers a name that is free — **Make it “KH-5030 (2)”**.
 ![The wizard's naming screen: the heading "Give the machine a name", the lead naming the model, a text field holding KH-5030, and under it the warning "There is already a machine called “KH-5030”. In the top bar they cannot be told apart." with the link "Make it “KH-5030 (2)”". At the bottom the buttons "Back" and "Create".](images/03-setup-name.png)
 
 **Set up.** The work area. "How big is the bed?" with the warning that matters
-most on this screen: "Measure the work area, not the outside of the case. This
-becomes the bed on your canvas — if it is wrong, OpenKerf thinks there is room
-where the head does not go." Width and height in millimetres, and a preview of the
+most on this screen: "Measure the usable physical bed and enter its width and height." Width and height in millimetres, and a preview of the
 bed beside the fields.
 
 ![The wizard's fourth screen, "How big is the bed?", with Width (mm) 500 and Height (mm) 300 and a drop-down "Where is 0,0?" set to "As the machine says itself"; under it the fieldset "The laser itself" with Kind of laser set to "CO2 with a glass tube", Tube power 80 W, the tick box "I am not sure how powerful my tube is" and Lens 50.8 mm; then "What does this machine have?" with the boxes for a Z axis and Autofocus, a collapsed section "More of this machine", and the buttons "Skip" and "Save and finish".](images/04-setup-settings.png)
@@ -308,7 +308,7 @@ shows everything the machine is about to do. You do not have to press anything t
 see it, and it follows your drawing: change a shape and the estimate is worked out
 again.
 
-**Start job** in the top bar does not start anything. It switches to that tab and
+**Prepare job** in the top bar does not start anything. It switches to that tab and
 arms the job — see "Burning" below.
 
 ![The Job tab showing the row "Material" reading "not filled in for this sheet", a yellow warning that the machine is not responding, a second warning that three layers use presets that were not verified, under those a "Show cut path" button and the whole table of layers with mm/s, %, passes and source, and under that a small picture of the sheet with the work in it, "Sheet 1 500 × 300 mm", "work 295 × 176 mm" and a note that two shapes are in a layer that is switched off — the foot of that picture running on under the strip at the bottom of the panel, which carries a green "Start job 1:19" with a narrower arrow button joined to its right-hand end.](images/12-job-preflight.png)
@@ -333,8 +333,7 @@ The list **Run through this** — "Lid closed", "Extraction and air assist on",
 **Start job**, directly above the **Start now** that fires.
 
 Read the source column. A preset that was not measured on a test grid says so,
-and the panel adds it up: "3 layers use presets that were not verified on a
-test grid. On unknown material: try a scrap first."
+and the panel adds it up: "3 unverified layers · test on a scrap first."
 
 Each part of the panel, and what it does while a job is running, is in
 [Burning](job.md).
@@ -368,7 +367,7 @@ away — armed or not, running or not.
 
 Then **Start job**. That first press arms the job: the footer becomes **Cancel**
 and **Start now**, and only **Start now** sends it. No single click burns
-anything. Pressing **Start job** in the top bar does the same arming, and takes
+anything. Pressing **Prepare job** in the top bar does the same arming, and takes
 you to the Job tab so you can read the pre-flight before the second press.
 
 **Stop** is in the top bar the whole time, running or not, and it answers to the
@@ -408,10 +407,10 @@ once the job is done — the stop button stays here." The setup screens carry no
 stop button and no shortcut, so leaving the work area during a job would take both
 off the screen at the one moment you might need them.
 
-You can start a job anyway. The pre-flight warns what will happen: "The machine is
-not responding. This job goes into the queue and only starts once the connection
-is there — switch it on or check the cable." So a silent machine after pressing
-start is the connection, not the job.
+You can open the pre-flight with **Prepare job** while disconnected. Final start
+is disabled when the driver reports a disconnected machine: "Machine disconnected.
+Switch it on and reconnect before starting." No job is promised to start automatically
+after reconnection.
 
 Some drivers do not report whether anything is listening. The strip then says
 "Connection unknown", and hovering that text explains why: "The engine is running,
@@ -429,3 +428,7 @@ but this driver does not report whether a machine is attached. Check the machine
 
 Connecting, disconnecting and the jog controls beside them are covered in
 [Burning](job.md#connect-and-disconnect).
+
+Machine setup asks for the usable physical bed dimensions. Laser type and rated
+power guide material-preset matching; **Glass tube or RF?** contains optional
+identification help. An unknown laser type does not imply an inferred model default.

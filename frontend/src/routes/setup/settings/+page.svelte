@@ -323,7 +323,7 @@
 		{/if}
 
 		<h1>{t('setup.bedSize')}</h1>
-		<p class="muted">{t('setup.bedSize.body')}</p>
+		<p class="muted">{t('ux.setup.bed')}</p>
 
 		<div class="workarea">
 			<div class="fields">
@@ -387,7 +387,7 @@
 		     here, because machine-wide facts belong to the setup flow. -->
 		<fieldset class="laser">
 			<legend>{t('setup.laser')}</legend>
-			<p class="muted hint">{t('setup.laser.body')}</p>
+			<p class="muted hint">{t('ux.setup.laserPurpose')}</p>
 			<div class="fields">
 				<label class="choice">
 					<span>{t('setup.laser.kind')}</span>
@@ -397,8 +397,11 @@
 							<option value={kind}>{laserKindLabel(kind)}</option>
 						{/each}
 					</select>
-					<span class="hint">{t('setup.laser.kind.hint')}</span>
 				</label>
+				<details class="fold">
+						<summary>{t('ux.setup.laserHelp')}</summary>
+						<p class="hint">{t('ux.setup.laserKinds')}</p>
+				</details>
 				<NumberField
 					label={t('setup.laser.watt')}
 					unit="W"

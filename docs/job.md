@@ -15,20 +15,20 @@ standing at the machine rather than at the keyboard.
 
 Three surfaces, and each keeps the same job all the time.
 
-- **The top bar**, on the right: **Stop**, **Pause** / **Resume**, **Start job**
-  (**Start** on a narrow bar). These four never move, so the stop button is in
+- **The top bar**, on the right: **Stop**, **Pause** / **Resume**, **Prepare job**
+  (**Prepare** on a narrow bar). These four never move, so the stop button is in
   the same place whether something is running or not — and it is on the far side
-  of the row from **Start job**, on every screen that carries both. **Show frame** sits with
+  of the row from **Prepare job**, on every screen that carries both. **Show frame** sits with
   them, and only there: the pre-flight used to carry a second copy of it and no
   longer does.
 - **The Job tab** in the right-hand panel: the pre-flight before, the progress
   during, and the machine controls under both.
 - **The status bar** at the bottom: the head position, your pointer position, how
   many elements the design holds, how much time is left, whether the machine is on
-  the line, and whether this page is still talking to OpenKerf. It is the same on
+  the line, and **Server connected** for the separate connection from this page to OpenKerf. The machine connection is named beside the machine in the header. It is the same on
   every tab, so you never have to switch tabs to read the progress or the count.
 
-**Start job** does not open a window. It switches the right-hand panel to the Job
+**Prepare job** does not open a window. It switches the right-hand panel to the Job
 tab and arms the pre-flight that was standing there anyway.
 
 ## The pre-flight
@@ -43,9 +43,9 @@ about half a second later.
 ### Time, material and zero point
 
 **How long it takes** stands on the start button at the foot of the panel, and
-nowhere else: "Start job 1:19". The engine works it out by building the whole cut
+nowhere else: "Prepare job 1:19". The engine works it out by building the whole cut
 plan, and while it does that the last known time stays where it is, at the contrast
-it always has, with a small ellipsis after it: "Start job 1:19…". The button keeps
+it always has, with a small ellipsis after it: "Prepare job 1:19…". The button keeps
 its width through that, so nothing moves under your cursor, and a screen reader
 hears the sentence "A new estimated time is being worked out." Hiding the number
 made the button change width on every edit, and a second copy of it higher up the
@@ -91,12 +91,7 @@ the table, with its number and colour, and with those same three words where its
 speed and power would be. It used to be left out of the table altogether, which
 made a layer full of shapes look like no layer at all.
 
-Above the table, in one line, if any layer's numbers were never measured: "3
-layers use presets that were not verified on a test grid. On unknown material:
-try a scrap first." It stands there rather than at the foot of the panel because
-the foot is where the sticky strip with the checklist lies: measured at 1280x800,
-under the table that line sat entirely behind the strip, and a warning you only
-meet by scrolling to it is no warning.
+Above the table, a compact confidence note identifies unverified layers: "3 unverified layers · test on a scrap first." Each affected row keeps its source label, and material mismatches remain visible below the table.
 
 Under the table, the objections. One line per layer, heaviest first, and when the
 top one really outweighs the bottom one it is tagged **First**.
@@ -159,7 +154,7 @@ Three lines under the heading **Run through this**: *Lid closed*, *Extraction an
 air assist on*, *Workpiece is clamped and flat*. There is nothing to tick. A
 checklist you get used to ticking off protects nobody.
 
-You meet it on the tap that arms the burn. Press **Start job** and the strip at
+You meet it on the tap that arms the burn. Press **Prepare job** and the strip at
 the foot of the panel grows the three lines, directly above the **Start now** that
 fires — the moment between the two taps is the moment you walk round the machine.
 Cancel, and the strip is the two buttons again.
@@ -464,7 +459,7 @@ a computer without a laser can go.
 
 No single click burns anything.
 
-1. **Start job** (with the estimated time in it) arms the pre-flight. Nothing
+1. **Prepare job** (with the estimated time in it) arms the pre-flight. Nothing
    goes off the screen.
 2. The button pair changes to **Cancel** and **Start now**. **Start now** sends
    the job. While it goes it reads *Working…*.
@@ -482,9 +477,9 @@ bed."
   for write actions**, with "The engine logs the token when the API starts." A
   refused token says **This token is being refused** and "Look in the window the
   engine runs in: that is where the token for this server is printed."
-- With the machine silent, starting is still allowed, and the pre-flight says
-  what will happen: "The machine is not responding. This job goes into the queue
-  and only starts once the connection is there — switch it on or check the cable."
+- A known disconnected machine blocks **Start now**, including a connection lost after preparation. The pre-flight says: "Machine disconnected. Switch it on and reconnect before starting."
+  An unknown connection state remains available for drivers that connect on start.
+  Failed sends are not promised to restart automatically after reconnection.
 - With no connection to OpenKerf, the start button is off and its tooltip reads
   "No connection to OpenKerf — the command will not arrive".
 - Show frame is off when there is nothing to frame; the top bar's tooltip then
@@ -520,7 +515,7 @@ controls.
 - **Stop the series** ends the count and keeps the list: "The list stays and so does
   the row; only the count of what has been burned goes."
 
-**When it goes wrong.** The ordinary **Start job** button in the pre-flight is off
+**When it goes wrong.** The ordinary **Prepare job** button in the pre-flight is off
 while a series is going, and so is **Start now** after arming, both with the same
 reason on them: "A series is going, so this button would burn one plate and count
 nothing. Press Burn this one instead: that is the button that counts the plates."
@@ -552,7 +547,7 @@ remaining time is in the status bar on every tab, next to the total.
 Two buttons: **Stop** on the left and, well away from it on the other side of the
 row, **Pause**. The distance is on purpose; a bad tap here costs the workpiece —
 and stop stands where it stands in the top bar, not on the spot the green
-**Start job** had a moment earlier. Their
+**Prepare job** had a moment earlier. Their
 keyboard shortcuts are on the buttons themselves, as the second line of their
 tooltip: "The key works anywhere in the app, as long as this window is in front —
 outside it a browser cannot receive keystrokes." (On a Mac, ⌘ + . instead of

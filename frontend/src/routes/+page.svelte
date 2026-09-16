@@ -77,7 +77,7 @@ import { SeriesStore } from '$lib/series.svelte';
 	import { Notifications, Watchdog } from '$lib/notifications.svelte';
 
 	const status = new StatusConnection();
-	const control = new Controller();
+	const control = new Controller(() => status.device);
 	// Decision B3: reporting yes, intervening no. The watchdog reads the status and
 	// decides when there is something to say; it sends nothing to the machine.
 	const notifications = new Notifications();
@@ -204,11 +204,11 @@ import { SeriesStore } from '$lib/series.svelte';
 	const sheets = new SheetStore(() => localStorage.getItem('openkerf.token') ?? '');
 	let calibrateOpen = $state(false);
 	const camera = new CameraStore(() => localStorage.getItem('openkerf.token') ?? '');
-	const tiling = new TilingStore(token);
+	const tiling = new TilingStore(token, () => status.device);
 	// The list a series burns from. Beside the other stores, because three surfaces
 	// read it — this window, the context panel and the run block in the Job panel —
 	// and one of them gets it from the status payload rather than from its own load.
-	const series = new SeriesStore(token);
+	const series = new SeriesStore(token, () => status.device);
 	/** An action that replaces the current work, awaiting a yes. */
 	type Replacement =
 		| { kind: 'project'; file: File }
@@ -1011,6 +1011,8 @@ import { SeriesStore } from '$lib/series.svelte';
 
 	let cornersOpen = $state(false);
 	let stencilOpen = $state(false);
+	let stencilPreviewRound = 0;
+	$effect(() => { if (!stencilOpen) stencilPreviewRound += 1; });
 	let stencilReport = $state<Awaited<ReturnType<typeof edits.stencil>> | null>(null);
 	let stencilError = $state<string | null>(null);
 	/**
@@ -1644,6 +1646,7 @@ import { SeriesStore } from '$lib/series.svelte';
 		/>
 		</div>
 		<Canvas
+            quietPalette={tab === 'job'}
 			onPointerMm={(point) => (pointerMm = point)}
 			onContextObject={openObjectMenu}
 			onDeeper={(info) => (deeper = info)}
@@ -2086,11 +2089,13 @@ import { SeriesStore } from '$lib/series.svelte';
 	report={stencilReport}
 	error={stencilError}
 	onLook={async (bridgeMm, perIsland) => {
-		const answer = await edits.stencil(design.selectedIds, bridgeMm, perIsland, true);
+		const round = ++stencilPreviewRound;
+		const answer = await edits.stencil(design.selectedIds, bridgeMm, perIsland, true, (message) => {
+			if (round === stencilPreviewRound && stencilOpen) stencilError = message;
+		});
+		if (round !== stencilPreviewRound || !stencilOpen) return;
 		stencilReport = answer;
-		// The refusal *is* the answer here — "these are single strokes" is what the reader
-		// needs — so it is shown where the count would have been, and not swallowed.
-		stencilError = answer ? null : edits.error;
+		if (answer) stencilError = null;
 	}}
 	onApply={async (bridgeMm, perIsland) => {
 		const answer = await edits.stencil(design.selectedIds, bridgeMm, perIsland);
@@ -2215,6 +2220,7 @@ import { SeriesStore } from '$lib/series.svelte';
 
 <Dialog title={t('testgrid.title')} bind:open={gridOpen} width="860px">
 	<TestGrid
+		{device}
 		{library}
 		{canEdit}
 		materialId={gridMaterial ?? sheets.active?.material_id ?? null}
@@ -2329,10 +2335,10 @@ import { SeriesStore } from '$lib/series.svelte';
 	   state beside each other. */
 	.vraagkaart {
 		position: fixed;
-		right: calc(280px + var(--space-4));
+		right: calc(360px + var(--space-4));
 		bottom: calc(var(--statusbar-height) + var(--space-4));
 		z-index: 70;
-		width: min(360px, calc(100vw - 300px - 2 * var(--space-4)));
+		width: min(360px, calc(100vw - 380px - 2 * var(--space-4)));
 	}
 	@media (max-width: 1199px), (pointer: coarse) {
 		.vraagkaart {
@@ -2348,7 +2354,7 @@ import { SeriesStore } from '$lib/series.svelte';
 		min-height: 0;
 	}
 	.panel {
-		width: 280px;
+		width: 360px;
 		flex: none;
 		background: var(--surface-1);
 		border-left: 1px solid var(--line);
@@ -2371,13 +2377,7 @@ import { SeriesStore } from '$lib/series.svelte';
 			width: clamp(280px, 38vw, 324px);
 		}
 	}
-	@media (min-width: 1200px) and (pointer: fine) {
-		.panel.job-panel { width: 320px; }
-		.vraagkaart.job-panel {
-			right: calc(320px + var(--space-4));
-			width: min(360px, calc(100vw - 340px - 2 * var(--space-4)));
-		}
-	}
+
 	.panel.gone { display: none; }
 	/* The grip sits against the edge of the canvas, where your thumb already is. The
 	   touch target is the whole column (44px, thumb size), but what you see is a pill in

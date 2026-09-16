@@ -13,7 +13,8 @@
 import { chromium } from 'playwright';
 import { mkdirSync } from 'node:fs';
 
-const BASE = process.env.OK_BASE ?? 'http://localhost:8090';
+import { BASE, assertScratch } from './scratch.mjs';
+await assertScratch(BASE);
 const language = process.argv[2] ?? 'en';
 const only = process.argv[3] ?? null;
 // Into the working record, not into this repository: this set is an archive of a

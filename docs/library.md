@@ -58,16 +58,13 @@ The tool rail on the left opens the window **Material library**. Materials are t
 on the left, with the number of presets behind each name; the presets for the material
 you pick are on the right, thin to thick, and within a thickness the measured ones first.
 
-Above the search field sits one card about the machine you are on — whether it has any
-presets at all, and what the shared catalogue could offer it. On a laser that already
-carries presets of its own it shrinks to one line. It is described under
-[Starting points from the shared catalogue](#starting-points-from-the-shared-catalogue).
+Search and preset filters are first. Under them, **Find starting points**, **Read a test-board photo**, and the library exchange fold open the secondary tasks when needed. Starting points keeps the machine description, catalogue provenance and import undo controls; it fetches suggestions only when you request them.
 
-![The Material library window. Across the top the quiet door into the shared catalogue and the strip "Read a burned board from a photograph"; under them a search field, the tick box "Only KH-5030" and an Apply to dropdown reading "Layer 1 · Outline". On the left the materials, each with the number of presets behind its name — Acrylaat (geëxtrudeerd) 3, Berkentriplex 5, MDF 2, and several at 0. On the right the preset rows for those materials with their thickness, operation, speed, power and a badge each: green Verified, grey Manual, amber Extrapolated, amber Imported. The engrave rows carry a small amber "other kind", because the layer they would land on cuts.](images/14-library.png)
+![The Material library window. Across the top the quiet door into the shared catalogue and the strip "Read a burned board from a photograph"; under them a search field, the tick box "Only KH-5030" and an Apply to dropdown reading "Layer 1 · Outline". On the left the materials, each with the number of presets beside its name; an on-sheet badge sits below the name — Acrylaat (geëxtrudeerd) 3, Berkentriplex 5, MDF 2, and several at 0. On the right the preset rows for those materials with their thickness, operation, speed, power and a badge each: green Verified, grey Manual, amber Extrapolated, amber Imported. The engrave rows carry a small amber "other kind", because the layer they would land on cuts.](images/14-library.png)
 
 Two checkboxes narrow the list, and both are starting points rather than walls:
-**Only {machine}** shows the presets of the laser that is switched on now, and
-**Only {material}** — with the reason **— from this sheet** beside it — jumps to the
+**Presets for {machine}** shows the presets of the laser that is switched on now, and
+**Presets for {material}** — with the reason **— from this sheet** beside it — jumps to the
 material lying in the machine. The material of the current sheet is also marked in the
 list on the left with the tag **on the sheet**.
 
@@ -200,7 +197,7 @@ precedence: **other material** and **other thickness**, spelled out under the ta
 *This preset is for {material}; this sheet is {material}.* and *This preset is for
 {n} mm; this sheet is {n} mm.*
 
-![The Job panel in the pre-flight. Under the row "Material" reading "not filled in for this sheet" stands the warning "3 layers use presets that were not verified on a test grid. On unknown material: try a scrap first.", and under that a "Show cut path" button and the table of layers with their speed, power and passes and a Source column reading "not verified". Below the table a thumbnail of the sheet; at the foot of the panel the strip that stays put while the rest scrolls, holding a green "Start job 1:19" with a narrower arrow button joined to its right, and nothing else.](images/12-job-preflight.png)
+![The Job panel in the pre-flight. Under the row "Material" reading "not filled in for this sheet" stands the warning three unverified layers, and under that a "Show cut path" button and the table of layers with their speed, power and passes and a Source column reading "not verified". Below the table a thumbnail of the sheet; at the foot of the panel the strip that stays put while the rest scrolls, holding a green "Start job 1:19" with a narrower arrow button joined to its right, and nothing else.](images/12-job-preflight.png)
 
 The summary underneath counts them:
 
@@ -244,7 +241,7 @@ in the same place, and a right-click on the row opens the same menu. Its rows, i
 | **Merge into another material…** | Moves everything onto another material |
 | **Remove this material** | Red, last, and it counts before it acts |
 
-![The material library with the ⋯ menu open on the material row Berkentriplex. The menu shows "Show only this material" and "Make a test grid", then "Rename this material…" and "Merge into another material…", and at the bottom in red "Remove this material". Behind it the list of materials, each with the number of presets behind its name, and above the list the search box with "Only KH-5030" unticked, so rows that belong to no machine are in the list too. On the right the presets of the first materials with their four kinds of badge side by side: Imported, Manual, Extrapolated and, on the two rows that came off a board, Verified.](images/40-material-verbs.png)
+![The material library with the ⋯ menu open on the material row Berkentriplex. The menu shows "Show only this material" and "Make a test grid", then "Rename this material…" and "Merge into another material…", and at the bottom in red "Remove this material". Behind it the list of materials, each with the number of presets beside its name; an on-sheet badge sits below the name, and above the list the search box with "Only KH-5030" unticked, so rows that belong to no machine are in the list too. On the right the presets of the first materials with their four kinds of badge side by side: Imported, Manual, Extrapolated and, on the two rows that came off a board, Verified.](images/40-material-verbs.png)
 
 **Adding one** is at the foot of the list of materials, where you are already looking:
 **New material**, which turns into a field in the same place. It used to be a button at the
@@ -354,7 +351,7 @@ That is not offered between two profiles that both have a machine behind them: *
 these profiles belong to a machine that exists. Two lasers are not one, and merging them
 would file one machine's measurements under the other.*
 
-This is also what the **Only {machine}** checkbox in the header is narrowing on. Switch
+This is also what the **Presets for {machine}** checkbox in the header is narrowing on. Switch
 it off to see the presets of your other lasers.
 
 ## Moving a library: export and import
@@ -444,7 +441,7 @@ no release yet.
 It is not a window and it has no button on the tool rail. It used to be both. Both are
 gone: browsing somebody else's speeds adds nothing to a drawing, and a catalogue you
 consult once per machine has no business sitting beside Rectangle. What is left is one
-card, in two places — at the top of this window, above the search field, and on the last
+card, in two places — inside **Find starting points** in this window, and on the last
 screen of the machine wizard.
 
 ### What the card says
@@ -463,7 +460,7 @@ have a preset for it.*
 Nothing is fetched while the card sits there. **Show what would suit this laser** is what
 goes to the network, and the line beside it says why it waits for you:
 
-> Nothing is fetched until you press this: the shared catalogue lives on the network, and opening a window should not wait for it.
+> Suggestions are fetched when you press the button.
 
 While it is fetching the button stays where it is and reads **Looking…**. Once the list is
 up the button is gone and the way back out, **Fold this list up again**, sits at the end of

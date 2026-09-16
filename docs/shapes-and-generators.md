@@ -1,5 +1,7 @@
 # Shapes, text, images and generators
 
+Editing existing text opens Edit text; creating text opens Place text. The stencil window reports the preview result once, with general instructions under How stencils work. When bridges can be created, it reminds you to test their width on scrap material.
+
 The drawing tools on the left give you a rectangle, a circle, a line and a pen path with curves in it. Everything else that puts geometry on the bed is on this page: text, images, clipart from public collections, and the eight generators that compute a shape out of a handful of numbers.
 
 The second half covers what you do to geometry once it is there — combining, offsetting, splitting, rounding corners, filling, hatching and nesting. Those all live in the right-click menu on a shape, so they read as one set.
@@ -125,7 +127,7 @@ Two things it deliberately does not do. It does not blank out while you are half
 
 Two other lines you will meet there: `Type something and it appears here` before you have typed anything, `Calculating…` while it is being worked out, and `The engine cannot draw this.` when the answer comes back empty.
 
-The primary button carries the outcome, so you can read what is coming before you commit: **Make 12 copies**, **Place around**, **Draw**, **Make panels**, **Make the hinge** or **Place**, each followed by the size or the piece count.
+The primary button carries the outcome, so you can read what is coming before you commit: **Make 12 copies**, **Place around**, **Draw**, **Make panels**, **Make the hinge** or **Place**, with the size or piece count beside the button in a fixed footer. The footer remains visible while the form scrolls.
 
 ### Repeat
 
@@ -133,7 +135,7 @@ Copies the selection in rows and columns. Select the shapes first; without a sel
 
 Fields: **Columns**, **Rows**, **Space X** and **Space Y**. The spacing is the gap *between* the shapes, not the pitch from one to the next — `The distance is the space between the shapes, because that is where the cut goes.`
 
-Under them a tick: **Each copy takes the next name from the list**. Repeating a tag that reads `{name}` gives you twelve identical Annas otherwise, because a copy is a copy. With this on, copy one reads the next row, copy two the one after that, in reading order — which is how you fill a plank with twelve different tags and lay them out yourself. It needs a list; without one the tick is greyed with the reason, and asking anyway comes back as `No list is attached, so there is no next name to take. Import a list in the Series window first.` With a list but nothing variable in what you picked: `None of the shapes you are repeating has a placeholder in its text, so there is no name for the copies to take. Put a column into a text first.` See [Variable text](variable-text.md#more-than-one-on-a-sheet).
+Open **Use names from a series** for **Each copy takes the next name from the list**. Repeating a tag that reads `{name}` gives you twelve identical Annas otherwise, because a copy is a copy. With this on, copy one reads the next row, copy two the one after that, in reading order — which is how you fill a plank with twelve different tags and lay them out yourself. It needs a list; without one the tick is greyed with the reason, and asking anyway comes back as `No list is attached, so there is no next name to take. Import a list in the Series window first.` With a list but nothing variable in what you picked: `None of the shapes you are repeating has a placeholder in its text, so there is no name for the copies to take. Put a column into a text first.` See [Variable text](variable-text.md#more-than-one-on-a-sheet).
 
 ### Circle
 
@@ -145,35 +147,35 @@ The centre lies one radius to the left of the selection, so the original itself 
 
 A regular polygon, and no selection needed. Fields: **Corners** (at least three), **Radius**, **Inner radius**, **Centre X** and **Centre Y**.
 
-**Inner radius** is the one worth knowing: leave it empty and you get a plain polygon, fill it in and the same corner count becomes a star. **Corners** counts the corner points, not the star's points, so a five-pointed star is five corners and not ten.
+**Star inner radius (optional)** is the one worth knowing: leave it empty and you get a plain polygon, fill it in and the same corner count becomes a star. **Corners** counts the corner points, not the star's points, so a five-pointed star is five corners and not ten.
 
 ### Box
 
-Loose panels for a finger-jointed box, laid out on the sheet. Fields: **Width**, **Depth** and **Height** on one line, then **Material thickness**, then **Finger** and **Kerf**, and two ticks: **With a lid** and **Spread over sheets when it does not fit**.
+Loose panels for a finger-jointed box, laid out on the sheet. Fields are grouped into **Dimensions** (Width, Depth, Height), **Fabrication** (Material thickness, Finger, Kerf), and **Output**, with two ticks: **With a lid** and **Spread over sheets when it does not fit**.
 
-Three things the tab tells you and that are easy to get wrong: the three sizes are **outside** sizes; the kerf is added to the teeth, because the laser takes material off both sides of the cut; and when the panels do not fit on one sheet the rest goes to a next sheet rather than off the bed. The button then reads `{parts} on this sheet, {sheets} sheets` instead of `{parts} pieces, fits on this sheet`.
+Three things the tab tells you and that are easy to get wrong: the three sizes are **outside** sizes; the kerf is added to the teeth, because the laser takes material off both sides of the cut; and when the panels do not fit on one sheet the rest goes to a next sheet rather than off the bed. The output summary then reads `{parts} on this sheet, {sheets} sheets` instead of `{parts} pieces, fits on this sheet`. **About the fit** explains kerf and the scrap test.
 
 With a lid ticked, the walls get teeth along their top edge for the lid to engage; without it, the top edge is straight.
 
 ### QR code
 
-Fields: **Content** and **Size**. The code is made as filled areas, not as a picture, and the reason is on the tab: `A QR code as areas, not as a picture: engraved bitmaps often come out vague on wood, filled squares do not.` The preview draws it solid, because nobody can read a QR code made of separate little outlines.
+Fields: **Content** and **Size**. The code is made as filled areas, not as a picture, and the tab starts with **Create a QR code from text or a link**. The preview draws it solid, because nobody can read a QR code made of separate little outlines.
 
 ### Barcode
 
 Fields: **Content**, **Type**, **Width** and **Height**. Seven types are offered: `code128`, `code39`, `ean13`, `ean8`, `upca`, `itf` and `issn`. Like the QR code it comes out as areas.
 
-EAN and UPC make demands on length and check digit. The tab says what happens when your content does not meet them: `if it does not add up the app says so instead of making a code that will not scan.`
+For EAN and UPC, a note beside Content asks for digits and explains that the preview checks the required length. Invalid content still reports the existing validation error.
 
 ### Arc text
 
 Text bent along a circle, for a round sign or a lid. Fields: **Text**, **Centre X**, **Centre Y**, **Radius**, **Letter height**, the tick **Along the underside**, and a **Font** row that starts collapsed showing `Default` — open it and you get the same font picker as the text window, with the sample line in your own words.
 
-One thing to know before you use it: the result is a path and no longer text. The tab says why — the engine would render the wording straight again at the next change and silently wipe the arc away. So set the words right first; afterwards you edit it as geometry.
+One thing to know before you use it: the result is a path and no longer text. The visible note says **The result is a path; its text can no longer be edited.** So set the words right first; afterwards you edit it as geometry.
 
 ### Living hinge
 
-A field of slits that lets rigid sheet material bend. Cut enough short slits across a piece of plywood and the strips of material left between them twist instead of snapping, and the sheet rolls. The tab says which way: `A field of slits that lets rigid sheet material bend. The slits lie across, and a sheet bends around a line parallel to its slits, so this one curls from top to bottom. Turn the group a quarter afterwards and it bends the other way.` There is no direction field, because a rotation already exists.
+A field of slits that lets rigid sheet material bend. Cut enough short slits across a piece of plywood and the strips of material left between them twist instead of snapping, and the sheet rolls. The tab says **This pattern bends from top to bottom**. **Bending direction and bridges** opens the fuller explanation and advice to test on a scrap. There is no direction field, because a rotation already exists.
 
 ![The Generators window on the Living hinge tab: the Pattern chooser set to Staggered rows, Slit length 8 mm, Gap in a row 3 mm and Between rows 2 mm, the line about what stays behind between them, and a preview of a dense field of short slits captioned with its size and the count of slits and rows.](images/28-hinge.png)
 
@@ -185,7 +187,7 @@ Then three numbers, and they are the whole design of a hinge:
 - **Gap in a row** — the material between two slits in the same row.
 - **Between rows** — the distance from one row of slits to the next.
 
-Beside the fields stands what those two gaps mean in wood: `Between two slits in a row 3.0 mm of material stays behind, and between two rows 2.0 mm. That bridge is what twists, and what breaks.` It says no more than that on purpose. How thin a bridge may be depends on the material, the thickness and how far you want to bend it, and a generator that pretends to know that is guessing with your plywood.
+Inside **Bending direction and bridges**, the current spacing is explained: `Between two slits in a row 3.0 mm of material stays behind, and between two rows 2.0 mm. That bridge is what twists, and what breaks.` It says no more than that on purpose. How thin a bridge may be depends on the material, the thickness and how far you want to bend it, and a generator that pretends to know that is guessing with your plywood.
 
 The area comes from one of two places. Tick **Fill the area of the selected shape** and the slits fill that shape — inside its outline, not inside the box around it. On a circle that means a round field of slits; on a rectangle the two are the same thing. Select a shape and a hole in it, and the hole stays empty, the way a fill would leave it. The tick reads **Select a shape first to use its area** when there is nothing selected. Untick it and you get four fields instead — **Left**, **Top**, **Width** and **Height** — and the field is placed on the bed where you say.
 

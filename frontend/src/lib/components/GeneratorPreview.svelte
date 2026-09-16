@@ -223,7 +223,7 @@
 		<svg viewBox="0 0 100 100" role="img" aria-label={t('genPreview.sketchAria')}>
 			<polygon class="hulp" points={polygonPoints(6, 34, 0)} />
 		</svg>
-	{:else}
+	{:else if !failure}
 		<svg viewBox="0 0 100 100" role="img" aria-label={t('genPreview.calculatingAria')}>
 			<rect class="hulp" x="14" y="20" width="72" height="60" />
 		</svg>
@@ -240,7 +240,7 @@
 		{#each preview.notes as note (note)}
 			<figcaption class="waarschuwing">{note}</figcaption>
 		{/each}
-	{:else}
+	{:else if !failure}
 		<figcaption>{@render children?.()}</figcaption>
 	{/if}
 </figure>

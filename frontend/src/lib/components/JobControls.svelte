@@ -551,6 +551,7 @@
 	}
 
 	async function confirmStart() {
+		if (!actions?.start || blocked || seriesRunning || device?.connection?.state === 'disconnected') return;
 		if (await control.start()) preflight = false;
 	}
 
@@ -929,11 +930,8 @@
 				     up against the bed — that is below. -->
 			{/if}
 			{#if !empty && device?.connection?.state === 'disconnected'}
-				<!-- Starting is allowed: the engine queues the job and connects as
-				     soon as the machine is there. But whoever presses "Start now" and
-				     walks over to a silent machine has to know the waiting is down to
-				     that and not to the job. -->
-				<p class="pf-warn strong">{t('job.notResponding')}</p>
+				<!-- A confirmed disconnection blocks the final start. -->
+				<p class="connection-note" role="status">{t('job.notResponding')}</p>
 			{/if}
 			{#if estimateSlow}
 				<p class="pf-row">{t('job.estimateSlow')}</p>
@@ -968,7 +966,7 @@
 				     name. So the order is: what is wrong in one line, the settings, then
 				     which layer is wrong and why. -->
 				{#if risky.length}
-					<p class="pf-warn strong">{t('job.risky', { n: risky.length })}</p>
+					<p class="confidence-note">{t('job.risky', { n: risky.length })}</p>
 				{/if}
 				<!-- The button heads the table, as its caption: these are the layers,
 				     and this is the order they burn in. It stood under the drawing once
@@ -1201,8 +1199,8 @@
 					<button
 						class="btn primary big"
 						onclick={confirmStart}
-						disabled={control.busy !== null || !connection.online || seriesRunning}
-						title={seriesRunning
+						disabled={!actions?.start || blocked || seriesRunning || device?.connection?.state === 'disconnected'}
+						title={device?.connection?.state === 'disconnected' ? t('job.notResponding') : seriesRunning
 							? t('api.series.runGoing')
 							: connection.online
 								? undefined
@@ -1872,6 +1870,8 @@
 </Dialog>
 
 <style>
+	.connection-note { margin: var(--space-3) 0; padding-left: var(--space-3); border-left: 3px solid var(--warn-solid); font-size: var(--text-sm); color: var(--text-2); }
+	.confidence-note { margin: var(--space-2) 0; font-size: var(--text-xs); color: var(--warn); }
 	.dialog-text {
 		margin: 0 0 var(--space-4);
 		font-size: var(--text-sm);

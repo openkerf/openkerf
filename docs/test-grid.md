@@ -1,5 +1,7 @@
 # Test grids: finding the presets for a material
 
+Start with material, operation and the speed/power ranges beside the board preview. Saved recipes and material creation expand on demand. Layout and extras holds thickness, cell size, axis selection, passes, spacing, position, captions, the board code and cut-out options; its summary shows thickness, cell size, spacing and passes. The draw action stays visible at the bottom. A grid can be drawn without a material, but a material must be linked before a cell can be saved as a preset.
+
 A test grid is a board of small squares, each burned at a slightly different speed and
 power. You burn one, look at which square came out right, and OpenKerf turns that square
 into a saved preset for that material. This page follows the whole loop: planning the

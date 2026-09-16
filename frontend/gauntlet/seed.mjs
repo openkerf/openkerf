@@ -1,3 +1,4 @@
+import { scratchFetch as fetch } from './scratch.mjs';
 /**
  * A design with something in it, for looking at screens that are not empty.
  *
@@ -8,7 +9,7 @@
  * the job panel have to be able to show. Pure API, so no browser and no
  * selectors: this keeps working when the interface moves.
  */
-const BASE = process.env.OK_BASE ?? 'http://localhost:8090';
+const BASE = process.env.OK_BASE ?? 'http://127.0.0.1:8092';
 
 async function post(path, body) {
 	const r = await fetch(BASE + path, {
@@ -28,9 +29,7 @@ async function patch(path, body) {
 	if (!r.ok) console.error('patch failed', path, r.status);
 }
 
-await fetch(BASE + '/api/job/stop', { method: 'POST' }).catch(() => {});
-await fetch(BASE + '/api/spooler/clear', { method: 'POST' }).catch(() => {});
-await fetch(BASE + '/api/design/autosave', { method: 'DELETE' }).catch(() => {});
+await fetch(BASE + '/api/design/autosave', { method: 'DELETE' });
 await post('/api/project/new');
 
 // Four layers with names and values of their own: cut, engrave twice, raster.
@@ -63,12 +62,12 @@ const ops = design.operations.filter((o) => !o.grid).map((o) => o.id);
 
 async function set(elementIndex, opIndex) {
 	const id = elements[elementIndex];
-	if (!id || !ops[opIndex]) return;
+	if (!id || !ids[opIndex]) throw new Error('Seed missing element or layer');
 	// Out of every layer first, then into the intended one: the engine classifies
 	// new shapes itself, so without this everything is also still in the layer its
 	// colour put it in.
 	for (const op of ops) await post('/api/design/unassign', { ids: [id], operation_id: op });
-	await post('/api/design/assign', { ids: [id], operation_id: ops[opIndex] });
+	await post('/api/design/assign', { ids: [id], operation_id: ids[opIndex] });
 }
 // Rough division: the outline to cut, the text to the caption, the small
 // rectangles to the fine lines, the QR to the raster area.
@@ -76,8 +75,8 @@ for (const [el, op] of [[0, 0], [1, 0], [2, 2], [3, 2], [4, 1], [5, 3]]) await s
 
 // A layer that does not burn along and a layer with passes: two states the list
 // has to be able to show.
-if (ops[2]) await patch(`/api/design/operations/${encodeURIComponent(ops[2])}`, { output: false });
-if (ops[0]) await patch(`/api/design/operations/${encodeURIComponent(ops[0])}`, { passes: 3 });
+if (ids[2]) await patch(`/api/design/operations/${encodeURIComponent(ids[2])}`, { output: false });
+if (ids[0]) await patch(`/api/design/operations/${encodeURIComponent(ids[0])}`, { passes: 3 });
 
 const after = await (await fetch(BASE + '/api/design')).json();
 console.log(

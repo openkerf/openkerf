@@ -361,8 +361,7 @@ notches in its outline is not what happens.
 **When it goes wrong.**
 
 - Not every kind of shape can carry them. On a line, a text or an image the panel says so:
-  "This shape carries no bridges. They work on a rectangle, an ellipse, a polyline or a path
-  — not on a line, text or an image." The menu row is greyed with the short version, "A line,
+  Bridges work on a rectangle, an ellipse, a polyline or a path. The menu row is greyed with the short version, "A line,
   text or an image carries no bridges".
 - Bridges only mean something to a cut. In an engrave or raster layer — and on a shape in
   no layer at all — the panel keeps the fields and says so instead of promising a cut:
@@ -614,3 +613,5 @@ elements. Removing it throws that work away — this cannot be undone.", with th
 moment, not read off the screen, so a sheet you have just switched to is never mistaken for
 an empty one. An empty sheet goes without a question. The last sheet cannot go at all — the
 button is dimmed and reads "A project has at least one sheet".
+
+On the **Job** tab, the colour strip is collapsed under **Colour for new work**. Open it to change drawing defaults; choosing a drawing tool shows the strip directly. The full palette remains visible on Edit and Layers.

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { axisLabel, AXIS_UNIT, type GridAxis } from '$lib/api';
+	import { axisLabel, AXIS_UNIT, machineDisconnected, type Device, type GridAxis } from '$lib/api';
 	import { i18n, t } from '$lib/i18n/index.svelte';
 	// Numbers in the reader's own notation, and a refusal in the reader's own language
 	// when the engine sent a code for it.
@@ -8,12 +8,14 @@
 	import NumberField from './NumberField.svelte';
 
 	let {
+		device = null,
 		materialId = null,
 		thicknessMm = null,
 		library,
 		canEdit = false,
 		onGenerated
 	}: {
+		device?: Device | null;
 		/** Pre-chosen material: from the sheet you are working on, or from the card
 		 *  you came from. */
 		materialId?: number | null;
@@ -933,6 +935,10 @@
 			const token =
 				typeof localStorage === 'undefined' ? '' : (localStorage.getItem('openkerf.token') ?? '');
 			if (token) headers.Authorization = `Bearer ${token}`;
+			if (pad === '/api/job/start' && machineDisconnected(device)) {
+				machineError = t('job.notResponding');
+				return;
+			}
 			const response = await fetch(pad, { method: 'POST', headers, body: '{}' });
 			if (!response.ok) {
 				const data = await response.json().catch(() => null);
@@ -985,17 +991,13 @@
 	{#if !canEdit}
 		<p class="muted">{t('grid.needsToken')}</p>
 	{:else}
-		<p class="lead">
-			{t('grid.lead', {
-				columns: t('grid.lead.right', { axis: axisLabel(form.column_axis).toLowerCase() }),
-				rows: t('grid.lead.down', { axis: axisLabel(form.row_axis).toLowerCase() })
-			})}
-		</p>
+		<p class="lead">{t('ux.grid.purpose')}</p>
 
 		<!-- Gap T7: named settings. Whoever tests 3 mm birch weekly is served by "last
 		     time" (T3), but two recipes for the same material — cut beside engrave —
 		     cannot sit side by side in that. At the top, as in LightBurn: you pick your
 		     recipe before you start tinkering, not after. -->
+		<details class="fold recipes"><summary>{t('ux.grid.recipes')}{#if pickedRecipe !== null} · {recipeName}{/if}</summary>
 		<div class="recepten">
 			<label class="field">
 				<span class="name">{t('grid.recipe')}</span>
@@ -1060,6 +1062,7 @@
 			{#if recipeError}<p class="failure" role="alert">{recipeError}</p>{/if}
 		</div>
 
+		</details>
 		<div class="werkbank">
 			<div class="grid">
 				<div class="paar">
@@ -1088,11 +1091,9 @@
 					     warning does not only point at the gap but closes it — otherwise there
 					     is an objection with no way out beside a button that simply goes
 					     ahead. -->
-					<div class="waarschuwing" role="status">
-						<p>
-							<strong>{t('grid.noMaterial.title')}</strong>
-							{t('grid.noMaterial.body')}
-						</p>
+					<div class="material-note">
+						<p class="hint">{t('ux.grid.noMaterial')}</p>
+						<details class="fold"><summary>{t('ux.grid.newMaterial')}</summary>
 						<div class="erbij">
 							<input
 								type="text"
@@ -1114,6 +1115,7 @@
 							>
 						</div>
 						{#if materialError}<p class="failure">{materialError}</p>{/if}
+						</details>
 					</div>
 				{/if}
 
@@ -1138,6 +1140,57 @@
 					</p>
 				{/if}
 
+
+				{#each vasteAs as as (as)}
+					<NumberField
+						label={t('grid.fixedAxis', { axis: axisLabel(as) })}
+						unit={AXIS_UNIT[as]}
+						step={INVOER[as].step}
+						min={0}
+						max={INVOER[as].max ?? null}
+						bind:value={form[VAST_VELD[as]]}
+					/>
+				{/each}
+
+				<!-- From, to and the number of steps are one statement about one axis
+				     together. They used to be spread over three places in the grid; now
+				     every axis is in a block of its own, with from and to side by side. -->
+				{#each assen as as (as)}
+					<fieldset class="asblok">
+						<!-- The unit once, in the block's heading. It used to be in both field
+						     labels ("from (mm/s)", "to (mm/s)") and then you read it twice to
+						     understand one range. -->
+						<legend class="name">{t('grid.axisRange', { axis: axisLabel(as), unit: AXIS_UNIT[as] })}</legend>
+						<div class="paar">
+							<NumberField
+								label={t('grid.from')}
+								step={INVOER[as].step}
+								min={0}
+								max={INVOER[as].max ?? null}
+								bind:value={form[`${as}_min`]}
+							/>
+							<NumberField
+								label={t('grid.to')}
+								step={INVOER[as].step}
+								min={0}
+								max={INVOER[as].max ?? null}
+								bind:value={form[`${as}_max`]}
+							/>
+						</div>
+						<div class="paar">
+							<NumberField
+								label={t('grid.stepsLabel')}
+								unit={as === assen[0] ? t('grid.stepsUnit.rows') : t('grid.stepsUnit.columns')}
+								step={1}
+								min={2}
+								bind:value={form[`${as}_steps`]}
+							/>
+						</div>
+					</fieldset>
+				{/each}
+
+				<details class="fold layout-options" open={Boolean(codeRefusal || cutoutRefusal)}><summary>{t('ux.grid.layout', { thickness: form.thickness_mm, cell: form.cell_mm, gap: form.gap_mm, passes: form.passes })}</summary>
+				<div class="grid">
 				<div class="paar">
 					<NumberField
 						label={t('library.thickness')}
@@ -1199,53 +1252,8 @@
 				<!-- The fixed quantity sits with the axes and not at the bottom: it belongs
 				     to the question "what varies", and on an 80vh window it otherwise fell
 				     behind the button bar. -->
-				{#each vasteAs as as (as)}
-					<NumberField
-						label={t('grid.fixedAxis', { axis: axisLabel(as) })}
-						unit={AXIS_UNIT[as]}
-						step={INVOER[as].step}
-						min={0}
-						max={INVOER[as].max ?? null}
-						bind:value={form[VAST_VELD[as]]}
-					/>
-				{/each}
 
-				<!-- From, to and the number of steps are one statement about one axis
-				     together. They used to be spread over three places in the grid; now
-				     every axis is in a block of its own, with from and to side by side. -->
-				{#each assen as as (as)}
-					<fieldset class="asblok">
-						<!-- The unit once, in the block's heading. It used to be in both field
-						     labels ("from (mm/s)", "to (mm/s)") and then you read it twice to
-						     understand one range. -->
-						<legend class="name">{t('grid.axisRange', { axis: axisLabel(as), unit: AXIS_UNIT[as] })}</legend>
-						<div class="paar">
-							<NumberField
-								label={t('grid.from')}
-								step={INVOER[as].step}
-								min={0}
-								max={INVOER[as].max ?? null}
-								bind:value={form[`${as}_min`]}
-							/>
-							<NumberField
-								label={t('grid.to')}
-								step={INVOER[as].step}
-								min={0}
-								max={INVOER[as].max ?? null}
-								bind:value={form[`${as}_max`]}
-							/>
-						</div>
-						<div class="paar">
-							<NumberField
-								label={t('grid.stepsLabel')}
-								unit={as === assen[0] ? t('grid.stepsUnit.rows') : t('grid.stepsUnit.columns')}
-								step={1}
-								min={2}
-								bind:value={form[`${as}_steps`]}
-							/>
-						</div>
-					</fieldset>
-				{/each}
+
 
 				<div class="paar">
 					<NumberField label={t('grid.gap')} unit="mm" step={1} min={0} bind:value={form.gap_mm} />
@@ -1444,6 +1452,8 @@
 					/>
 					<span class="hint">{t('grid.caption.hint')}</span>
 				</label>
+				<p class="hint">{t('grid.lead', { columns: t('grid.lead.right', { axis: axisLabel(form.column_axis).toLowerCase() }), rows: t('grid.lead.down', { axis: axisLabel(form.row_axis).toLowerCase() }) })}</p>
+				</div></details>
 			</div>
 
 			{#if preview}
@@ -1700,8 +1710,8 @@
 					</button>
 					<button
 						class="btn primary"
-						disabled={naarMachine === 'start'}
-						title={naarMachine === 'start' ? t('reason.busy') : undefined}
+						disabled={naarMachine === 'start' || machineDisconnected(device)}
+						title={machineDisconnected(device) ? t('job.notResponding') : naarMachine === 'start' ? t('reason.busy') : undefined}
 						onclick={() => machineActie('/api/job/start', 'start', 'start-ready')}
 					>
 						{naarMachine === 'start' ? t('grid.starting') : t('job.startJob')}
@@ -1805,6 +1815,8 @@
 		color: var(--accent-ink);
 	}
 
+	.material-note .hint { margin: 0 0 var(--space-1); }
+	.layout-options { margin-top: var(--space-2); }
 	.lead { margin: 0; font-size: var(--text-sm); color: var(--text-1); max-width: 62ch; }
 	.muted { color: var(--text-2); margin: 0; font-size: var(--text-xs); }
 
@@ -1839,6 +1851,8 @@
 		border: 1px solid var(--line);
 		border-radius: var(--radius-field);
 	}
+	.asblok { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+	.asblok .paar { display: contents; }
 	.asblok legend { padding: 0 4px; }
 	.hint { font-size: var(--text-xs); color: var(--text-2); }
 	select, input[type='text'] {
@@ -1865,7 +1879,6 @@
 		font-size: var(--text-xs);
 		color: var(--text-1);
 	}
-	.waarschuwing p { margin: 0; }
 	/* A board that comes out of the machine blank is not a point of attention but a
 	   wasted plate: that message gets the danger colour. */
 	.waarschuwing.ernstig {

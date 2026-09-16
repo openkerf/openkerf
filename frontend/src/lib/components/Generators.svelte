@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
+	import type { MessageKey } from '$lib/i18n/core';
+	import { apiError } from '$lib/i18n/core';
 	import { i18n, t } from '$lib/i18n/index.svelte';
 	import Dialog from './Dialog.svelte';
 	import FontPicker from './FontPicker.svelte';
@@ -125,7 +127,7 @@
 
 	// "Grid" was called the same as the test grid, and that is something else
 	// entirely. "Repeat" says what it does.
-	const TABS: { id: Tab; label: string; needsSelection: boolean; icon: string }[] = [
+	let TABS: { id: Tab; label: string; needsSelection: boolean; icon: string }[] = $derived([
 		{
 			id: 'grid',
 			label: t('gen.tab.grid'),
@@ -179,7 +181,7 @@
 			needsSelection: false,
 			icon: 'M4 6v12M8 8v8M12 4v16M16 8v8M20 6v12'
 		}
-	];
+	]);
 
 	// A tab that can do nothing on this machine is not shown greyed out but left out:
 	// the whole point of the board is that the head moves between the marks.
@@ -205,6 +207,7 @@
 	let fontOpen = $state(false);
 
 	async function run(body: Record<string, unknown>) {
+		if (actionBlocked) return;
 		notice = null;
 		const outcome = await onGenerate(tab, body);
 		error = outcome.error ?? null;
@@ -290,26 +293,6 @@
 		return t('gen.hinge.material', { gap: i18n.mm(gap), row: i18n.mm(row) });
 	});
 
-	/**
-	 * What the sweep comes down to per mark.
-	 *
-	 * The step is the thing you are really setting and it is nowhere in the form: you
-	 * type two ends and a count. A tenth of a millimetre apart is a board you cannot
-	 * read, and finding that out after burning it is the whole problem.
-	 */
-	let sweep = $derived.by(() => {
-		const low = Number(focus.z_from_mm);
-		const high = Number(focus.z_to_mm);
-		const count = Number(focus.marks);
-		if (![low, high, count].every(Number.isFinite) || count < 2 || low === high) return '';
-		return t('gen.focus.step', {
-			step: i18n.mm(Math.abs(high - low) / (count - 1)),
-			span: i18n.mm(Math.abs(high - low))
-		});
-	});
-
-	// ----------------------------------------------------------- the preview
-
 	let preview = $state<Voorbeeld | null>(null);
 	let previewError = $state<string | null>(null);
 	/**
@@ -376,6 +359,7 @@
 	// Answers can overtake each other: you keep typing while the previous round is
 	// still in flight. Only the last request may still set the image.
 	let round = 0;
+	let previewPending = $state(false);
 
 	async function haalVoorbeeld(mijn: number, what: string, body: Record<string, unknown>) {
 		try {
@@ -393,17 +377,19 @@
 			if (mijn !== round) return;
 			if (!response.ok) {
 				previewError =
-					typeof data?.detail === 'string' ? data.detail : t('gen.cannotDraw');
+					response.headers.get('X-OpenKerf-Error') === 'gen.badBarcode'
+						? t('gen.barcode.invalid')
+						: apiError(response, typeof data?.detail === 'string' ? data.detail : t('gen.cannotDraw'));
 				return;
 			}
 			previewError = null;
-			// Only replace it when something valid came out; leaving the last valid
-			// image is calmer than dropping a hole, and also more honest: that is still
-			// what you would get if you stopped typing now.
+			// Keep the last valid image on failure, explicitly labelled as such.
 			preview = data;
 		} catch (e) {
 			if (mijn === round)
 				previewError = t('error.network', { message: e instanceof Error ? e.message : e });
+		} finally {
+			if (mijn === round) previewPending = false;
 		}
 	}
 
@@ -428,6 +414,7 @@
 		// input can wipe the message below away again.
 		if (timer) clearTimeout(timer);
 		const mijn = ++round;
+		previewPending = false;
 
 		// Switching tabs leaves no shape from the previous tab behind: that would be a
 		// preview of something other than the form beside it.
@@ -445,6 +432,8 @@
 			previewError = t('gen.incomplete');
 			return;
 		}
+		previewPending = true;
+		previewError = null;
 		timer = setTimeout(() => haalVoorbeeld(mijn, what, body), 200);
 		return () => {
 			if (timer) clearTimeout(timer);
@@ -469,9 +458,17 @@
 		const size = (v: number) => (v >= 100 ? v.toFixed(0) : v.toFixed(1));
 		return ` — ${t('gen.tail.size', { width: size(b[2] - b[0]), height: size(b[3] - b[1]) })}`;
 	});
+	let actionKey = $derived<MessageKey>(
+		tab === 'grid' ? 'gen.grid.go' : tab === 'radial' ? 'gen.radial.go' :
+		tab === 'polygon' ? 'gen.draw' : tab === 'box' ? 'gen.makePanels' :
+		tab === 'focus' ? 'gen.focus.go' : tab === 'hinge' ? 'gen.hinge.go' : 'gen.place'
+	);
+	let actionBlocked = $derived(
+		busy || blocked || !voorbeeldbaar || unfinished || previewPending || !!previewError || !preview
+	);
 </script>
 
-<Dialog title={t('gen.title')} bind:open width="800px">
+<Dialog title={t('gen.title')} bind:open width="940px">
 	<div class="tabs">
 		{#each tabs as item (item.id)}
 			<button class="tab" aria-pressed={tab === item.id} onclick={() => { tab = item.id; error = null; }}>
@@ -496,7 +493,7 @@
 	<div class="werkbank">
 	<div class="formulier">
 	{#if tab === 'grid'}
-		<p class="lead">{t('gen.grid.lead')}</p>
+		{#if !blocked}<p class="lead">{t('gen.grid.lead')}</p>{/if}
 		<div class="fields">
 			<div class="pair">
 				<NumberField label={t('gen.columns')} step={1} min={1} bind:value={grid.columns} />
@@ -509,6 +506,8 @@
 			<!-- The one thing in this dialog that reads from outside the drawing. It goes
 			     through `opdracht()` with everything else, so the preview and the button
 			     cannot ask different things. -->
+			<details class="fit-help fold">
+				<summary>{t(grid.follow_list ? 'gen.grid.seriesActive' : 'gen.grid.series')}</summary>
 			<label class="check listfollow" title={listAttached ? undefined : t('api.gen.noList')}>
 				<input
 					type="checkbox"
@@ -523,11 +522,8 @@
 				     press and the answer after it are one wording. -->
 				<p class="hint">{t('api.gen.noList')}</p>
 			{/if}
+			</details>
 		</div>
-		<button class="btn primary go" disabled={blocked || busy}
-			title={busy ? t('reason.busy') : blocked ? t('reason.pickShape') : undefined} onclick={() => run(opdracht())}>
-			{t('gen.grid.go', { n: n(grid.columns) * n(grid.rows), tail: buttonTail })}
-		</button>
 	{:else if tab === 'radial'}
 		<p class="lead">{t('gen.radial.lead')}</p>
 		<div class="fields">
@@ -540,10 +536,6 @@
 				></label
 			>
 		</div>
-		<button class="btn primary go" disabled={blocked || busy}
-			title={busy ? t('reason.busy') : blocked ? t('reason.pickShape') : undefined} onclick={() => run(opdracht())}
-			>{t('gen.radial.go', { tail: buttonTail })}</button
-		>
 	{:else if tab === 'polygon'}
 		<p class="lead">{t('gen.polygon.lead')}</p>
 		<div class="fields">
@@ -559,31 +551,30 @@
 				<NumberField label={t('gen.centreY')} unit="mm" step={1} bind:value={polygon.cy_mm} />
 			</div>
 		</div>
-		<button class="btn primary go" disabled={busy} title={busy ? t('reason.busy') : undefined} onclick={() => run(opdracht())}
-			>{t('gen.draw', { tail: buttonTail })}</button
-		>
 	{:else if tab === 'box'}
 		<p class="lead">{t('gen.box.lead')}</p>
 		<div class="fields">
 			<!-- Width, depth and height are one measurement in three and so sit on one
 			     line; the thickness of the material is something else and sits below. -->
+			<fieldset><legend>{t('gen.dimensions')}</legend>
 			<div class="three">
 				<NumberField label={t('gen.width')} unit="mm" step={1} bind:value={box.width_mm} />
 				<NumberField label={t('gen.depth')} unit="mm" step={1} bind:value={box.depth_mm} />
 				<NumberField label={t('gen.height')} unit="mm" step={1} bind:value={box.height_mm} />
 			</div>
-			<div class="pair">
+			</fieldset><fieldset><legend>{t('gen.fabrication')}</legend>
+			<div class="three">
 				<NumberField
 					label={t('gen.materialThickness')}
 					unit="mm"
 					step={0.1}
 					bind:value={box.thickness_mm}
 				/>
-			</div>
-			<div class="pair">
 				<NumberField label={t('gen.finger')} unit="mm" step={1} bind:value={box.finger_mm} />
 				<NumberField label={t('gen.kerf')} unit="mm" step={0.05} bind:value={box.kerf_mm} />
 			</div>
+			<details class="fit-help fold"><summary>{t('gen.help')}</summary><p>{t('gen.box.help')}</p></details>
+			</fieldset><fieldset><legend>{t('gen.output')}</legend>
 			<label class="check"
 				><input type="checkbox" bind:checked={box.lid} /><span>{t('gen.withLid')}</span></label
 			>
@@ -591,10 +582,8 @@
 				<input type="checkbox" bind:checked={box.spread} />
 				<span>{t('gen.spreadSheets')}</span>
 			</label>
+			</fieldset>
 		</div>
-		<button class="btn primary go" disabled={busy} title={busy ? t('reason.busy') : undefined} onclick={() => run(opdracht())}
-			>{t('gen.makePanels', { tail: buttonTail })}</button
-		>
 	{:else if tab === 'qrcode'}
 		<p class="lead">{t('gen.qr.lead')}</p>
 		<div class="fields">
@@ -609,9 +598,6 @@
 				<NumberField label={t('gen.size')} unit="mm" step={1} bind:value={qr.size_mm} />
 			</div>
 		</div>
-		<button class="btn primary go" disabled={busy || !qr.text.trim()} title={busy ? t('reason.busy') : t('reason.needsText')} onclick={() => run(opdracht())}
-			>{t('gen.place', { tail: buttonTail })}</button
-		>
 	{:else if tab === 'barcode'}
 		<p class="lead">{t('gen.barcode.lead')}</p>
 		<div class="fields">
@@ -622,6 +608,9 @@
 					bind:value={bar.text}
 				/></label
 			>
+			{#if ['ean13', 'ean8', 'upca'].includes(bar.kind)}
+				<p class="bridgeline">{t('gen.barcode.numeric', { type: bar.kind.toUpperCase() })}</p>
+			{/if}
 			<label>
 				<span>{t('gen.barcode.type')}</span>
 				<select bind:value={bar.kind}>
@@ -635,11 +624,9 @@
 				<NumberField label={t('gen.height')} unit="mm" step={1} bind:value={bar.height_mm} />
 			</div>
 		</div>
-		<button class="btn primary go" disabled={busy || !bar.text.trim()} title={busy ? t('reason.busy') : t('reason.needsText')} onclick={() => run(opdracht())}
-			>{t('gen.place', { tail: buttonTail })}</button
-		>
 	{:else if tab === 'arctext'}
 		<p class="lead">{t('gen.arc.lead')}</p>
+		<p class="bridgeline result-note">{t('gen.arc.pathResult')}</p>
 		<div class="fields">
 			<label
 				><span>{t('gen.text')}</span><input
@@ -679,9 +666,6 @@
 				<FontPicker bind:font={arc.font} bind:fontName={arc.fontName} sample={arc.text} />
 			{/if}
 		</div>
-		<button class="btn primary go" disabled={busy || !arc.text.trim()} title={busy ? t('reason.busy') : t('reason.needsText')} onclick={() => run(opdracht())}
-			>{t('gen.place', { tail: buttonTail })}</button
-		>
 	{:else if tab === 'focus'}
 		<p class="lead">{t('gen.focus.lead')}</p>
 		<div class="fields">
@@ -698,9 +682,6 @@
 			<!-- Which way is which. "+2" on the board says nothing by itself, and the sign
 			     convention is the same one the drop per pass uses — one rule, not two. -->
 			<p class="bridgeline">{t('gen.focus.direction')}</p>
-			{#if sweep}
-				<p class="bridgeline">{sweep}</p>
-			{/if}
 			<div class="pair">
 				<NumberField label={t('gen.focus.mark')} unit="mm" step={1} bind:value={focus.mark_mm} />
 				<NumberField label={t('gen.focus.gap')} unit="mm" step={1} bind:value={focus.gap_mm} />
@@ -713,9 +694,7 @@
 				><input type="checkbox" bind:checked={focus.text} /><span>{t('gen.focus.text')}</span></label
 			>
 		</div>
-		<button class="btn primary go" disabled={busy} title={busy ? t('reason.busy') : undefined} onclick={() => run(opdracht())}
-			>{t('gen.focus.go', { tail: buttonTail })}</button
-		>
+		<details class="fit-help fold"><summary>{t('gen.focus.help')}</summary><p>{t('gen.focus.reading')}</p></details>
 	{:else}
 		<p class="lead">{t('gen.hinge.lead')}</p>
 		<div class="fields">
@@ -736,13 +715,11 @@
 				<NumberField label={t('gen.hinge.gap')} unit="mm" step={0.1} bind:value={hinge.gap_mm} />
 				<NumberField label={t('gen.hinge.rows')} unit="mm" step={0.1} bind:value={hinge.row_mm} />
 			</div>
-			<!-- Beside the fields, not under the preview: this is what the two numbers you
-			     just typed mean in wood, and it is the mistake that snaps the piece. It says
-			     nothing about a limit — how thin a bridge may be depends on the material —
-			     only what the bridge is and what it does. -->
-			{#if bridges}
-				<p class="bridgeline">{bridges}</p>
-			{/if}
+			<details class="fit-help fold">
+				<summary>{t('gen.hinge.help')}</summary>
+				<p>{t('gen.hinge.mechanics')}</p>
+				{#if bridges}<p>{bridges}</p>{/if}
+			</details>
 			<label class="check areatoggle">
 				<input
 					type="checkbox"
@@ -763,9 +740,6 @@
 				</div>
 			{/if}
 		</div>
-		<button class="btn primary go" disabled={busy} title={busy ? t('reason.busy') : undefined} onclick={() => run(opdracht())}
-			>{t('gen.hinge.go', { tail: buttonTail })}</button
-		>
 	{/if}
 	</div>
 
@@ -780,11 +754,25 @@
 		{/if}
 	</GeneratorPreview>
 	</div>
+	{#snippet footer()}
+		{#if buttonTail}<p class="output-summary" role="status">{buttonTail.replace(/^ — /, '')}</p>{/if}
+		<button class="btn primary" disabled={actionBlocked}
+			title={busy ? t('reason.busy') : blocked ? t('reason.pickShape') : previewError ?? (previewPending ? t('gen.preview.calculating') : !voorbeeldbaar ? t('reason.needsText') : undefined)}
+			onclick={() => run(opdracht())}>
+			{t(actionKey, { n: n(grid.columns) * n(grid.rows), tail: '' })}
+		</button>
+	{/snippet}
 </Dialog>
 
 <style>
+	fieldset { min-width: 0; margin: 0; padding: var(--space-2) 0 var(--space-3); border: 0; border-bottom: 1px solid var(--line); border-radius: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+	legend { padding: 0 var(--space-1); color: var(--text-1); font-size: var(--text-sm); font-weight: 600; }
+	.fit-help { font-size: var(--text-xs); color: var(--text-2); }
+	.fit-help p { margin: var(--space-2) 0 0; }
+	.output-summary { flex: 1; color: var(--text-2); font-size: var(--text-sm); margin: 0; }
+
 	/* Setting on the left, seeing what you set on the right. Below 720px it stacks. */
-	.werkbank { display: grid; grid-template-columns: 1fr 210px; gap: var(--space-4); align-items: start; }
+	.werkbank { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: var(--space-4); align-items: start; }
 	/* A column, so the primary button can put itself at the bottom right. */
 	.formulier {
 		min-width: 0;
@@ -820,7 +808,7 @@
 		color: var(--accent);
 		font-weight: 500;
 	}
-	.lead { margin: 0 0 var(--space-3); font-size: var(--text-xs); color: var(--text-2); line-height: 1.5; }
+	.lead { margin: 0 0 var(--space-4); font-size: var(--text-sm); color: var(--text-2); line-height: 1.5; }
 	.hint { margin: 0 0 var(--space-2); font-size: var(--text-xs); color: var(--warn); }
 	.error { margin: 0 0 var(--space-2); font-size: var(--text-xs); color: var(--danger); }
 	.notice { margin: 0 0 var(--space-2); font-size: var(--text-xs); color: var(--accent); }
@@ -844,7 +832,7 @@
 	}
 	.pair { grid-template-columns: 1fr 1fr; }
 	.three { grid-template-columns: 1fr 1fr 1fr; }
-	.fields .check { display: flex; align-items: center; gap: 6px; align-self: end; }
+	.fields .check { display: flex; align-items: center; gap: 6px; align-self: start; }
 	/* A row that is not an <input> and therefore cannot be a <label>: the Segmented has
 	   its own aria-label, this is the one you read. */
 	.fields .wide { display: grid; gap: 2px; }
@@ -860,6 +848,7 @@
 	   is about. */
 	.fields .check.listfollow { align-self: start; }
 	.bridgeline { margin: 0; font-size: var(--text-xs); color: var(--text-2); line-height: 1.5; }
+	.bridgeline.result-note { margin-bottom: var(--space-3); }
 	.fontchoice { margin-bottom: var(--space-4); }
 	.letterregel {
 		display: flex;
@@ -889,15 +878,4 @@
 		color: var(--text-1);
 	}
 	.check input { width: auto; }
-	/* Form rule v4: the primary button sits bottom right, not across the full width.
-	   A 500px button for one action reads as a banner, and it lined up with no other
-	   form in the app. */
-	/* The button that makes the thing is a `btn primary` like every other main button;
-	   `.go` says only where it stands. It used to carry its own colour and padding, so
-	   the repair in `tokens.css` that keeps a filled button filled when you point at it
-	   never reached it: disabled it measured the accent at opacity 0.45 while the
-	   stencil window beside it measured rgb(238, 240, 242). */
-	.go {
-		align-self: flex-end;
-	}
 </style>

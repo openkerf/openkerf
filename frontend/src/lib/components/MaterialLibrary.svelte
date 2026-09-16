@@ -1630,34 +1630,6 @@
 	</div>
 {/if}
 
-<!--
-	The one moment this whole part of the app exists for, at the top of the body and
-	above the search bar: a machine with no settings, and the offer to fetch some that
-	match the kind of laser and its tube power.
-
-	The same component the last step of the wizard renders, reading the same function —
-	where two surfaces have to know one thing, it is written once. It fetches nothing
-	when it appears, so opening this window still costs what it cost.
-
-	`door` keeps one quiet line here when there is nothing to offer — a machine with
-	settings of its own, or a reader who waved the offer away. Without it the shared
-	catalogue is unreachable from anywhere in the app, and that is the state every
-	machine ends up in: measured on the author's library, the active laser carries three
-	settings it measured itself, so the card is gone and there is no other way in.
--->
-<StarterOffer door onTestGrid={() => onMakeGrid?.(null)} onChanged={() => library.load()} />
-
-{#if canEdit}
-	<!-- The way back in from this window. A reader who has just burned a board comes here
-	     first — this is where settings live — and until now there was nothing here at all:
-	     the photograph could only be handed over from inside the test-grid window, and only
-	     against a board picked by hand from a list of every board ever burned. -->
-	<button class="doorway" onclick={() => onReadBoard?.()}>
-		<strong>{t('library.readBoard')}</strong>
-		<span>{t('library.readBoard.how')}</span>
-	</button>
-{/if}
-
 {#if canEdit && library.activeMachine && library.coverage && library.coverage.unattached > 0}
 	<!-- Settings that belong to no machine show up under every machine, because the
 	     query that fetches them reads `machine_id = ? OR machine_id IS NULL`. Attaching
@@ -1768,6 +1740,48 @@
 	</div>
 </div>
 {/if}
+
+<div class="library-tools">
+	<details class="fold starter-disclosure">
+		<summary>{t('library.startingPoints')}</summary>
+		<StarterOffer door onTestGrid={() => onMakeGrid?.(null)} onChanged={() => library.load()} />
+	</details>
+	{#if canEdit}
+		<details class="fold photo-disclosure">
+			<summary>{t('library.boardPhoto')}</summary>
+			<p class="fine">{t('library.readBoard.how')}</p>
+			<button class="btn" onclick={() => onReadBoard?.()}>{t('library.readBoard')}</button>
+		</details>
+	{/if}
+	<details class="uitwissel fold">
+	<summary>{t('library.exchange')}</summary>
+	<p class="fine">{t('library.exchange.body')}</p>
+	<div class="uitknoppen">
+		<button
+			class="btn"
+			disabled={library.busy || library.materials.length === 0}
+			title={library.materials.length === 0 ? t('library.export.nothing') : undefined}
+			onclick={() => library.exportBundle()}
+		>
+			{t('library.export')}
+		</button>
+		{#if canEdit}
+			<label class="btn file">
+				{t('library.import')}
+				<input
+					type="file"
+					accept=".openkerf-lib,application/zip"
+					onchange={(e) => {
+						const f = e.currentTarget.files?.[0];
+						e.currentTarget.value = '';
+						if (f) pickFile(f);
+					}}
+				/>
+			</label>
+		{/if}
+	</div>
+</details>
+</div>
 
 <!-- Only sensible when there is something to apply. With an empty library this
      explanation about layers sat *above* the message that there are no materials
@@ -1911,7 +1925,7 @@
 				{#if group}
 					<div class="materiaalkop">
 						<h2 class="head">{group.name}</h2>
-						{#if canEdit}
+						{#if canEdit && zichtbarePresets.length > 0}
 							<button class="mini" onclick={() => onMakeGrid?.(group.materialId)}>
 								{t('library.makeGrid')}
 							</button>
@@ -2307,34 +2321,7 @@
 
 <!-- Decision B7. Outside the block above, because importing into an empty library
      is precisely the ordinary reason to be here: a new computer. -->
-<section class="uitwissel">
-	<h3>{t('library.exchange')}</h3>
-	<p class="fine">{t('library.exchange.body')}</p>
-	<div class="uitknoppen">
-		<button
-			class="btn"
-			disabled={library.busy || library.materials.length === 0}
-			title={library.materials.length === 0 ? t('library.export.nothing') : undefined}
-			onclick={() => library.exportBundle()}
-		>
-			{t('library.export')}
-		</button>
-		{#if canEdit}
-			<label class="btn file">
-				{t('library.import')}
-				<input
-					type="file"
-					accept=".openkerf-lib,application/zip"
-					onchange={(e) => {
-						const f = e.currentTarget.files?.[0];
-						e.currentTarget.value = '';
-						if (f) pickFile(f);
-					}}
-				/>
-			</label>
-		{/if}
-	</div>
-</section>
+
 {/if}
 
 {#if rowMenu}
@@ -2342,6 +2329,12 @@
 {/if}
 
 <style>
+	.library-tools { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-6); padding: var(--space-3) 0; border-bottom: 1px solid var(--line); margin-bottom: var(--space-3); }
+	.library-tools details[open] { flex-basis: 100%; }
+	.library-tools details[open] > summary { margin-bottom: var(--space-3); }
+	.library-tools .uitwissel { margin: 0; padding: 0; border: 0; }
+	.library-tools .fine { margin: 0 0 var(--space-2); }
+
 	/* Search has to stay reachable while you scroll through twenty materials; the
 	   window itself is the scroll container, so this sticks to its top. */
 	.kopblok {
@@ -2452,7 +2445,7 @@
 	   because then the list slides out from under your cursor. */
 	.tweeluik {
 		display: grid;
-		grid-template-columns: 232px minmax(0, 1fr);
+		grid-template-columns: 280px minmax(0, 1fr);
 		gap: var(--space-4);
 		align-items: start;
 	}
@@ -2465,7 +2458,8 @@
 		gap: 1px;
 	}
 	.matrij {
-		display: flex;
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
 		align-items: center;
 		gap: var(--space-2);
 		width: 100%;
@@ -2484,7 +2478,9 @@
 		color: var(--accent);
 		font-weight: 500;
 	}
-	.matname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	.matname { grid-column: 1; min-width: 0; overflow-wrap: break-word; }
+	.matrij .mataantal { grid-column: 2; grid-row: 1 / span 2; }
+	.matrij .ligt { grid-column: 1; justify-self: start; }
 	/* The row and its ⋯ side by side: the menu button is a sibling of the row button and
 	   not a child, because a button inside a button is not a button. */
 	.matregel { display: flex; align-items: center; gap: 2px; }
@@ -2563,24 +2559,6 @@
 	}
 	/* Settings that hang off no machine: a count, a reason and one button. */
 	/* A door, so it reads as somewhere to go and not as a notice about something. */
-	.doorway {
-		display: grid;
-		justify-items: start;
-		gap: 2px;
-		width: 100%;
-		margin: 0 0 var(--space-4);
-		padding: var(--space-3) var(--space-4);
-		border: 1px solid var(--line);
-		border-radius: var(--radius-card);
-		background: var(--surface-2);
-		color: var(--text-1);
-		font: inherit;
-		font-size: var(--text-sm);
-		text-align: left;
-		cursor: pointer;
-	}
-	.doorway:hover { border-color: var(--accent); }
-	.doorway span { color: var(--text-2); font-size: var(--text-xs); }
 
 	.strays {
 		display: grid;
@@ -2717,11 +2695,11 @@
 	}
 	.operation {
 		min-width: 0;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
+		white-space: normal;
+		overflow-wrap: break-word;
 		font-size: var(--text-sm);
 	}
+
 	.operation .mat { font-weight: 500; }
 	.values {
 		flex: none;
@@ -2981,14 +2959,6 @@
 		margin-top: var(--space-4);
 		padding-top: var(--space-3);
 		border-top: 1px solid var(--line);
-	}
-	.uitwissel h3 {
-		font-size: var(--text-xs);
-		font-weight: 600;
-		text-transform: uppercase;
-		letter-spacing: 0.06em;
-		color: var(--text-2);
-		margin: 0 0 var(--space-2);
 	}
 	.uitwissel .fine { max-width: 52ch; }
 	.uitknoppen { display: flex; gap: var(--space-2); flex-wrap: wrap; }

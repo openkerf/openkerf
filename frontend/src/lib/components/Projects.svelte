@@ -183,7 +183,7 @@
 	}
 </script>
 
-<Dialog title={mode === 'saveAs' ? t('projects.saveAs.title') : t('projects.title')} bind:open width="560px">
+<Dialog title={mode === 'saveAs' ? t('projects.saveAs.title') : t('projects.title')} bind:open width="560px" footer={mode === 'saveAs' || ask ? projectFooter : undefined}>
 	{#if projects.error}
 		<p class="error" role="alert">{projects.error}</p>
 	{/if}
@@ -205,7 +205,7 @@
 						{#if mode === 'open'}
 							<button class="btn open" onclick={() => chooseOpen(entry.name)}>{t('projects.open')}</button>
 						{:else}
-							<button class="btn" onclick={() => (typed = entry.name)}>{t('projects.name')}</button>
+							<button class="btn" onclick={() => (typed = entry.name)}>{t('ux.projects.useName')}</button>
 						{/if}
 						<button class="btn more" aria-haspopup="menu" aria-label={t('common.more')} onclick={(e) => menuFor(entry, e.currentTarget as HTMLElement)}>⋮</button>
 					</span>
@@ -213,6 +213,10 @@
 			{/each}
 		</div>
 	{/if}
+</Dialog>
+
+	{#snippet projectFooter()}
+	<div class="project-actions">
 	{#if mode === 'saveAs'}
 		<div class="saveas">
 			<label>
@@ -265,12 +269,14 @@
 			</span>
 		</p>
 	{/if}
-</Dialog>
+	</div>
+	{/snippet}
 {#if rowMenu}
 	<Menu menu={rowMenu.list} x={rowMenu.x} y={rowMenu.y} onClose={() => (rowMenu = null)} />
 {/if}
 
 <style>
+	.project-actions { width: 100%; }
 	.rows { display: grid; gap: 2px; }
 	.head, .row { display: grid; grid-template-columns: 1fr auto auto; gap: var(--space-3); align-items: center; padding: var(--space-2) var(--space-3); }
 	.head { font-size: var(--text-xs); color: var(--text-2); text-transform: uppercase; letter-spacing: 0.04em; }
@@ -280,7 +286,7 @@
 	.row em { font-style: normal; color: var(--text-2); font-size: var(--text-xs); margin-left: var(--space-2); }
 	.when { color: var(--text-2); font-size: var(--text-sm); white-space: nowrap; }
 	.verbs { display: flex; gap: var(--space-2); }
-	.saveas { display: flex; gap: var(--space-2); align-items: end; margin-top: var(--space-4); }
+	.saveas { display: flex; gap: var(--space-2); align-items: end; margin-top: 0; }
 	.saveas label { display: grid; gap: 4px; flex: 1; }
 	.saveas input { min-height: 44px; padding: 0 var(--space-3); border: 1px solid var(--line); border-radius: var(--radius-field); font: inherit; }
 	.ask { display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; margin-top: var(--space-3); }

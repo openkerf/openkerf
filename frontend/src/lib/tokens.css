@@ -222,13 +222,13 @@
 	--font-ui: 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
 	--font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', monospace;
 
-	--text-xs: 11px;
-	--text-sm: 13px;
-	--text-md: 15px;
+	--text-xs: 12px;
+	--text-sm: 14px;
+	--text-md: 16px;
 	--text-lg: 18px;
 	--text-xl: 24px;
 
-	--topbar-height: 48px;
+	--topbar-height: 56px;
 	--statusbar-height: 28px;
 	/* The band under the top bar. Its own height, like the two above it, because it is
 	   a frame band and not a card: what it holds is one row of small buttons. */

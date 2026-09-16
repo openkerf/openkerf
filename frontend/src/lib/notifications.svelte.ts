@@ -200,8 +200,9 @@ export type Alarm = {
  * reports "Kernel detach: Failed." on every normal connection on macOS without
  * anything being wrong. A false alarm on a screen that watches a laser is worse
  * than a late one — after two empty alarms nobody looks at it any more. Hence
- * only the lines that really mean nothing is burning, each with a sentence of
- * its own; the original line stays visible as the source.
+ * only recognised connection failures get a sentence of their own. They do not
+ * establish whether anything burned; the machine and workpiece need checking.
+ * The original line remains available as the source.
  *
  * Source: `meerk40t/lihuiyu/controller.py` and `meerk40t/ch341/` (read, not
  * guessed). If upstream adds a line, this list keeps quiet — that is the safe

@@ -27,6 +27,7 @@
 		edits,
 		canEdit = false,
 		tool = 'select',
+        quietPalette = false,
 		onEdited,
 		onDrawn,
 		onTextAt,
@@ -51,6 +52,7 @@
 		edits: EditController;
 		canEdit?: boolean;
 		tool?: string;
+        quietPalette?: boolean;
 		onEdited?: () => void;
 		onDrawn?: (shape: Record<string, unknown>) => void;
 		onTextAt?: (at: { x: number; y: number }) => void;
@@ -2999,10 +3001,17 @@
      There it belongs to the shape you are holding, and not to a tab you have to
      look up first. A row of its own, no floating bar across the bed: it must never
      cover something you are aligning. -->
+{#if quietPalette && tool === 'select'}
+<details class="drawing-colours fold"><summary>{t('palette.forNewWork')}</summary>
 <LayerPalette {design} {edits} {canEdit} onChanged={() => onEdited?.()} />
+</details>
+{:else}
+<LayerPalette {design} {edits} {canEdit} onChanged={() => onEdited?.()} />
+{/if}
 </div>
 
 <style>
+	.drawing-colours { background: var(--surface-1); border-top: 1px solid var(--line); padding: var(--space-2) var(--space-3); }
 	/* As long as space is held the cursor says what a click does now. Without that
 	   difference the canvas looks broken: you click and no frame appears. */
 	.canvas-wrap.panning,

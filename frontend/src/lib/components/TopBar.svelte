@@ -276,18 +276,13 @@
 	     reason where the tooltip was. -->
 	<svelte:element
 		this={mayLeave ? 'a' : 'span'}
-		class="machine"
+		class="machine identity"
 		class:shut={!mayLeave}
 		href={mayLeave ? '/setup' : undefined}
 		title={mayLeave ? machineTitle : t('topbar.machine.busy')}
 	>
 		<span class="dot machinedot {machineState}" aria-hidden="true"></span>
 		<span class="name">{device?.label ?? t('topbar.machine.setup')}</span>
-		<!-- The word beside the state was here for a third time: the status bar in the
-		     bottom right says it in full, and the coloured dot already says it here.
-		     Those 55px are the room the material fits in — and without that room the
-		     start button slides off the screen. On a tablet this was already hidden for
-		     the same reason. -->
 		<span class="muted toestand">{machineStateLabel(machineState)}</span>
 	</svelte:element>
 
@@ -456,7 +451,7 @@
 		{/if}
 	<!-- Opens no dialog but the pre-flight in the right-hand panel. -->
 	<button
-		class="btn primary"
+		class="btn prepare"
 		disabled={!canStart || gone}
 		title={startTitle}
 		onclick={onStart}
@@ -481,7 +476,7 @@
 		flex: none;
 		display: flex;
 		align-items: center;
-		gap: var(--space-3);
+		gap: var(--space-2);
 		padding: 0 var(--space-3);
 		background: var(--surface-1);
 		border-bottom: 1px solid var(--line);
@@ -636,8 +631,8 @@
 	/* Narrow bar: the short label, wide bar: the long one. Two whole labels, so a
 	   translation is never half a sentence. */
 	.btn-label.short { display: none; }
-	.topbar.narrow .btn.primary .lang { display: none; }
-	.topbar.narrow .btn.primary .short { display: inline; }
+	.topbar.narrow .btn.prepare .lang { display: none; }
+	.topbar.narrow .btn.prepare .short { display: inline; }
 	/* The project and the separate files are two kinds of action; a hairline says so
 	   without words. */
 	.scheiding {
@@ -705,7 +700,19 @@
 	/* The thickness is half the answer and must not drop away, but it does not have to
 	   weigh as much as the name. */
 	.thickness { color: var(--text-2); font-size: var(--text-xs); }
-	.toestand { display: none; }
+	.toestand { display: block; font-size: var(--text-xs); white-space: nowrap; }
+	.identity { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: var(--space-2); row-gap: 0; }
+	.identity .dot { grid-row: span 2; }
+	.identity .name { max-width: 18ch; overflow: hidden; text-overflow: ellipsis; }
+	.project-button .btn-label { max-width: 20ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	@media (min-width: 1200px) and (max-width: 1499px) {
+		.topbar .docs .btn-label { display: none; }
+		.topbar .material .name { max-width: 10ch; }
+		.topbar .brand .woord { display: none; }
+	}
+	@media (max-width: 1199px) {
+		.topbar .identity .name { max-width: 10ch; }
+	}
 	/* Size only. The colour of a state is one rule for the whole app, in
 	   `tokens.css` under `.machinedot`. */
 	.dot {

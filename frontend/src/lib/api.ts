@@ -676,3 +676,8 @@ export function gridSummary(grid: GridAxes): string {
 	const column = grid.column_axis ?? 'power';
 	return `${gridSize(grid)} · ${axisRange(grid, row)} · ${axisRange(grid, column)}`;
 }
+
+/** Only a confirmed disconnection blocks a burn; unknown drivers may auto-connect. */
+export function machineDisconnected(device: Device | null): boolean {
+	return device?.connection?.state === 'disconnected';
+}

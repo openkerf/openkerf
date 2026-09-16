@@ -7,7 +7,7 @@
  */
 
 import { apiError, t } from './i18n/core.ts';
-import type { Capabilities } from './api';
+import { machineDisconnected, type Device, type Capabilities } from './api';
 import { connection } from './connection.svelte';
 
 const TOKEN_KEY = 'openkerf.token';
@@ -79,7 +79,7 @@ export class Controller {
 	 */
 	rejected = $state(false);
 
-	constructor() {
+	constructor(private device: () => Device | null) {
 		if (typeof localStorage !== 'undefined') {
 			this.token = localStorage.getItem(TOKEN_KEY) ?? '';
 		}
@@ -247,6 +247,10 @@ export class Controller {
 	onStarted: (() => void) | null = null;
 
 	async start() {
+		if (machineDisconnected(this.device())) {
+			this.error = t('job.notResponding');
+			return false;
+		}
 		const ok = await this.#post('/api/job/start', 'start');
 		// On the press of the button, not on the polling: a short job is over before
 		// the status ever shows it as "running".

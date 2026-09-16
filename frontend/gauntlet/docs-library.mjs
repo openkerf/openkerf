@@ -1,3 +1,4 @@
+import { scratchFetch as fetch } from './scratch.mjs';
 /**
  * The library the handbook's pictures are of.
  *
@@ -16,22 +17,23 @@
  *
  * ## It cannot touch a real library
  *
- * Two locks, because one is a typo away from being no lock at all:
+ * Three locks:
  *
  * 1. `OK_SCRATCH_LIBRARY=1` has to be set. Same flag the board shots use.
  * 2. The library it finds has to be *empty*. A library with materials in it is
  *    somebody's, and this refuses rather than adding twenty of its own.
+ * 3. Every request verifies the hardware-free scratch server marker.
  *
- * Start an engine with a library path of its own — `openkerf -p 8092 -l /tmp/docs/lib.db`
- * — and point `OK_BASE` at it. `-P/--profile` isolates nothing; the library path does.
+ * Start `scratch_server.py` and point `OK_BASE` at localhost:8092.
+ * A separate library path alone does not isolate the machine configuration.
  */
-const BASE = process.env.OK_BASE ?? 'http://127.0.0.1:8090';
+const BASE = process.env.OK_BASE ?? 'http://127.0.0.1:8092';
 const TOKEN = process.env.OK_TOKEN ?? '';
 
 if (process.env.OK_SCRATCH_LIBRARY !== '1') {
 	console.error(
 		'Refusing to write a library without OK_SCRATCH_LIBRARY=1.\n' +
-			'Start an engine with a library of its own: openkerf -p 8092 -l /tmp/docs/lib.db'
+			'Start the isolated gauntlet/scratch_server.py server.'
 	);
 	process.exit(1);
 }
@@ -56,7 +58,7 @@ const existing = await api('GET', '/api/library/materials');
 if (existing.length) {
 	console.error(
 		`Refusing: this library already holds ${existing.length} materials, so it is ` +
-			'somebody’s. Point OK_BASE at an engine started with a library path of its own.'
+			'somebody’s. Start a fresh isolated gauntlet/scratch_server.py server.'
 	);
 	process.exit(1);
 }
@@ -64,32 +66,23 @@ if (existing.length) {
 /**
  * The machine the whole handbook is about.
  *
- * Every picture in the set shows KH-5030 with a bed of 500 x 300, and a preset is only
- * reusable when you know which laser made it — so the profile carries the kind of laser
- * and the tube power as well. Without those two the library opens with the offer card
- * over it, which is a different picture (39-starter) than the ones this seeds for.
+ * The scratch dummy has a 500 x 300 bed. Its library profile carries simulated
+ * laser type and power so the ordinary material and provenance UI can be reviewed.
+ * No physical driver or user's machine profile is needed or activated.
  */
 const engineMachines = (await api('GET', '/api/machines')) ?? [];
-const ruida = engineMachines.find((m) => m.path === 'ruida' && m.configured);
-if (!ruida) {
+const active = engineMachines.find((m) => m.active && m.configured);
+if (!active) {
 	console.error(
-		'No KH-5030 in the engine. The machine list lives in one MeerK40t.cfg for every ' +
-			'instance, so this will not make one: that would put a machine in yours. Set ' +
-			'the handbook machine up once, and every run after this finds it.'
+		'No configured active simulated machine. Restart gauntlet/scratch_server.py.'
 	);
 	process.exit(1);
 }
-if (!ruida.active) await api('POST', '/api/machines/ruida/activate');
 // The profile is minted by a read, not by a write — `_active_profile` in the engine
 // layer, deliberately, so that opening the library on a fresh install does not file a
 // machine nobody chose. So: ask, then the profile exists.
-await api('GET', '/api/library/presets');
-const machines = await api('GET', '/api/library/machines');
-if (!machines.length) {
-	console.error('The machine is active but no profile came out of it.');
-	process.exit(1);
-}
-const machine = machines[0];
+const machine = await api('GET', '/api/library/active-machine');
+if (machine.device_path !== active.path) throw new Error('Scratch profile does not match the active machine');
 await api('PATCH', `/api/library/machines/${machine.id}`, {
 	laser_type: 'co2-glass',
 	power_watt: 80

@@ -1,3 +1,4 @@
+import { scratchFetch as fetch } from './scratch.mjs';
 /**
  * What the repair has to prove, measured in the running app.
  *
@@ -172,10 +173,10 @@ const afterEscape = await page.evaluate(() => {
 console.log('after Escape:', JSON.stringify(afterEscape));
 
 // ------------------------------------------------- alt+P on an empty bed
-await fetch(BASE + '/api/project/new', { method: 'POST' }).catch(() => {});
+await fetch(BASE + '/api/project/new', { method: 'POST' });
 // Without this the reload recovers the autosave and the bed is not empty at all —
 // which is what made this measurement lie the first time.
-await fetch(BASE + '/api/design/autosave', { method: 'DELETE' }).catch(() => {});
+await fetch(BASE + '/api/design/autosave', { method: 'DELETE' });
 await page.reload({ waitUntil: 'domcontentloaded' });
 await page.waitForTimeout(1200);
 await page.click('body', { position: { x: 700, y: 400 } }).catch(() => {});

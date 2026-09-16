@@ -1,110 +1,93 @@
-# gauntlet
+# Desktop UI gauntlet
 
-Scripts that look at the running app and measure it, instead of trusting that it
-looks fine. They need a browser (`playwright`) and a running OpenKerf.
+Use a disposable server, never the working installation. The shared guard refuses
+origins other than loopback port 8092 and requires the scratch server marker.
+The bootstrap loads only the dummy driver and puts kernel configuration, operations,
+library and projects in a fresh temporary directory. `-P`, `-X`, or a separate port
+alone do not isolate MeerK40t data.
 
-```bash
-# the engine plus our API
-meerk40t/.venv/bin/meerk40t --no-gui -d -e "openkerf -p 8090"
-# and, while developing, the dev server that serves the current source
-cd frontend && npx vite dev --port 8090   # then use OK_BASE=http://localhost:8090
+From the repository root, using an environment with the app and engine dependencies:
+
+```sh
+rtk proxy npm --prefix frontend run build
+rtk proxy env PYTHONPATH=api python frontend/gauntlet/scratch_server.py
 ```
 
-Every script takes its origin from `OK_BASE` and falls back to
-`http://127.0.0.1:8090`.
+In another terminal:
 
-| Script | What it does |
-|---|---|
-| `harness.mjs` | shared: browser, themes, widths, a clean slate, `survey()` for boxes and computed styles, `report()` for findings |
-| `seed.mjs` | puts a design with four layers, work in each of them and two awkward states (no burn along, passes) on the bed. Pure API, so it survives interface changes |
-| `i-shots.mjs` | the screenshot set per language: `node gauntlet/i-shots.mjs en\|nl` → `workshop/screenshots/i18n/<language>/` |
-| `i-overflow.mjs` | measures text that does not fit its box, per language. Elements that clip by design are listed in the script itself. Twelve screens, the material library among them — that is where the offer of starting settings lives, and its sentences are the longest in the app |
-| `docs-shots.mjs` | the pictures for the handbook: `node gauntlet/docs-shots.mjs [name-fragment]` → `docs/images/`. English, light theme, desktop 1440×900 and phone 390×844. Seeds its own drawing through the API, so a rerun gives the same picture; it does not start the laser, so there is no shot of the queue. Refuses to run against an engine that shares the layer list — see below |
-| `preview-check.mjs` | the cut-path window, measured: overlapping numbers, the reachable end of the scrubber, the false "server is away" on the way in, what lies over the drawing, and where Tab goes. What of it fits in a test is in `tests/cutpath-window.test.ts`; the stacking and the focus ring are here |
-| `selftest.mjs` | checks the checker: injects a contrast that is too low and fails if the measurement does not find it |
-| `i-apply.py` | moves a batch of literals out of a component into the catalogues (used for the English conversion; kept for the next language) |
-
-One trap worth knowing before you write another script. The offer of starting
-settings carries a **Not now** of its own, and pressing it writes
-`starter_state = 'dismissed'` on the machine that is active — so a script that
-clears banners by pressing whatever says "Not now" takes the offer away from the
-reader's real library and then measures the empty space. Both scripts here
-exclude it with `button:not(.away)`; `tests/starter.test.ts` keeps them honest.
-And point a scratch server at its own database (`openkerf -l <path>`) before you
-let anything press a button: `machine-name.test.ts` really does create machines,
-and it does not clean them up.
-
-The one-off scripts of the earlier usability and accessibility rounds are gone.
-They asked for Dutch selectors and Dutch button labels that no longer exist, so
-they measured nothing; what they found is in `CLAUDE.md`, in the commits of those
-rounds, and in `workshop/screenshots/` — the working record, a private repository
-of its own that hangs in this one as `workshop/`.
-
-## The library the handbook's pictures are of
-
-`docs-library.mjs` writes it: twenty materials, presets of all four kinds, and a test
-grid with two presets picked off it. Until this round the library screenshots were taken
-against whoever ran `docs-shots.mjs` — the pictures showed the author's own materials —
-and that only came out when the words in the app changed and they had to be taken again.
-
-```bash
-# an engine with a library and a layer list of its own; -P/--profile isolates neither,
-# the two paths do
-meerk40t --no-gui -d -e "openkerf -p 8092 -l /tmp/docs/lib/library.db \
-                                  -o /tmp/docs/lib/operations.cfg \
-                                  -r /tmp/docs/lib/projects -f frontend/build"
-cd frontend
-OK_SCRATCH_LIBRARY=1 OK_BASE=http://127.0.0.1:8092 node gauntlet/docs-library.mjs
-OK_SCRATCH_LIBRARY=1 OK_BASE=http://127.0.0.1:8092 node gauntlet/docs-shots.mjs
+```sh
+rtk proxy node frontend/gauntlet/seed.mjs
+rtk proxy node --test frontend/gauntlet/scratch.test.mjs
+rtk proxy env PYTHONPATH=api python -m unittest discover -s frontend/gauntlet -p test_scratch_server.py
 ```
 
-## The layer list is the second file that is not yours
+Open http://127.0.0.1:8092. The server prints its disposable storage directory.
+Use `OPENKERF_API=http://127.0.0.1:8092` if serving the frontend separately with Vite;
+the browser target for the guarded scripts remains 8092. Stop the server normally
+after the run. Do not copy the scratch configuration into the real installation.
 
-`-l` fences off the library; `-o` fences off the engine's layer list, and until this
-round only the first of the two existed. Both are keyed to the **kernel name** and not
-to the profile, so without them a screenshot run reads and writes the files of the app
-you actually work in.
+## Simulated machine states
 
-What that cost, measured: the pre-flight picture came back with a fourth layer reading
-"Engrave, 20 mm/s, 100%" where the seeding asks for "Logo area, 300 mm/s, 30%", and 1:19
-on the clock had become 2:22. Nothing in the script put that layer there — it comes from
-the `[_default …]` sections of the developer's own `operations.cfg`, which is the set
-the engine files a new shape under when its colour has no layer yet.
+`POST /api/gauntlet/state` accepts `connection` (`connected`, `disconnected`,
+`unknown`) and `phase` (`idle`, `queued`, `running`, `paused`, `done`). It changes
+only the status payload, including the WebSocket; no engine job is queued.
+The scratch capabilities expose controls for visual inspection. Execution and
+machine-command routes return 409 instead of performing the action. The UI is
+clearly labelled as a simulated device. These fixtures do not validate hardware.
 
-`docs-shots.mjs` therefore asks `/api/health` first and refuses unless it answers
-`"operations": "own"`. With the fence in place, and measured: two runs of the same shot
-differed in 41 of 1,296,000 pixels — all of them in the animation in the top bar — three
-runs after that were identical to one another, and the real `operations.cfg` came through
-a full run and a tidy shutdown byte for byte identical.
+```sh
+rtk proxy curl -fsS -X POST http://127.0.0.1:8092/api/gauntlet/state \
+  -H 'Content-Type: application/json' -d '{"connection":"connected","phase":"paused"}'
+```
 
-The same run also showed the script's own half of the fault. `seed()` took its layers
-from the *positions* in the list after the drawing was done, and the engine makes a layer
-of its own for a colour it has none for — so `ops[3]` was an engine-made engrave layer,
-the QR code went into it, and "Logo area" was pruned away empty. It now keeps the ids the
-four layers came back with.
+## Existing tools
 
-Two locks keep it off a real library: the flag, and a library that has to be empty. It
-makes no machine — that list lives in one `MeerK40t.cfg` for every instance, so creating
-one would put a machine in yours — and it expects the handbook's KH-5030 to be there.
+| Tool | Purpose |
+| --- | --- |
+| `scratch_server.py`, `scratch.mjs` | Disposable backend and fail-closed target check |
+| `seed.mjs` | Deterministic drawing and layers using guarded API calls |
+| `harness.mjs` | Shared readiness, browser contexts, geometry survey and failing report |
+| `i-shots.mjs`, `i-overflow.mjs` | Language screenshots and text-fit inspection |
+| `preview-check.mjs` | Cut-path layout and focus inspection |
+| `docs-library.mjs`, `docs-shots.mjs` | Handbook fixtures/images; additional scenario prerequisites still apply |
+| `selftest.mjs` | Legacy measurement self-check; not a substitute for independent visual review |
 
-`docs-shots.mjs` expects the same machine and, since this round, will not *make* it so
-either: it used to activate the Ruida when it found another machine active, and that is a
-write in the one file neither `-l` nor `-o` can fence off. Measured, with the KH-5030
-already active: a whole run leaves `MeerK40t.cfg` byte for byte identical. Measured with
-`lihuiyu-device` active instead: the run wrote `activated_device = ruida` at once — taking
-a photograph changed which laser the reader's own app opens on. Putting it back is not
-enough either, and that is measured too: after the Ruida was activated again, `[space]`
-still held the K40's 310 × 210 mm bed where the Ruida's 500 × 300 belongs. So the script
-asks and refuses, and activating the right machine is a thing you do yourself.
+Legacy handbook scenarios that require a real Ruida profile will refuse the dummy
+fixture. Do not bypass the guard or activate a user's profile to make them pass.
+Extend the disposable fixture or report the scenario as blocked. Missing controls,
+failed readiness and API failures are failures, not evidence of a clean screen.
+Documentation helpers that dismiss prompts are unsuitable for warning-state review.
 
-Three things worth knowing before you run it:
+## Review evidence
 
-- **A row that says it was measured needs a board behind it.** Give a preset
-  `source: 'testraster'` without one and the provenance panel says so ("no test grid
-  hangs off it"), and the picture of that panel is then a picture of a fault. The seeder
-  picks squares off a real grid instead.
-- **Shot 15 needs a preset in the library**, and takes it from what this seeds. Before,
-  it depended on a row shot 41 makes later, so on an empty library the run stopped there.
-- **The set can trip over its own dialogs.** Measured on one run: shot 39 could not click
-  the tool rail because the window from shot 38 was still open and its backdrop swallowed
-  the click. Taking the last few by name (`node gauntlet/docs-shots.mjs 39`) gets round it.
+Use the authorised browser-control tool for actual browser interaction in an agent
+session. Capture complete screens at 1440×900, dense states at 1366×768, and a wide
+canvas check at 1920×1080. Check Dutch and English labels and the other theme for
+regressions. Record revision, fixture, CSS viewport, language/theme and exact steps.
+
+The engineer supplies before/after images. A separate senior reviewer must open
+those actual images and record observations, then check relevant interactions and
+siblings. Merely making screenshots or passing source tests is not visual approval.
+Each finding has at most three implementation/review attempts. Unresolved failures
+remain visible; do not reset finding IDs or call skipped coverage passed.
+
+Process notes, the finding ledger and images belong in the private `workshop/`
+repository. User-facing handbook images belong in `docs/images/` when updated.
+
+### Focus and alarm fixtures
+
+`POST /api/gauntlet/state` also accepts `{"z_step":true}` (default false).
+Reload the page after changing it so design capabilities refresh. This reveals
+Focus test and the layer Z-step settings; generation remains dummy-only and all
+execution routes stay blocked. Restore with `{"z_step":false}`.
+
+With a browser connected, `POST /api/gauntlet/alarm` with
+`{"kind":"usb_missing"}` emits a simulated USB alarm over the existing WebSocket.
+`{"kind":"usb_recovered"}` clears it. These are fixed display events, never
+kernel or driver signals. The existing notification preference remains in charge
+of desktop notifications; the fixture does not request permission.
+
+These additions require the next scratch server start; editing this file does not
+modify an already running process. Camera imagery is not simulated: the bootstrap
+loads no camera plugin, so camera calibration remains unavailable without a
+separate safe image fixture. Do not enable a real camera to fill this coverage gap.

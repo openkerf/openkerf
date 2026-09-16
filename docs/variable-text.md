@@ -1,5 +1,7 @@
 # Variable text: one design, many names
 
+The Series window starts with the file or number inputs and a row preview. Placeholder instructions are available beside the data. The attach and detach actions stay in the window footer while the contents scroll.
+
 Fifty keyrings with fifty different names on them is one drawing and fifty burns. You draw
 the tag once, put `{name}` where the name goes, hand OpenKerf a list of names, and then press
 one button per plate. That is a **series**: one design, burned once per row of a list.

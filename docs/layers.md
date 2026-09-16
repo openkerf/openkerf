@@ -174,7 +174,7 @@ whole-list version **The layers are already in burn order**.
 
 ![An opened layer showing its colour swatches, name, kind of operation and the further settings underneath.](images/10-layer-detail.png)
 
-The three fields sit in the row itself, deliberately: adjusting a value next to a
+The three fields are labelled **Speed**, **Power** and **Passes** in the row itself: adjusting a value next to a
 running machine should not cost a submenu. Speed is in mm/s and goes down to
 0.1; power is a percentage between 1 and 100; passes is a whole number from 1.
 In compact mode the row shows the three as one readable line and the fields move
@@ -187,14 +187,12 @@ the same way at that width; its own tooltip carries it in full.
 Changing speed or power also writes the memory for that layer's colour, so the
 strip under the bed reports the new figures at once.
 
-Open the fold and there is more: the ten colour swatches, a **Name** field, and
-**Kind of operation**.
+Open the fold for **Name**, **Kind of operation**, and fabrication settings. Click the coloured chip for the ten colour swatches and the colour memory.
 
 ## Changing what a layer does
 
 **Kind of operation** in the fold switches an existing layer between Cut,
-Engrave, Raster and Dots, with the note **The shapes and the settings stay; only
-what the machine does with them changes.** You do not have to throw the layer
+Engrave, Raster and Dots, with **About operation types** explaining that the shapes and settings stay while the machine operation changes. You do not have to throw the layer
 away and assign everything again.
 
 One switch is refused rather than done: a layer holding shapes cannot become a

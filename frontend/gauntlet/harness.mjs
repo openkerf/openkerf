@@ -1,3 +1,4 @@
+import { scratchFetch as fetch, assertScratch } from './scratch.mjs';
 /**
  * Tools for the gauntlet.
  *
@@ -7,7 +8,7 @@
  */
 import { chromium } from 'playwright';
 
-export const BASE = process.env.OK_BASE ?? 'http://127.0.0.1:8090';
+export const BASE = process.env.OK_BASE ?? 'http://127.0.0.1:8092';
 export const WIDTHS = { desktop: 1440, tablet: 1024, phone: 390 };
 
 export async function browser() {
@@ -22,11 +23,12 @@ export async function browser() {
  * noticed.
  */
 export async function reset() {
-	await fetch(`${BASE}/api/design/autosave`, { method: 'DELETE' }).catch(() => {});
-	await fetch(`${BASE}/api/design/clear`, { method: 'POST' }).catch(() => {});
+	await fetch(`${BASE}/api/design/autosave`, { method: 'DELETE' });
+	await fetch(`${BASE}/api/design/clear`, { method: 'POST' });
 }
 
 export async function open(b, { width = 1440, theme = 'light', path = '/' } = {}) {
+	await assertScratch(BASE);
 	const context = await b.newContext({
 		viewport: { width, height: width === 390 ? 844 : 900 },
 		deviceScaleFactor: 1,
@@ -54,7 +56,7 @@ export async function open(b, { width = 1440, theme = 'light', path = '/' } = {}
 	await page.goto(BASE + path, { waitUntil: 'domcontentloaded', timeout: 30000 });
 	// Do not wait for networkidle: the status connection stays open, so that
 	// state never arrives. Wait until the app itself has drawn.
-	await page.waitForSelector('.statusbar, .setup', { timeout: 20000 }).catch(() => {});
+	await page.waitForSelector('.statusbar, .setup', { timeout: 20000 });
 	await page.waitForTimeout(700);
 	page.problems = problems;
 	return page;
@@ -100,5 +102,6 @@ export function report(name, findings) {
 		console.log(`[${f.severity}] ${f.what}`);
 		console.log(`    evidence: ${f.evidence}`);
 	}
+	if (findings.length) process.exitCode = 1;
 	return tally;
 }

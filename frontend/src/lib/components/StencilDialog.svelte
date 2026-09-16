@@ -77,7 +77,6 @@
 </script>
 
 <Dialog title={t('stencil.title')} bind:open width="440px">
-	<p class="why">{t('stencil.why')}</p>
 
 	{#if error}
 		<p class="refusal" role="alert">{error}</p>
@@ -116,7 +115,8 @@
 		<NumberField label={t('stencil.per')} step={1} min={1} max={6} bind:value={per} />
 	</div>
 
-	<p class="hint">{t('stencil.untried')}</p>
+	{#if report?.bridges && !error}<p class="hint">{t('ux.stencil.testMaterial')}</p>{/if}
+	<details class="fold"><summary>{t('ux.stencil.help')}</summary><p class="why">{t('stencil.why')}</p></details>
 
 	<!-- The window's own footer, not a row in the body: `Dialog` puts the ask row under
 	     a rule and outside the part that scrolls, and `.ask-actions` in tokens.css lays

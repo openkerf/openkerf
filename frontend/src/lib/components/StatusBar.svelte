@@ -244,7 +244,6 @@
 		class:offline={!connected}
 		title={connected ? t('status.openkerf.live.title') : t('status.openkerf.away.title')}
 	>
-		<span class="dot machinedot {connected ? 'ready' : 'offline'}" aria-hidden="true"></span>
 		{connected ? t('status.openkerf.live') : t('status.openkerf.away')}
 	</span>
 </footer>
@@ -378,8 +377,4 @@
 	/* Size only; the colour per state is shared — `.machinedot` in `tokens.css`. This
 	   bar had a rule for one of the six states, so the other five were grey here while
 	   the top bar coloured them. */
-	.dot {
-		width: 8px;
-		height: 8px;
-	}
 </style>

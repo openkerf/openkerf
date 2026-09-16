@@ -23,7 +23,8 @@
  */
 import { chromium } from 'playwright';
 
-const BASE = process.env.OK_BASE ?? 'http://localhost:8090';
+import { BASE, assertScratch } from './scratch.mjs';
+await assertScratch(BASE);
 const language = process.argv[2] ?? 'en';
 /** Below this many pixels of overflow it is text metrics, not a layout problem. */
 const SLACK = 2;

@@ -16,6 +16,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { burnsNothing } from '../src/lib/design.svelte.ts';
 import {
+	machineDisconnected,
 	jobBusy,
 	jobPhase,
 	jobStatusLabel,
@@ -204,4 +205,14 @@ test('may I pause, resume or stop — one answer for four surfaces', () => {
 		false,
 		'a machine that cannot be stopped from here must not pretend'
 	);
+});
+
+// Unknown includes drivers that connect when the job starts; only explicit failure blocks.
+test('known disconnected machine blocks execution without blocking unknown drivers', () => {
+    const device = (state: string) => ({ connection: { state } }) as Parameters<typeof machineDisconnected>[0];
+    assert.equal(machineDisconnected(device('disconnected')), true);
+    assert.equal(machineDisconnected(device('connected')), false);
+    assert.equal(machineDisconnected(device('unknown')), false);
+    assert.equal(machineDisconnected(null), false);
+    assert.equal(machineDisconnected({} as NonNullable<Parameters<typeof machineDisconnected>[0]>), false);
 });

@@ -62,7 +62,7 @@ test('the stencil is reachable, and the window reads the route that measures', (
 	assert.match(dialog, /onLook\(width, each\)/);
 	assert.match(dialog, /onApply\(numbers\.bridge, numbers\.per\)/);
 	const page = src('routes', '+page.svelte');
-	assert.match(page, /edits\.stencil\(design\.selectedIds, bridgeMm, perIsland, true\)/);
+	assert.match(page, /edits\.stencil\(design\.selectedIds, bridgeMm, perIsland, true,/);
 
 	// And the crossing is written the way every other number in this app is written. `n` is
 	// the plural selector and is the one value that does not go through `Intl`, so a

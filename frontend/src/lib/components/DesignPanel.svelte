@@ -28,6 +28,30 @@
 	import type { SeriesStore } from '$lib/series.svelte';
 	import { untrack } from 'svelte';
 
+	const imageLabels: Record<string, MessageKey> = {
+		contrast: 'ux.image.effect.contrast',
+		gamma: 'ux.image.effect.gamma',
+		auto_contrast: 'ux.image.effect.autoContrast',
+		unsharp_mask: 'ux.image.effect.unsharpMask',
+		edge_enhance: 'ux.image.effect.edgeEnhance',
+		halftone: 'ux.image.effect.halftone',
+		dither: 'ux.image.effect.dither',
+		tone: 'ux.image.effect.tone',
+		crop: 'ux.image.effect.crop',
+	};
+	const imageParameterLabels: Record<string, MessageKey> = {
+		contrast: 'ux.image.parameter.contrast',
+		brightness: 'ux.image.parameter.brightness',
+		factor: 'ux.image.parameter.factor',
+		cutoff: 'ux.image.parameter.cutoff',
+		percent: 'ux.image.parameter.percent',
+		radius: 'ux.image.parameter.radius',
+		threshold: 'ux.image.parameter.threshold',
+		sample: 'ux.image.parameter.sample',
+		angle: 'ux.image.parameter.angle',
+		oversample: 'ux.image.parameter.oversample',
+	};
+
 	let {
 		design,
 		edits,
@@ -697,12 +721,12 @@
 	// confirmation — but one that says *how much* goes and what stays.
 	let confirmDropAll = $state(false);
 
-	const LAYER_TYPES = [
+	let LAYER_TYPES = $derived([
 		{ value: 'cut', label: t('panel.kind.cut'), noun: t('panel.kind.cutNoun') },
 		{ value: 'engrave', label: t('panel.kind.engrave'), noun: t('panel.kind.engraveNoun') },
 		{ value: 'raster', label: t('panel.kind.raster'), noun: t('panel.kind.rasterNoun') },
 		{ value: 'dots', label: t('panel.kind.dots'), noun: t('panel.kind.dotsNoun') }
-	];
+	]);
 	let newLayerNoun = $derived(
 		LAYER_TYPES.find((type) => type.value === newLayerType)?.noun ?? t('panel.kind.layerNoun')
 	);
@@ -1241,6 +1265,7 @@
 			     Not hidden when the shape is not in a cut layer either. Hiding it would hide
 			     the reason with it, and then somebody looks for bridges on an engraving and
 			     concludes the app cannot do them. It says where it is true instead. -->
+			{#if bridges.carries}
 			<div class="bridges">
 				<span class="rot-label">{t('panel.bridges')}</span>
 				<label class="check" title={bridgeOff}>
@@ -1260,9 +1285,7 @@
 					<span>{t('panel.bridges.on')}</span>
 				</label>
 
-				{#if !bridges.carries}
-					<p class="hint">{t('panel.bridges.notSupported')}</p>
-				{:else if bridges.has}
+				{#if bridges.has}
 					<div class="steppers">
 						<NumberField
 							label={t('panel.bridges.count')}
@@ -1347,6 +1370,8 @@
 				{/if}
 			</div>
 
+			{/if}
+
 			<!-- Three collapsed folds used to be here: Combine (unite, difference,
 			     intersect, exclude), Edit path (nest, offset, simplify, hatch, wobble)
 			     and Corners. Fifteen operations behind three clicks, in a column you had
@@ -1394,13 +1419,13 @@
 									disabled={edits.busy} title={edits.busy ? t('reason.busy') : undefined}
 									onchange={(e) => onImageSet?.(item.name, e.currentTarget.checked, null)}
 								/>
-								<span>{item.label}</span>
+								<span>{imageLabels[item.name] ? t(imageLabels[item.name]) : item.label}</span>
 							</label>
 							{#if item.enabled}
 								{#each Object.entries(item.values) as [key, value] (key)}
 									{#if item.ranges[key]}
 										<label class="fx-value">
-											<span>{key}</span>
+											<span>{imageParameterLabels[key] ? t(imageParameterLabels[key]) : key}</span>
 											<input
 												type="range"
 												min={item.ranges[key][0]}
@@ -1790,7 +1815,7 @@
 							onclick={() => openSettings(open ? null : op.id)}
 						>{short(op)}</button>
 					{:else if canEdit}
-						<label class="val">
+						<label class="val"><span class="value-label">{t('panel.value.speed')}</span>
 							<input
 								class="mono"
 								type="number"
@@ -1803,7 +1828,7 @@
 								onchange={(e) => commitNumber(e, op.id, 'speed', op.speed)}
 							/><span>mm/s</span>
 						</label>
-						<label class="val">
+						<label class="val"><span class="value-label">{t('panel.value.power')}</span>
 							<input
 								class="mono"
 								type="number"
@@ -1817,7 +1842,7 @@
 								onchange={(e) => commitNumber(e, op.id, 'power_percent', percent)}
 							/><span>%</span>
 						</label>
-						<label class="val narrow">
+						<label class="val narrow"><span class="value-label">{t('panel.value.passes')}</span>
 							<input
 								class="mono"
 								type="number"
@@ -1908,7 +1933,7 @@
 						<!-- In compact mode the fields are here, because there is no room in
 						     the row. Same fields, same behaviour — just one line lower. -->
 						<div class="vals wide">
-							<label class="val">
+							<label class="val"><span class="value-label">{t('panel.value.speed')}</span>
 								<input
 									class="mono"
 									type="number"
@@ -1921,7 +1946,7 @@
 									onchange={(e) => commitNumber(e, op.id, 'speed', op.speed)}
 								/><span>mm/s</span>
 							</label>
-							<label class="val">
+							<label class="val"><span class="value-label">{t('panel.value.power')}</span>
 								<input
 									class="mono"
 									type="number"
@@ -1935,7 +1960,7 @@
 									onchange={(e) => commitNumber(e, op.id, 'power_percent', percent)}
 								/><span>%</span>
 							</label>
-							<label class="val narrow">
+							<label class="val narrow"><span class="value-label">{t('panel.value.passes')}</span>
 								<input
 									class="mono"
 									type="number"
@@ -1950,6 +1975,7 @@
 							</label>
 						</div>
 					{/if}
+					{#if !open || colourOpen}
 					<div class="swatches" role="group" aria-label={t('panel.colourAria', { label: op.label })}>
 						{#each LAYER_COLORS as swatch (swatch)}
 							<button
@@ -1984,6 +2010,8 @@
 							{t('panel.memory.none')}
 						{/if}
 					</p>
+
+					{/if}
 
 					{#if open}
 						<label class="wide">
@@ -2020,7 +2048,7 @@
 								why={t('reason.busy')}
 								bind:value={() => kindOf(op.type), (value) => retypeLayer(op.id, value)}
 							/>
-							<p class="hint">{t('panel.kind.hint')}</p>
+							<details class="fold kind-help"><summary>{t('panel.kind.help')}</summary><p class="hint">{t('panel.kind.hint')}</p></details>
 						</div>
 
 						{#if compact}
@@ -2673,14 +2701,16 @@
 	   there too.
 	*/
 	.val {
-		display: inline-flex;
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
 		align-items: center;
-		border: 1px solid transparent;
+		border: 1px solid var(--line);
 		border-radius: var(--radius-field);
-		background: transparent;
+		background: var(--surface-1);
 		overflow: hidden;
 		transition: background var(--transition), border-color var(--transition);
 	}
+	.value-label { padding: 0 var(--space-1); grid-column: 1 / -1; font-family: var(--font-ui); color: var(--text-2); font-size: var(--text-xs); }
 	.val:hover {
 		border-color: var(--line);
 		background: var(--surface-2);
@@ -2693,7 +2723,7 @@
 	.val input {
 		font: inherit;
 		font-family: var(--font-mono);
-		font-size: var(--text-xs);
+		font-size: var(--text-sm);
 		font-variant-numeric: tabular-nums;
 		width: 4.2em;
 		min-width: 0;
@@ -2718,7 +2748,7 @@
 		appearance: textfield;
 		-moz-appearance: textfield;
 	}
-	.val span {
+	.val span:not(.value-label) {
 		font-size: var(--text-xs);
 		color: var(--text-2);
 		padding: 0 var(--space-2) 0 2px;

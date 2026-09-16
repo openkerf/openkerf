@@ -145,7 +145,7 @@
 		<p class="muted">{t('rotary.needsMachine')}</p>
 		<div class="actions"><a class="btn primary" href="/setup">{t('rotary.backToMachines')}</a></div>
 	{:else}
-		<p class="muted">{t('rotary.intro')}</p>
+		<p class="muted">{t('ux.rotary.purpose')}</p>
 		{#if machine}
 			<p class="muted">{t('rotary.forMachine', { machine: machine.label })}</p>
 		{/if}
@@ -161,6 +161,7 @@
 				<span>{t('rotary.use')}</span>
 			</label>
 			<p class="hint">{t('rotary.use.hint')}</p>
+			<p class="hint">{t('ux.rotary.home')}</p>
 
 			<fieldset>
 				<legend>{t('rotary.kind')}</legend>
@@ -298,44 +299,31 @@
 			</fieldset>
 		{/if}
 
-		<aside class="block">
-			<h2>{t('rotary.safety.title')}</h2>
+		<details class="fold rotary-help">
+			<summary>{t('ux.rotary.coordinates')}</summary>
+			<p>{t('rotary.intro')}</p>
 			<ul>
-				<li>{t('rotary.safety.home')}</li>
 				<li>{t('rotary.safety.frame')}</li>
 				<li>{t('rotary.safety.preflight')}</li>
 				<li>{t('rotary.safety.position')}</li>
 			</ul>
-		</aside>
-
-		<aside class="block">
-			<h2>{t('rotary.scope.title')}</h2>
-			<p>{t('rotary.scope.firmware')}</p>
-			<p>{t('rotary.scope.rest')}</p>
-		</aside>
-
-		<!-- The checklist lives here and not only in a file in the repository: the person
-		     who needs it is standing at the laser with this page open. -->
-		<aside class="block checklist">
-			<h2>{t('rotary.checklist.title')}</h2>
+			<p>{t('ux.rotary.scope')}</p>
+		</details>
+		<details class="fold rotary-help">
+			<summary>{t('rotary.checklist.title')}</summary>
 			<p>{t('rotary.checklist.intro')}</p>
 			<ol>
 				{#each CHECKLIST as key (key)}
 					<li>{t(key)}</li>
 				{/each}
 			</ol>
-		</aside>
+		</details>
 	{/if}
 </section>
 
 <style>
 	h1 {
 		margin-bottom: var(--space-2);
-	}
-	h2 {
-		font-size: var(--text-sm);
-		font-weight: 600;
-		margin: 0 0 var(--space-2);
 	}
 	fieldset {
 		border: 1px solid var(--line);
@@ -397,26 +385,7 @@
 		flex-wrap: wrap;
 		margin-top: var(--space-3);
 	}
-	.block {
-		margin-top: var(--space-8);
-		padding: var(--space-4);
-		border: 1px solid var(--line);
-		border-radius: var(--radius-card);
-		background: var(--surface-2);
-	}
-	.block p,
-	.block li {
-		font-size: var(--text-xs);
-		margin: 0 0 var(--space-2);
-	}
-	.block ul,
-	.block ol {
-		margin: 0;
-		padding-left: var(--space-5);
-	}
-	/* Numbered, because at the machine you work through it in order and want to be able
-	   to say out loud where you are. */
-	.checklist ol li {
-		margin-bottom: var(--space-2);
-	}
+	.rotary-help { margin-top: var(--space-4); }
+	.rotary-help p, .rotary-help li { font-size: var(--text-xs); margin: var(--space-2) 0; }
+	.rotary-help ul, .rotary-help ol { padding-left: var(--space-5); }
 </style>

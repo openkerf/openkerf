@@ -35,7 +35,7 @@ Nothing on this page changes anything until you press **Save the rotary**. Typin
 a diameter puts nothing in the next job; the sentences under the fields tell you
 what *would* happen.
 
-![The Rotary page for the machine KH-5030. "Burn on a cylinder" is ticked; under "Kind of rotary" the choice is "Chuck — I know the diameter" with a diameter of 80 mm and the line "Once round is 251.33 mm."; under "Y scale" the choice is "A factor I fill in" with 1.036269, "Y goes into the machine multiplied by 1.036." and "A shape 100 mm tall burns 103.6 mm around the object."; then a "Save the rotary" button and the block "Calibrate from a burned line" with 100 mm asked for, an empty measurement, and the note that it was last calibrated on 100 mm asked for and 96.5 mm measured. At the bottom three blocks: "What changes on the machine", "What this deliberately does not do", and "At the machine: the first ring" with ten numbered steps.](images/30-rotary.png)
+![The Rotary page for the machine KH-5030. "Burn on a cylinder" is ticked; under "Kind of rotary" the choice is "Chuck — I know the diameter" with a diameter of 80 mm and the line "Once round is 251.33 mm."; under "Y scale" the choice is "A factor I fill in" with 1.036269, "Y goes into the machine multiplied by 1.036." and "A shape 100 mm tall burns 103.6 mm around the object."; then a "Save the rotary" button and the block "Calibrate from a burned line" with 100 mm asked for, an empty measurement, and the note that it was last calibrated on 100 mm asked for and 96.5 mm measured. The older screenshot shows three explanatory blocks at the bottom; these are now grouped into coordinate help and a first-ring checklist.](images/30-rotary.png)
 
 **On a machine that has its own rotary** the page says one sentence instead of a
 form: "This machine brings MeerK40t's own rotary along, and that one stays in
@@ -44,6 +44,11 @@ That is not a limitation but a rule: the engine hangs its own rotary on a
 lhystudios, grbl, balor, newly or moshi device, and two rotaries correcting the
 same axis is worse than one. On a Ruida the engine's rotary is never loaded, and
 that is the machine this was built for.
+
+The page keeps the activation precaution and homing restriction beside the switch.
+**Coordinates and controller settings** and **At the machine: the first ring**
+expand when needed; calibration fields and feedback remain directly available.
+These settings affect job output, not controller firmware.
 
 ## The settings
 
@@ -127,8 +132,7 @@ measured on the object."
 Four things, and the page lists them where you set the rotary because they are
 consequences and not settings.
 
-- **Homing is refused.** "Homing is refused while the rotary is on: the head would
-  drive into it. Take the rotary out first, or confirm that the bed is clear." A
+- **Homing is refused.** "Homing requires confirmation that the bed is clear while rotary mode is active." A
   chuck stands exactly where the gantry wants to go. Pressing **Home** in the Job
   tab opens the question **Home with the rotary fitted?** instead of moving
   anything — see [Burning](job.md#homing-with-a-rotary-in-the-bed).
@@ -148,16 +152,14 @@ consequences and not settings.
 
 ## What this deliberately does not do
 
-> "Nothing is written into the controller. A Ruida keeps its own rotary page, and
-> on a GRBL machine OpenKerf leaves $101 alone at the start of a job: that is
-> firmware, and it is set where the firmware lives."
+> "These settings adjust OpenKerf job output. Configure the rotary on the controller itself; this page does not change its firmware settings."
 
 There is no rotary opcode in the Ruida job format at all, so this could not be
 written from the engine even if we wanted it. Which is why the order of work below
 starts on the controller's own panel: that conversion is its job, and ours is the
 correction on top of it.
 
-> "The feeder, the dual laser and galvo mode are not part of this either."
+The feeder, dual laser and galvo mode are outside this page’s scope.
 
 Neither is cylinder correction — burning on a cone or correcting for the curve of
 a flat-ish surface. That is a different transformation and it is not built.

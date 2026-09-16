@@ -515,8 +515,9 @@
 			</div>
 		{/if}
 
-		<div class="tweeluik">
+		<div class="tweeluik" class:unattached={!attached}>
 		<!-- LEFT: the identity column. What this list makes, burn by burn. -->
+		{#if attached}
 		<section class="lijst" aria-label={t('series.burns.aria')}>
 			{#if attached}
 				<div class="kopblok">
@@ -611,18 +612,13 @@
 						{/each}
 					</ul>
 				{/if}
-			{:else}
-				<!-- No greyed second control for what is absent: prose says it instead.
-				     An empty state may take the room, because here it *is* the screen. -->
-				<div class="welkom">
-					<h3>{t('series.empty')}</h3>
-					<p>{t('series.empty.how', { example: example('name') })}</p>
-				</div>
 			{/if}
 		</section>
+		{/if}
 
 		<!-- RIGHT: the detail. Where the rows come from and what was decided. -->
 		<section class="detail">
+			{#if !attached}<p class="fine">{t('ux.series.purpose')}</p>{/if}
 			<Segmented
 				label={t('series.source')}
 				bind:value={source}
@@ -682,9 +678,7 @@
 						<input type="text" bind:value={range.column} />
 					</label>
 				</div>
-				<p class="fine">
-					{t('series.numbers.hint', { example: example(range.column.trim() || 'number') })}
-				</p>
+				<details class="fold"><summary>{t('ux.series.placeholders')}</summary><p class="fine">{t('series.numbers.hint', { example: example(range.column.trim() || 'number') })}</p></details>
 			{/if}
 
 			{#if unfinished}
@@ -774,6 +768,7 @@
 			{#if columns.length}
 				<div class="blok">
 					<h3>{t('series.columns')}</h3>
+					<details class="fold"><summary>{t('ux.series.placeholders')}</summary><p class="fine">{t('ux.series.placeholderHelp')}</p></details>
 					<div class="tabelrol">
 						<table class="kolommen">
 							<thead>
@@ -1004,7 +999,12 @@
 				     the button that detaches the list — first, the primary last. It sticks
 				     to the bottom of the column it scrolls in, which is the one thing said
 				     locally. -->
-				<div class="knoppen ask-actions">
+
+			</div>
+		</section>
+		</div>
+	</div>
+	{#snippet footer()}
 					{#if attached}
 						<button
 							class="btn"
@@ -1021,11 +1021,7 @@
 					>
 						{attached ? t('series.attach.instead') : t('series.attach')}
 					</button>
-				</div>
-			</div>
-		</section>
-		</div>
-	</div>
+	{/snippet}
 </Dialog>
 
 {#if rowMenu}
@@ -1043,6 +1039,7 @@
 		gap: var(--space-4);
 		align-items: start;
 	}
+	.tweeluik.unattached { grid-template-columns: minmax(0, 1fr); }
 	@media (max-width: 720px) {
 		.tweeluik {
 			grid-template-columns: 1fr;
@@ -1189,21 +1186,6 @@
 		background: var(--surface-2);
 		color: var(--text-1);
 	}
-	/* An empty state may take the room: with nothing attached it *is* this pane. */
-	.welkom {
-		padding: var(--space-6) 0;
-		max-width: 40ch;
-	}
-	.welkom h3 {
-		margin: 0 0 var(--space-2);
-		font-size: var(--text-md);
-		font-weight: 600;
-	}
-	.welkom p {
-		margin: 0;
-		color: var(--text-2);
-		line-height: 1.5;
-	}
 	.leeg {
 		padding: var(--space-4) 0;
 	}
@@ -1302,23 +1284,6 @@
 		flex-direction: column;
 		gap: var(--space-2);
 	}
-	/* The buttons stay on screen while the right-hand pane scrolls.
-	
-	   Measured before this: the pane is 749 px of tables, ticks and fields inside a
-	   body of 705, and the dialog is capped at min(80vh, 760px) — so at *every* window
-	   height the primary button sat below the fold and the one thing this window is for
-	   was reached by scrolling past two tables. A sticky foot costs 44 px of the pane
-	   and takes the scroll away from the action. */
-	.knoppen {
-		position: sticky;
-		bottom: calc(-1 * var(--space-4));
-		z-index: 2;
-		margin: var(--space-2) calc(-1 * var(--space-4)) calc(-1 * var(--space-4));
-		padding: var(--space-2) var(--space-4) var(--space-4);
-		background: var(--surface-1);
-		border-top: 1px solid var(--line);
-	}
-
 	/* A wide table scrolls inside its own box; the window itself never scrolls
 	   sideways, because then the burn list beside it would leave the screen. */
 	.tabelrol {

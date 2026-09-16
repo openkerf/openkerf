@@ -62,7 +62,7 @@
 	}
 </script>
 
-<Dialog title={t('text.title')} bind:open width="480px">
+<Dialog title={initial ? t('ux.text.editTitle') : t('text.title')} bind:open width="480px">
 	<label class="field">
 		<span>{t('text.label')}</span>
 		<!-- svelte-ignore a11y_autofocus -->

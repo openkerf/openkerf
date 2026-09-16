@@ -28,6 +28,7 @@
  * a button somebody actually pressed.
  */
 
+import { machineDisconnected, type Device } from './api';
 import { apiError, t } from './i18n/core.ts';
 import { burnsFor, resolve, type Row } from './series.ts';
 
@@ -262,7 +263,7 @@ export class SeriesStore {
 	 */
 	#round = 0;
 
-	constructor(token: () => string) {
+	constructor(token: () => string, private device: () => Device | null) {
 		this.#token = token;
 	}
 
@@ -638,6 +639,10 @@ export class SeriesStore {
 	 * when the last attempt was spoiled.
 	 */
 	burn(confirm = false) {
+		if (machineDisconnected(this.device())) {
+			this.error = t('job.notResponding');
+			return Promise.resolve(null);
+		}
 		return this.#write('/api/series/burn', confirm ? { confirm: true } : {});
 	}
 

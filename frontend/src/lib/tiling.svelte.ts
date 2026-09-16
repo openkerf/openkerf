@@ -6,6 +6,7 @@
  * payload, so canvas, top bar and phone all see the same state.
  */
 
+import { machineDisconnected, type Device } from './api';
 import { apiError, t } from './i18n/core.ts';
 
 export type TileRect = { x0_mm: number; y0_mm: number; x1_mm: number; y1_mm: number };
@@ -47,7 +48,7 @@ export class TilingStore {
 
 	#token: () => string;
 
-	constructor(token: () => string) {
+	constructor(token: () => string, private device: () => Device | null) {
 		this.#token = token;
 	}
 
@@ -95,6 +96,10 @@ export class TilingStore {
 	}
 
 	async #send(path: string, body?: unknown) {
+		if (path === '/api/tiling/burn' && machineDisconnected(this.device())) {
+			this.error = t('job.notResponding');
+			return false;
+		}
 		this.busy = true;
 		this.error = null;
 		try {

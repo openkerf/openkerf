@@ -33,7 +33,9 @@
 				<!-- Verbatim what the engine said. We translate, but we do not hide
 				     where it came from — that is the difference between a report and
 				     an assertion. -->
-				<p class="source mono">{watchdog.alarm.source.trim()}</p>
+				<details class="fold technical"><summary>{t('alarm.details')}</summary>
+					<p class="source mono">{watchdog.alarm.source.trim()}</p>
+				</details>
 			{/if}
 		</div>
 		<button class="seen" onclick={() => watchdog.dismiss()}>{t('alarm.seen')}</button>
@@ -41,6 +43,8 @@
 {/if}
 
 <style>
+	.technical { margin-top: var(--space-1); }
+	.technical > summary { color: inherit; }
 	.alarm {
 		position: fixed;
 		/*

@@ -443,7 +443,8 @@ export class EditController {
 		ids: string[],
 		bridgeMm: number,
 		perIsland: number,
-		preview = false
+		preview = false,
+		onError: (message: string | null) => void = (message) => { this.error = message; }
 	): Promise<{
 		islands: number;
 		bridges: number;
@@ -454,7 +455,7 @@ export class EditController {
 		open_contours: number;
 	} | null> {
 		if (!preview) this.busy = true;
-		this.error = null;
+		onError(null);
 		try {
 			const response = await fetch('/api/design/stencil', {
 				method: 'POST',
@@ -467,12 +468,12 @@ export class EditController {
 				})
 			});
 			if (!response.ok) {
-				this.error = await describe(response);
+				onError(await describe(response));
 				return null;
 			}
 			return await response.json();
 		} catch (e) {
-			this.error = t('error.network', { message: e instanceof Error ? e.message : String(e) });
+			onError(t('error.network', { message: e instanceof Error ? e.message : String(e) }));
 			return null;
 		} finally {
 			if (!preview) this.busy = false;
