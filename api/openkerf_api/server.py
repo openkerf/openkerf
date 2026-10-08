@@ -57,6 +57,7 @@ from .series import (
     rows_in,
 )
 from .sheets import Sheets
+from .svgtext import outline_texts
 from .starter import Starter
 from .tilerun import TileRun
 from .testgrid import (
@@ -909,7 +910,15 @@ class ApiServer:
             with target.open("wb") as handle:
                 shutil.copyfileobj(file.file, handle)
             before = self.design.element_ids()
+            before_nodes = {id(node) for node in self.kernel.elements.elems()}
             result = act(self.commands.load_file, str(target))
+            # Text in the file has no shape without a font renderer: it becomes vector
+            # text here, or is named so the interface can say which labels did not come
+            # in (see `svgtext`).
+            texts = outline_texts(
+                self.kernel,
+                [n for n in self.kernel.elements.elems() if id(n) not in before_nodes],
+            )
             added = [id_ for id_ in self.design.element_ids() if id_ not in before]
             # An empty bed plus a file *is* that file; anything else is a mixture that
             # exists nowhere on disk, so it counts as unsaved work. Marking it clean
@@ -918,7 +927,12 @@ class ApiServer:
                 self.document.touch()
             else:
                 self.document.clean()
-            return {**result, "added": added, "count": len(added)}
+            return {
+                **result,
+                "added": added,
+                "count": len(added),
+                "unreadable_texts": texts["unreadable"],
+            }
 
         @app.post("/api/job/start", dependencies=write)
         def start_job():

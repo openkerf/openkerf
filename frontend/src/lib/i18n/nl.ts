@@ -1579,6 +1579,10 @@ export const nl: Catalogue = {
 		one: '1 vorm geïmporteerd en geselecteerd — sleep hem op zijn plek.',
 		other: '{n} vormen geïmporteerd en geselecteerd — sleep ze op hun plek.'
 	},
+	'notice.import.textsMissing': {
+		one: '1 tekst uit het bestand kon niet in vormen worden omgezet en staat niet op het vel: {texts}.',
+		other: '{n} teksten uit het bestand konden niet in vormen worden omgezet en staan niet op het vel: {texts}.'
+	},
 	'notice.fill.filled': {
 		one: '1 vorm gevuld — een rasterlaag brandt nu het vlak.',
 		other: '{n} vormen gevuld — een rasterlaag brandt nu het vlak.'
