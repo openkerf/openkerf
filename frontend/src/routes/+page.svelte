@@ -321,14 +321,24 @@ import { SeriesStore } from '$lib/series.svelte';
 	 * would first be looking for what just arrived.
 	 */
 	async function importInto(file: File) {
-		const added = await control.load(file);
-		if (added === null) return;
+		const result = await control.load(file);
+		if (result === null) return;
 		await design.load();
+		const { added, unreadableTexts } = result;
+		if (added.length) design.selectMany(added);
+		// A label that did not come in outranks "imported and selected": it is the one
+		// that would otherwise be found out at the machine.
+		if (unreadableTexts.length) {
+			layoutNotice = t('notice.import.textsMissing', {
+				n: unreadableTexts.length,
+				texts: i18n.list(unreadableTexts.map((text) => `“${text}”`))
+			});
+			return;
+		}
 		// The API refuses a file without shapes, so an empty import does not get here;
 		// the guard is there so a future route that does allow it says nothing rather
 		// than "0 shapes imported".
 		if (!added.length) return;
-		design.selectMany(added);
 		layoutNotice = t('notice.import.added', { n: added.length });
 	}
 

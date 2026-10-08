@@ -27,6 +27,7 @@ import urllib.request
 import threading
 
 from .edits import DesignError
+from .svgtext import outline_texts
 
 # Short: a user who is searching does not wait. A source that takes longer is simply not
 # available for this purpose.
@@ -321,6 +322,10 @@ class Clipart:
         before = {id(node) for node in self.elements.elems()}
         with self.elements.undoscope("Insert clipart"):
             self.drawing.runner.run(f'load "{target}"')
+            added = [n for n in self.elements.elems() if id(n) not in before]
+            # Clip art carries `<text>` as often as any SVG; without this it would sit in
+            # a layer with no shape (see `svgtext`).
+            outline_texts(self.kernel, added)
             added = [n for n in self.elements.elems() if id(n) not in before]
             if not added:
                 raise DesignError(

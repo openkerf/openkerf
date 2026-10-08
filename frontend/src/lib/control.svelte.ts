@@ -467,14 +467,19 @@ export class Controller {
 	 * Hands back the ids of what came in, so the interface can select it. Whoever
 	 * imports wants to move the new work somewhere, and among shapes that were
 	 * already there you cannot see which ones just arrived.
+	 *
+	 * Also hands back the wording of every text in the file that could not be made into
+	 * shapes: it is not on the sheet, and somebody who drew a label wants to know that
+	 * before the burn rather than after it.
 	 */
-	async load(file: File): Promise<string[] | null> {
+	async load(file: File): Promise<{ added: string[]; unreadableTexts: string[] } | null> {
 		const form = new FormData();
 		form.append('file', file);
 		const body = await this.#postJson('/api/job/load', 'load', form);
 		if (body === null) return null;
-		const added = body.added;
-		return Array.isArray(added) ? added.filter((id): id is string => typeof id === 'string') : [];
+		const strings = (value: unknown) =>
+			Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : [];
+		return { added: strings(body.added), unreadableTexts: strings(body.unreadable_texts) };
 	}
 }
 

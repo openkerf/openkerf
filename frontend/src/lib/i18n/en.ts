@@ -1666,6 +1666,10 @@ export const en = {
 		one: '1 shape imported and selected — drag it into place.',
 		other: '{n} shapes imported and selected — drag them into place.'
 	},
+	'notice.import.textsMissing': {
+		one: '1 text in the file could not be made into shapes and is not on the sheet: {texts}.',
+		other: '{n} texts in the file could not be made into shapes and are not on the sheet: {texts}.'
+	},
 	'notice.fill.filled': {
 		one: '1 shape filled — a raster layer now burns the area.',
 		other: '{n} shapes filled — a raster layer now burns the area.'
