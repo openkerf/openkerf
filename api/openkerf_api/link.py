@@ -96,6 +96,44 @@ class MachineLink(Protocol):
     def close(self) -> None:
         """Release everything; bounded, idempotent. Called at shutdown and on a switch."""
 
+    # -- phase 4: moving the head, and the realtime verbs ---------------------------------
+    #
+    # Coordinates are the design's millimetres, exactly what `machine.py` passed to the
+    # console before (`move_absolute 10mm 20mm`); the link converts to the machine. Each
+    # call returns once the controller has acknowledged what was sent — not once the head
+    # has arrived. A refusal or a lost line raises `ConnectionError` (or `TimeoutError`
+    # for an unconfirmed packet); `machine.py` turns that into a coded sentence.
+
+    def motion_capabilities(self) -> dict:
+        """
+        `{"home", "physical_home", "move", "jog", "frame", "focus", "lock", "unlock",
+        "pause", "resume", "stop": bool}` — what this machine can be asked. Replaces
+        asking the console whether a command exists.
+        """
+
+    def home(self, physical: bool = False) -> None: ...
+
+    def move_to(self, x_mm: float, y_mm: float) -> None: ...
+
+    def move_by(self, dx_mm: float, dy_mm: float) -> None: ...
+
+    def trace(self, corners: list[tuple[float, float]]) -> None:
+        """The head along these points in order, laser off: the frame."""
+
+    def focus(self, dz_mm: float) -> None: ...
+
+    def lock(self) -> None: ...
+
+    def unlock(self) -> None: ...
+
+    def pause(self) -> None:
+        """Ahead of anything still queued on the line."""
+
+    def resume(self) -> None: ...
+
+    def stop(self) -> None:
+        """Ahead of anything still queued on the line; must work while a file is going out."""
+
 
 # ------------------------------------------------------------------ which link
 
