@@ -1057,6 +1057,17 @@ export const en = {
 	'panel.drop.ask': 'Throw away “{label}”? The shapes stay, the settings do not.',
 	'panel.drop.confirm': 'Remove',
 	'panel.drop.layer': 'Remove layer…',
+	'panel.drop.askShapes': {
+		one: '“{label}” holds one shape. Move it to another layer before this one goes?',
+		other: '“{label}” holds {n} shapes. Move them to another layer before this one goes?'
+	},
+	'panel.drop.into': 'Move to',
+	'panel.drop.loose': {
+		one: 'Removing without moving leaves one shape in no layer; it will not burn.',
+		other: 'Removing without moving leaves {n} shapes in no layer; they will not burn.'
+	},
+	'panel.drop.merge': 'Move and remove',
+	'panel.drop.removeAnyway': 'Remove only',
 	'panel.grid.title': 'Test grid #{id}',
 	'panel.grid.cells': '{n} cells · speed and power are fixed',
 	'panel.grid.showCells': 'Show the cells of grid {id}',
@@ -2593,6 +2604,12 @@ export const en = {
 	'api.layer.gridCell': 'This is a cell of a test grid; the kind of operation is the test.',
 	'api.layer.noAirAssist': 'This machine has no command for air assist, so a switch here would do nothing. Set up at the machine first which method drives the blower.',
 	'api.layer.noZAxis': 'This machine has no Z axis the driver can move, so a step per pass would do nothing. Switch the Z axis on at the machine, or leave this field empty.',
+	'api.layer.mergeSelf': 'A layer cannot be merged into itself; choose another layer for its shapes.',
+	'api.layer.mergeGridCell': 'This is a cell of a test grid; its shapes and settings are the test.',
+	'api.layer.mergeWontHold': {
+		one: 'One shape in this layer cannot go into “{label}”: it burns single points, so a point is the only thing it takes. Choose another layer for the shapes.',
+		other: '{n} shapes in this layer cannot go into “{label}”: it burns single points, so a point is the only thing it takes. Choose another layer for the shapes.'
+	},
 	// The refusals around starting points. Only the ones whose sentence carries no
 	// number measured per call: "{machine} already has 3 settings of its own" keeps its
 	// English, because the numbers do not travel in a header and a translated sentence

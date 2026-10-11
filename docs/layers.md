@@ -318,8 +318,18 @@ layers stay**. Afterwards a short line reports **{n} empty layers gone.**
 is no empty layer in the list**, and running it anyway reports **There was no
 empty layer in the list.**
 
-Removing one layer is at the bottom of its fold, as **Remove layer…**, and asks
-first: **Throw away “{label}”? The shapes stay, the settings do not.** Removing
+Removing one layer is at the bottom of its fold, as **Remove layer…**, or
+**Remove layer** in the row menu; both ask under the row first. An empty layer
+asks **Throw away “{label}”? The shapes stay, the settings do not.** A layer that
+still holds shapes — the usual case when tidying up after an import that split one
+colour over two layers — asks **“{label}” holds {n} shapes. Move them to another
+layer before this one goes?** with **Move to** already pointing at the other layer
+of the same kind and colour. **Move and remove** puts the shapes there and removes
+the layer in one step (one undo puts both back). **Remove only** removes the layer
+and leaves the shapes on the bed; when some of them are in no other layer the
+question says so first: **Removing without moving leaves {n} shapes in no layer;
+they will not burn.** Moving square shapes into a Dots layer is refused, and
+nothing moves. Removing
 everything is **Remove all layers…** in the **List** menu, which asks **Throw away
 all {n} layers?** and says in the same breath what stays — the shapes on the bed,
 in no layer after this, and any test grids.

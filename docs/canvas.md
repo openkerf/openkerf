@@ -79,7 +79,10 @@ The way a laser cutter works, an **outline is a line**. So you click a shape's c
 its middle. The inside of a rectangle is not clickable, and that is on purpose: anything
 you draw *inside* that rectangle — a hole, a label, a part nested to save material — stays
 reachable instead of being swallowed by the shape lying over it. There is a hit zone a few
-pixels wide around the contour, so you do not have to hit a hairline exactly.
+pixels wide around the contour, so you do not have to hit a hairline exactly. Where that
+zone lies over something else — a letter close to the edge of its frame — the click takes
+the shape whose line or face is actually under the pointer; between two equally close, the
+smaller one.
 
 A **filled shape is caught on its face**. For a filled shape the surface is the work — that
 is what a raster layer burns — so clicking anywhere on it selects it. Images work the same
@@ -89,8 +92,17 @@ way: the whole picture catches the click.
 
 Other ways to select:
 
-- **Drag a box** over the bed with Select active. Everything the box *touches* is selected;
-  you do not have to enclose a shape completely. Hidden shapes are left out.
+- **Drag a box** over the bed with Select active. Which way you drag decides what it takes:
+  - **left to right**, the box has a solid edge and selects only the shapes lying
+    *entirely inside* it. Draw it around the text inside a cut outline and you get the
+    text, not the outline;
+  - **right to left**, the edge is dashed and the box selects every shape it *touches*,
+    so you do not have to enclose anything completely.
+
+  "Touches" means the lines that are drawn, not the space a shape takes up: a box in the
+  empty middle of a rectangle does not touch the rectangle. A filled shape and an image
+  are touched anywhere on their face. A group is taken by a left-to-right box only when
+  all of it lies inside. Hidden shapes are left out.
 - **Shift+click** adds a shape to the selection, or takes it out again.
 - **Escape**, or a click on the empty bed, clears the selection.
 - A shape can also be reached with the keyboard: tab to it and press Enter or space.
@@ -100,7 +112,8 @@ Other ways to select:
 Shapes lie on top of each other more often than you would think — a copy that did not
 move, a cut-out over its panel, two rectangles of the same size.
 
-A plain click takes the top one. **Alt+click walks down the pile**: whatever is selected
+A plain click takes the one actually under the pointer, as above; when they all are, the
+smallest, and between equals the top one. **Alt+click walks down the pile**: whatever is selected
 now, the next one below it is taken, and from the bottom it starts again at the top. Where
 you are is said in words beside the selection count above the bed: "Shape 2 of 4 under the
 pointer — Alt+click for the next." That line disappears again after a few seconds.
@@ -608,7 +621,9 @@ burned.
 
 The row of tabs above the bed is the sheet bar. Each tab carries the sheet's name and its
 size (`300×200`); hovering adds the material, if one is filled in. Click a tab to switch to
-that sheet. The **+** at the end adds one ("Add a sheet").
+that sheet. The **+** at the end adds one ("Add a sheet"). A new sheet starts with the
+layers of the sheet you were on — their kind, colour, name, speed, power and passes — still
+empty, so the next import onto it lands in the layers you already set up.
 
 Click the tab you are already on and a small editor opens under it, with:
 

@@ -915,6 +915,7 @@ class ApiServer:
                 shutil.copyfileobj(file.file, handle)
             before = self.design.element_ids()
             before_nodes = {id(node) for node in self.kernel.elements.elems()}
+            before_ops = {id(op) for op in self.kernel.elements.ops()}
             result = act(self.commands.load_file, str(target))
             # Text in the file has no shape without a font renderer: it becomes vector
             # text here, or is named so the interface can say which labels did not come
@@ -923,6 +924,12 @@ class ApiServer:
                 self.kernel,
                 [n for n in self.kernel.elements.elems() if id(n) not in before_nodes],
             )
+            # A `<g>` that only gave its shapes a colour is not a part; without this one
+            # click selected every shape of that colour (`dissolve_colour_groups`).
+            self.drawing.dissolve_colour_groups(before_nodes)
+            # One layer per new shape, and the user's layers reused rather than doubled
+            # by the engine's classification (see `Drawing.settle_import`).
+            settled = self.drawing.settle_import(before_ops, before_nodes)
             added = [id_ for id_ in self.design.element_ids() if id_ not in before]
             # An empty bed plus a file *is* that file; anything else is a mixture that
             # exists nowhere on disk, so it counts as unsaved work. Marking it clean
@@ -936,6 +943,7 @@ class ApiServer:
                 "added": added,
                 "count": len(added),
                 "unreadable_texts": texts["unreadable"],
+                "unassigned": settled["unassigned"],
             }
 
         @app.post("/api/job/start", dependencies=write)
@@ -1876,6 +1884,13 @@ class ApiServer:
         @app.delete("/api/design/operations/{operation_id}", dependencies=write)
         def delete_operation(operation_id: str):
             return manage(self.drawing.delete_operation, operation_id)
+
+        @app.post(
+            "/api/design/operations/{operation_id}/merge-into/{target_id}", dependencies=write
+        )
+        def merge_operation(operation_id: str, target_id: str):
+            """The layer's shapes into another layer, and the layer gone (one undo)."""
+            return manage(self.drawing.merge_operation, operation_id, target_id)
 
         # ------------------------------------------------------- design edits
 
