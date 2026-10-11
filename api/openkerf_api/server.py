@@ -3763,6 +3763,7 @@ class ApiServer:
         )
         self._thread.start()
         self._attach_signals()
+        self.connect_once()
         # Close the camera as soon as nobody is watching. A read thread that runs on for
         # hours costs power and keeps the device busy for other programs; the brake is in
         # Camera.reap().
@@ -3781,6 +3782,34 @@ class ApiServer:
             self.channel("Write actions are open (bound to localhost).")
         else:
             self.channel(f"Write actions need this token: {self.token}")
+
+    def connect_once(self):
+        """
+        One attempt to connect a Ruida at startup, in the background; the thread, or `None`.
+
+        Only when the active machine is a Ruida with an address set: a machine the user
+        never pointed anywhere is not probed. One `RuidaLink.connect()` — bounded by the
+        link (`connect_seconds`), and on failure the link closes its session, so the
+        status simply reads "disconnected" with the link's own sentence and nothing
+        is sent after it (`test_ruida_startup_connect.py`). Never retried, never
+        waited for: startup does not depend on a controller that may be switched off.
+        """
+        device = getattr(self.kernel, "device", None)
+        if not is_ruida(device):
+            return None
+        if not str(getattr(device, "address", "") or "").strip():
+            return None
+        link = self.links.for_device(device)
+
+        def attempt():
+            try:
+                link.connect()
+            except Exception as error:  # pragma: no cover - a link must not take us down
+                self.channel(f"Connecting to the Ruida at startup failed: {error}")
+
+        thread = threading.Thread(target=attempt, name="openkerf-ruida-connect", daemon=True)
+        thread.start()
+        return thread
 
     def _beside(self, name: str, was: str | None = None) -> Path:
         """

@@ -30,6 +30,10 @@ once; the bed size the engine also reads is a setting here, not a reading.
   `RDJob.decode_reply` does (`ruida/rdjob.py:1332-1359`); the position is kept raw,
   as `update_x`/`update_y` store it in `driver.native_x`/`native_y`
   (`ruida/controller.py:258-276`).
+- **`pause()` holds it off a file.** While a file goes down the line (`RuidaLink.send_file`)
+  no read is queued; one already queued is cancelled, one already on the line is let
+  finish. `resume()` lets it read again. The thread keeps running throughout, so a
+  `start()` from a `connect()` in between changes nothing.
 """
 
 import concurrent.futures
@@ -118,6 +122,10 @@ class Monitor:
         self._lock = threading.Lock()
         self._readings: dict[bytes, Reading] = {}
         self._stop = threading.Event()
+        self._paused = threading.Event()
+        #: Held from "not paused?" to "read queued", and by `pause()`: once `pause()`
+        #: returns, no read can still be on its way into the session's queue.
+        self._gate = threading.Lock()
         self._thread: threading.Thread | None = None
         self._next = 0
         self._card_due = True
@@ -169,6 +177,23 @@ class Monitor:
                                         daemon=True)
         self._thread.start()
 
+    @property
+    def paused(self) -> bool:
+        return self._paused.is_set()
+
+    def pause(self) -> None:
+        """Queue no more reads until `resume()`. Returns at once.
+
+        A read already waiting in the session's queue is cancelled by `_wait` within
+        `SLICE_SECONDS`; one already on the line finishes in the session, which is why
+        `RuidaLink.send_file` waits for `session.busy` to clear before its first packet.
+        """
+        with self._gate:
+            self._paused.set()
+
+    def resume(self) -> None:
+        self._paused.clear()
+
     def stop(self, timeout: float = 1.0) -> None:
         """Stop polling and wait, bounded, for the thread to end."""
         self._stop.set()
@@ -193,7 +218,7 @@ class Monitor:
         return address
 
     def _wait(self, future) -> bytes | None:
-        while not self._stop.is_set():
+        while not (self._stop.is_set() or self._paused.is_set()):
             done, _ = concurrent.futures.wait([future], timeout=self.SLICE_SECONDS)
             if done:
                 try:
@@ -205,14 +230,15 @@ class Monitor:
 
     def _poll(self) -> None:
         session = self.session
-        # The engine's rule: only while connected and nothing else is on the line.
-        if not session.connected or session.busy:
-            return
-        address = self._address()
-        try:
-            future = session.read_memory(address)
-        except ConnectionError:
-            return
+        with self._gate:
+            # The engine's rule: only while connected and nothing else is on the line.
+            if self._paused.is_set() or not session.connected or session.busy:
+                return
+            address = self._address()
+            try:
+                future = session.read_memory(address)
+            except ConnectionError:
+                return
         self.polls += 1
         reply = self._wait(future)
         if reply is None:

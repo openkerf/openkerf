@@ -3,12 +3,13 @@ What our modules ask of the line to a machine, in one place.
 
 A Ruida goes through our own transport (`ruida/`); every other laser goes through the
 engine's device, spooler and console as before. The modules that talk to a machine —
-`machine.py`, `status.py`, `busy.py`, and later `ruida_upload.py` and `commands.py` — ask
+`machine.py`, `status.py`, `busy.py`, `ruida_upload.py`, and later `commands.py` — ask
 a `MachineLink` and do not care which one answers. See the plan in the working record,
 `plannen/2026-10-11-eigen-ruida-verbinding.md`.
 
-Phase 2 is connecting and status. Sending a job, a file or a realtime command comes in
-the phases after it, as methods added here.
+Phase 2 is connecting and status, phase 3 a file into the controller's memory
+(`send_file`). Sending a job and a realtime command come in the phases after it, as
+methods added here.
 """
 
 from __future__ import annotations
@@ -27,6 +28,28 @@ MachineState = Literal["idle", "moving", "running", "paused", "unknown"]
 
 #: What our own line is carrying, as `busy.the_line_is_in_use` answers it.
 LineUse = Literal["burning", "queued", "uploading"]
+
+
+class SendInterrupted(Exception):
+    """
+    `send_file` stopped at packet `index` (0-based) and sent nothing after it.
+
+    `on_line` says whether that packet itself went out — handed to the transport, its
+    acknowledgement then missing or late — or never left. `stalled` separates "it did
+    not come back within the wait" (`True`) from "the line said no or went away"
+    (`False`). The caller turns these into its own sentence; `ruida_upload.py` into the
+    "N of M blocks" refusals.
+    """
+
+    def __init__(self, index: int, *, on_line: bool, stalled: bool, why: str = ""):
+        super().__init__(why or f"The file stopped at packet {index}.")
+        self.index = index
+        self.on_line = on_line
+        self.stalled = stalled
+
+
+class LineTaken(Exception):
+    """Another file holds this line, and did not let go within the wait."""
 
 
 class MachineLink(Protocol):
@@ -53,6 +76,22 @@ class MachineLink(Protocol):
 
     def line_in_use(self) -> LineUse | None:
         """What our own line is carrying right now, or `None`."""
+
+    #: Whether `send_file` confirms every packet; only then may a file go down it.
+    carries_files: bool
+
+    def send_file(self, packets, *, packet_seconds: float = 10.0,
+                  claim_seconds: float = 2.0) -> None:
+        """
+        Send `packets` in order, as one file, each confirmed before the next goes out.
+
+        Returns when the last one is confirmed. Otherwise raises `SendInterrupted` at
+        the packet where it stopped — nothing after it is sent, and a packet whose
+        acknowledgement went missing is never sent again — or `LineTaken` when another file has held the line for `claim_seconds`.
+        `packet_seconds` bounds the wait for one packet. The payloads are the caller's:
+        the link frames each as one datagram and knows nothing of what a file is made of.
+        While it runs, `line_in_use()` answers "uploading".
+        """
 
     def close(self) -> None:
         """Release everything; bounded, idempotent. Called at shutdown and on a switch."""
@@ -196,6 +235,14 @@ class EngineLink:
         from .busy import spooler_use
 
         return spooler_use(_attr(self.device, "spooler"))
+
+    #: Only a Ruida keeps files, and a Ruida always takes `RuidaLink` (`is_ruida`).
+    carries_files = False
+
+    def send_file(self, packets, *, packet_seconds=10.0, claim_seconds=2.0):
+        raise SendInterrupted(
+            0, on_line=False, stalled=False,
+            why="The engine's line does not carry files; nothing has been sent.")
 
     def close(self) -> None:
         pass

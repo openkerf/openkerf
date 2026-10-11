@@ -304,7 +304,7 @@ def test_an_upload_to_a_ruida_is_refused_at_once(kernel):
     upload = RuidaUpload(kernel)
     started = time.monotonic()
     with pytest.raises(DesignError) as error:
-        upload._session()
+        upload._link()
     assert error.value.code == "upload.notConnected"
     # Not the eight-second wait for an engine session that will never connect.
     assert time.monotonic() - started < 0.5

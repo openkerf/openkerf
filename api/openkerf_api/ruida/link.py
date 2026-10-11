@@ -23,9 +23,11 @@ Ruida session is not opened by anything in here.
   patch had to work around (`ruida/transport.py`).
 """
 
+import concurrent.futures
 import threading
 import time
 
+from ..link import LineTaken, SendInterrupted
 from . import framing
 from .monitor import Monitor, machine_state
 from .session import RuidaSession
@@ -55,6 +57,9 @@ class RuidaLink:
         self._settings: tuple[str, int] | None = None
         self._wanted = False
         self._detail: str | None = None
+        #: One file on the line at a time; held for the whole of `send_file`.
+        self._file = threading.Lock()
+        self._uploading = False
 
     # -- the engine's settings ----------------------------------------------
 
@@ -172,8 +177,103 @@ class RuidaLink:
             return "unknown"
         return machine_state(monitor.status_word)
 
-    def line_in_use(self) -> None:
-        return None
+    def line_in_use(self) -> str | None:
+        return "uploading" if self._uploading else None
+
+    carries_files = True
+
+    #: How often `send_file` looks again at a line that is still busy before a packet.
+    CLEAR_POLL_SECONDS = 0.005
+
+    def send_file(self, packets, *, packet_seconds: float = 10.0,
+                  claim_seconds: float = 2.0) -> None:
+        """
+        The `MachineLink` contract, on our session.
+
+        - **One generation for the whole file.** It is read once, before the first
+          packet, and every write names it (`RuidaSession.write(generation=...)`). A
+          reconnect anywhere in the file moves it on, and the next write is refused:
+          the file fails at that packet and is never resumed on the new connection.
+        - **One packet at a time.** Each is written only once the one before it is
+          confirmed; a missing ACK fails it in the session and the file stops there —
+          the session never sends it again. A NAK is resent by the session, bounded.
+        - **The monitor is paused for the length of the file**, as the engine's own
+          sender holds the status monitor off with `_job_lock`. Measured against
+          `ruida_peer` (`test_ruida_upload_link.py`): unpaused, the monitor put 0 reads
+          between the blocks of an eight-circle file in 6 of 6 runs, with and without a
+          30 ms ACK delay — it skips while the session is busy, and the gap between one
+          receipt and the next write is shorter than its period. Hold the line idle for
+          0.2 s between two blocks and, unpaused, reads go out in that gap; paused, none
+          (`test_no_status_poll_goes_out_during_the_upload`). The upload took the same
+          time either way (280–288 ms with the 30 ms delay). So the pause costs nothing
+          measured and makes "no read inside a file" a rule rather than a timing. It
+          matters on hardware: a read does no harm to the file
+          (`test_a_status_poll_between_blocks_does_not_damage_the_file`), but a KH-5030
+          left memory reads acknowledged and unanswered — the first on a fresh socket,
+          and about 40% at 0.2 s polling — and such a read holds the next block for the
+          session's whole reply wait.
+        - **Before the first packet the line must be clear**: a read that was already
+          on it is let finish, within `packet_seconds`; otherwise the file stalls at
+          packet 0 with nothing sent.
+        """
+        if not self._file.acquire(timeout=claim_seconds):
+            raise LineTaken("Another file is being sent on this line.")
+        try:
+            with self._lock:
+                session, monitor = self._session, self._monitor
+                if session is None or not self._wanted or not session.connected:
+                    raise SendInterrupted(
+                        0, on_line=False, stalled=False,
+                        why="Not connected to the Ruida controller.")
+                generation = session.generation
+                self._uploading = True
+            if monitor is not None:
+                monitor.pause()
+            try:
+                for index, packet in enumerate(packets):
+                    self._until_clear(session, index, packet_seconds)
+                    self._send_one(session, index, packet, generation, packet_seconds)
+            finally:
+                if monitor is not None:
+                    monitor.resume()
+        finally:
+            self._uploading = False
+            self._file.release()
+
+    def _until_clear(self, session, index: int, seconds: float) -> None:
+        deadline = time.monotonic() + seconds
+        while session.busy:
+            if not session.connected:
+                raise SendInterrupted(index, on_line=False, stalled=False,
+                                      why="The Ruida stopped answering.")
+            if time.monotonic() > deadline:
+                raise SendInterrupted(index, on_line=False, stalled=True,
+                                      why="The line to the Ruida did not come free.")
+            time.sleep(self.CLEAR_POLL_SECONDS)
+
+    @staticmethod
+    def _send_one(session, index: int, packet: bytes, generation: int,
+                  seconds: float) -> None:
+        try:
+            receipt = session.write(packet, generation=generation)
+        except (ConnectionError, OSError) as error:
+            raise SendInterrupted(index, on_line=False, stalled=False,
+                                  why=str(error)) from error
+        try:
+            receipt.result(timeout=seconds)
+        except concurrent.futures.TimeoutError as error:
+            if receipt.done():
+                # The session's own `TimeoutError`, set on the receipt: gone out and
+                # not confirmed, the same as a missing ACK.
+                raise SendInterrupted(index, on_line=True, stalled=False,
+                                      why=str(error)) from error
+            # Still in the queue: take it back. Already on the line: never resent.
+            cancelled = receipt.cancel()
+            raise SendInterrupted(index, on_line=not cancelled, stalled=True,
+                                  why="The Ruida did not confirm the packet in time.") from error
+        except (ConnectionError, OSError, concurrent.futures.CancelledError) as error:
+            raise SendInterrupted(index, on_line=True, stalled=False,
+                                  why=str(error)) from error
 
     def close(self) -> None:
         with self._lock:

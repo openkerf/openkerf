@@ -14,6 +14,8 @@ import pytest
 
 from openkerf_api.commands import CommandRunner, _AlwaysConnected
 from openkerf_api.edits import DesignError
+from openkerf_api.ruida.link import RuidaLink
+from openkerf_api.ruida.monitor import Monitor
 from openkerf_api.ruida_upload import CHUNK, RuidaUpload, machine_name
 from openkerf_api.server import ApiServer
 
@@ -856,15 +858,15 @@ def test_the_emulator_receives_the_file_we_built(ruida, monkeypatch, tmp_path):
 class FakeSession:
     """A connection that records what it is handed, and can misbehave on cue.
 
-    Stands in for `RuidaSession` in the three ways the flow control cares about:
-    `is_busy` (`ruida/ruidasession.py:161`, `_reply_pending or _ack_pending`),
-    `connected`, and `write`, which on the real one raises `ConnectionError` the
-    moment the session is not connected (`:186`).
+    Stands in for our `RuidaSession` (`ruida/session.py`) in the ways
+    `RuidaLink.send_file` cares about: `busy` (anything queued or on the line),
+    `connected` and `state`, `generation`, and `write`, which on the real one
+    raises `ConnectionError` the moment the session is not connected.
     """
 
     connected = True
-    supports_write_completion = True
     generation = 0
+    detail = ""
 
     def __init__(self, busy_forever=False, busy_for=0, fail_after=None, queued=0):
         # A real queue, because `_line_is_busy` asks it and the clearing before an
@@ -880,7 +882,16 @@ class FakeSession:
         self.busy_reads = 0
 
     @property
-    def is_busy(self):
+    def state(self):
+        # What our session says while it rides out a silence: "connecting".
+        return "connected" if self.connected else "connecting"
+
+    @property
+    def busy(self):
+        # The queue first, as the engine's `_line_is_busy` read it: packets of
+        # somebody else's waiting are a busy line whatever the counter says.
+        if not self.send_q.empty():
+            return True
         self.busy_reads += 1
         if self.busy_forever:
             return True
@@ -895,20 +906,49 @@ class FakeSession:
         return receipt
 
 
-def a_fake_session(upload, monkeypatch, **kwargs):
-    """Put a `FakeSession` in the place of both ways out of `RuidaUpload`.
+def a_line_over(kernel, session):
+    """A real `RuidaLink` with `session` where its UDP session would be.
 
-    Both, not one: `_session` is what the flow control reads `is_busy` off and
-    `_write` is what puts bytes on the line, and on a real device they are two
-    faces of the same session (`ruida/device.py:410` binds `controller.write` to
-    `active_session.write`). Patching only one would leave the other pointed at
-    the live controller of the device this fixture started — which is a path
-    toward a machine, and this suite has none.
+    The link's own `send_file` — the generation pin, one packet at a time, the
+    wait for a clear line, the monitor held off — runs exactly as it does on a
+    machine; only the session under it is a stand-in, so nothing leaves this
+    process. The monitor is a real one, never started: `pause()` and `resume()`
+    are what the link asks of it. The link is kept on `session.link`.
+    """
+    link = RuidaLink(getattr(kernel, "device", None))
+    link._session = session
+    link._monitor = Monitor(session)
+    link._settings = ("127.0.0.1", 0x88)
+    link._wanted = True
+    session.link = link
+    return link
+
+
+def a_fake_session(upload, monkeypatch, **kwargs):
+    """Put a `FakeSession`, inside a real `RuidaLink`, in the place of the line.
+
+    `_link` is the one way out of `RuidaUpload`: every packet goes through the
+    link it returns. Patched as a whole, so nothing is left pointed at the link
+    of the device this fixture started — the path toward a machine, and this
+    suite has none.
     """
     session = FakeSession(**kwargs)
-    monkeypatch.setattr(upload, "_session", lambda: session)
-    monkeypatch.setattr(upload, "_write", session.write)
+    link = a_line_over(upload.kernel, session)
+    monkeypatch.setattr(upload, "_link", lambda: link)
     return session
+
+
+def a_fake_line_for_the_kernel(upload, monkeypatch, session):
+    """The same, but under the real `_link()`: `link_for` hands back this line.
+
+    For the tests about what `_link()` itself decides — waiting out a line that
+    is reconnecting, refusing one that stays away.
+    """
+    import openkerf_api.ruida_upload as upload_module
+
+    link = a_line_over(upload.kernel, session)
+    monkeypatch.setattr(upload_module, "link_for", lambda kernel, device=None: link)
+    return link
 
 
 def test_a_transfer_that_stalls_says_how_far_it_got(ruida, monkeypatch):
@@ -1092,9 +1132,9 @@ def test_an_empty_file_is_never_announced(ruida, monkeypatch):
 
 def test_a_machine_that_is_not_connected_refuses_with_a_sentence(ruida):
     """
-    The `ruida` fixture starts the service with `-i`, so no session was ever
-    opened and `device.active_session` is `None` — the state a user is in before
-    they press connect. That is a sentence saying nothing has been sent, not an
+    The `ruida` fixture starts the service with `-i`, so its line was never
+    opened (and its address is a host name, which `RuidaLink` refuses before it
+    opens anything) — the state a user is in before they press connect. That is a sentence saying nothing has been sent, not an
     `AttributeError` on `None`.
     """
     a_rectangle(ruida)
@@ -1110,7 +1150,7 @@ def test_a_machine_that_is_not_connected_refuses_with_a_sentence(ruida):
 def test_a_session_that_is_open_but_not_connected_refuses_too(ruida, monkeypatch):
     """
     `RuidaSession.connected` is more than "an object exists": it wants the
-    transport open *and* the controller answering (`ruida/ruidasession.py:154`).
+    line asked for *and* the controller answering (`ruida/session.py`).
     A session that exists while the machine is off is exactly the case where
     `write` raises `ConnectionError` on the first byte, so it is caught here
     instead, before a file is announced.
@@ -1119,13 +1159,13 @@ def test_a_session_that_is_open_but_not_connected_refuses_too(ruida, monkeypatch
     upload = RuidaUpload(ruida)
     session = FakeSession()
     session.connected = False
-    monkeypatch.setattr(ruida.device, "active_session", session, raising=False)
-    # `_write` too, and not for tidiness: without it this test is safe only
-    # because `_session()` happens to refuse before the first write. Move that
-    # check one line and the test writes on the live controller of the device
-    # this fixture started — a path toward a machine, opened by a test that is
-    # about a machine being unreachable.
-    monkeypatch.setattr(upload, "_write", session.write)
+    # Through `link_for`, so the real `_link()` decides — and the line it gets is
+    # the fake one, not the link of the device this fixture started: a path
+    # toward a machine, opened by a test that is about a machine being
+    # unreachable. "connecting" is waited for `line_gap_seconds`; cut short here.
+    a_fake_line_for_the_kernel(upload, monkeypatch, session)
+    upload.line_gap_seconds = 0.05
+    upload.poll_seconds = 0.001
 
     with pytest.raises(DesignError) as error:
         upload.upload("BORD")
@@ -1179,8 +1219,7 @@ def test_a_gap_in_the_line_before_the_first_byte_is_waited_out(ruida, monkeypatc
     a_rectangle(ruida)
     upload = RuidaUpload(ruida)
     session = GappySession(away_seconds=0.05)
-    monkeypatch.setattr(ruida.device, "active_session", session, raising=False)
-    monkeypatch.setattr(upload, "_write", session.write)
+    a_fake_line_for_the_kernel(upload, monkeypatch, session)
     upload.poll_seconds = 0.001
 
     started = time.monotonic()
@@ -1202,8 +1241,7 @@ def test_a_line_that_stays_away_still_refuses_and_does_not_hang(ruida, monkeypat
     upload = RuidaUpload(ruida)
     session = FakeSession()
     session.connected = False
-    monkeypatch.setattr(ruida.device, "active_session", session, raising=False)
-    monkeypatch.setattr(upload, "_write", session.write)
+    a_fake_line_for_the_kernel(upload, monkeypatch, session)
     upload.line_gap_seconds = 0.05
     upload.poll_seconds = 0.001
 
@@ -1217,22 +1255,25 @@ def test_a_line_that_stays_away_still_refuses_and_does_not_hang(ruida, monkeypat
     assert took < 2.0, f"refusing took {took:.2f} s"
 
 
-def test_a_gap_partway_through_the_file_does_not_abandon_it(ruida, monkeypatch):
+def test_a_gap_before_the_file_starts_does_not_abandon_it(ruida, monkeypatch):
     """
-    The worse half of the same story: a gap that falls between two blocks used to
-    end the transfer with "the machine stopped answering", leaving an incomplete
-    file on the panel over something that heals itself in four seconds. The
-    blocks resume instead.
+    The gap waited out on the line the file is about to go down, not on a
+    session found beside it.
 
-    `_session` is handed the session directly here, so the pre-flight wait is out
-    of the way and the gap falls where the blocks are: on the first
-    `_wait_for_the_line`, before the `E8 02` packet.
+    This was `test_a_gap_partway_through_the_file_does_not_abandon_it`, and the
+    name promised more than the test did: `_session` was handed the session
+    directly and the gap fell on the first wait, before the `E8 02` packet —
+    never between two blocks. A gap that does fall between two blocks now ends
+    the file, on purpose: our session moves its generation on when it
+    reconnects, and the link refuses to carry on with the second half of a file
+    on a new connection (`test_ruida_upload_link.py`,
+    `test_a_reconnect_mid_file_fails_the_upload`). Before the first packet
+    nothing has been pinned yet, so here the gap is still waited out.
     """
     a_rectangle(ruida)
     upload = RuidaUpload(ruida)
     session = GappySession(away_seconds=0.05)
-    monkeypatch.setattr(upload, "_session", lambda: session)
-    monkeypatch.setattr(upload, "_write", session.write)
+    a_fake_line_for_the_kernel(upload, monkeypatch, session)
     upload.poll_seconds = 0.001
 
     started = time.monotonic()
@@ -1242,11 +1283,6 @@ def test_a_gap_partway_through_the_file_does_not_abandon_it(ruida, monkeypatch):
     assert result["chunks"] == len(session.written) - 2
     assert session.written[0] == b"\xe8\x02"
     assert took >= 0.05, f"the gap was not waited out, only {took:.3f} s passed"
-
-
-def _the_lock(device):
-    """The controller's job lock — the one the engine's own file sender holds."""
-    return device.driver.controller._job_lock
 
 
 def test_the_status_monitor_is_held_off_while_the_file_goes_down(ruida, monkeypatch):
@@ -1262,20 +1298,25 @@ def test_the_status_monitor_is_held_off_while_the_file_goes_down(ruida, monkeypa
     "stopped taking the file" without a byte going out.
 
     So the line is taken for the duration, the way the engine takes it for its own
-    sends: `_data_sender` acquires this very lock at `ruida/controller.py:129` and
-    `_status_monitor` waits on it at `:173`.
+    sends: `_data_sender` acquires `_job_lock` at `ruida/controller.py:129` and
+    `_status_monitor` waits on it at `:173`. On our own line that is
+    `RuidaLink.send_file` pausing its `Monitor`; measured against the emulator in
+    `test_ruida_upload_link.py`, `test_no_status_poll_goes_out_during_the_upload`.
     """
     a_rectangle(ruida)
     upload = RuidaUpload(ruida)
     session = a_fake_session(upload, monkeypatch)
+    link = session.link
     held = []
     original = session.write
-    monkeypatch.setattr(upload, "_write", lambda data, **kwargs: (held.append(_the_lock(ruida.device).locked()), original(data))[1])
+    monkeypatch.setattr(session, "write", lambda data, **kwargs: (held.append((link.monitor.paused, link.line_in_use())), original(data))[1])
 
     upload.upload("BORD")
 
-    assert held and all(held), "the monitor was free to queue while we were sending"
-    assert not _the_lock(ruida.device).locked(), "the lock was not given back"
+    assert held and all(paused for paused, _ in held), "the monitor was free to queue while we were sending"
+    assert all(use == "uploading" for _, use in held), held
+    assert not link.monitor.paused, "the monitor was not let go again"
+    assert link.line_in_use() is None, "the line still says it is uploading"
 
 
 def test_a_stuck_queue_is_not_deleted_to_make_room_for_an_upload(ruida, monkeypatch):
@@ -1290,19 +1331,21 @@ def test_a_stuck_queue_is_not_deleted_to_make_room_for_an_upload(ruida, monkeypa
     assert not session.written
 
 
-def test_a_line_the_engine_is_already_sending_on_is_refused(ruida, monkeypatch):
+def test_a_line_already_carrying_a_file_is_refused(ruida, monkeypatch):
     """
-    The lock is how `_data_sender` says "a file of mine is going down this line".
-    If it will not come free, the answer is a sentence and not a wait without end:
-    `pause_monitor()` is a bare `acquire()` with no timeout (`controller.py:132`)
-    and four places release it, so a plain call there can hang the request for
-    ever.
+    The link's own file lock is how a sender says "a file of mine is going down
+    this line" (it was the engine's `_job_lock`, the one `_data_sender` holds).
+    If it will not come free, the answer is a sentence and not a wait without
+    end: the engine's `pause_monitor()` was a bare `acquire()` with no timeout
+    (`controller.py:132`), and a plain call there could hang the request for
+    ever. Named for what it is now; it was
+    `test_a_line_the_engine_is_already_sending_on_is_refused`.
     """
     a_rectangle(ruida)
     upload = RuidaUpload(ruida)
     session = a_fake_session(upload, monkeypatch)
     upload.line_claim_seconds = 0.05
-    lock = _the_lock(ruida.device)
+    lock = session.link._file
     lock.acquire()
     try:
         with pytest.raises(DesignError) as error:
@@ -1334,7 +1377,13 @@ def test_a_status_poll_between_blocks_does_not_damage_the_file(
     ruida, monkeypatch, tmp_path
 ):
     """
-    Why the upload does *not* pause the engine's status monitor while it sends.
+    Why a status poll between two blocks is not what the monitor is paused for.
+
+    Written when the upload did *not* pause the engine's status monitor; it does
+    pause ours now (`RuidaLink.send_file`), and the reason is time, not damage —
+    an unanswered read holds the next block for the session's whole reply wait.
+    What this test pins stays true and is why that choice is not a safety
+    question: an interleaved read does not damage the file.
 
     `RuidaController._status_monitor` (`ruida/controller.py:162`) sends a
     `GET_SETTING` every 0.2 s for as long as the device is connected, over the
@@ -1413,8 +1462,8 @@ def test_a_status_poll_between_blocks_does_not_damage_the_file(
 
 
 class DeferringSession:
-    supports_write_completion = True
     generation = 0
+    detail = ""
     """A connection where writing and acknowledging come apart, as they really do.
 
     `FakeSession` cannot catch what this catches, because there writing *is*
@@ -1453,8 +1502,12 @@ class DeferringSession:
         self._thread.start()
 
     @property
-    def is_busy(self):
+    def busy(self):
         return self._ack_pending
+
+    @property
+    def state(self):
+        return "connected" if self.connected else "connecting"
 
     def write(self, data, **kwargs):
         # Raising here is not decoration: `RuidaSession.write` checks `connected`
@@ -1519,8 +1572,8 @@ def deferring():
     def make(upload, monkeypatch, **kwargs):
         session = DeferringSession(**kwargs)
         made.append(session)
-        monkeypatch.setattr(upload, "_session", lambda: session)
-        monkeypatch.setattr(upload, "_write", session.write)
+        link = a_line_over(upload.kernel, session)
+        monkeypatch.setattr(upload, "_link", lambda: link)
         return session
 
     yield make
@@ -1803,10 +1856,9 @@ def test_a_broken_transfer_says_what_was_seen_and_not_what_caused_it(
 def a_server_with_a_fake_line(kernel, tmp_path, monkeypatch, **kwargs):
     """An `ApiServer` whose upload writes into a `FakeSession`, not onto a line.
 
-    The same two patches `a_fake_session` makes, on the server's own
-    `RuidaUpload` — which is the object the route reaches, and which was built
-    with the live kernel. Patching one of the two would leave `_write` pointed
-    at `device.driver.controller.write`, the live controller of the device the
+    The same patch `a_fake_session` makes, on the server's own `RuidaUpload` —
+    which is the object the route reaches, and which was built with the live
+    kernel. Without it `_link()` would hand back the link of the device the
     fixture started: a path toward a machine, opened by a test about a route.
     """
     from openkerf_api.server import ApiServer
@@ -2037,7 +2089,7 @@ def test_a_second_upload_at_the_same_time_is_refused(ruida, monkeypatch):
     file in the machine's memory made of two jobs.
 
     Held here at the first packet rather than by timing: the first upload's
-    `_write` blocks until this test lets it go, which is the window a second
+    `session.write` blocks until this test lets it go, which is the window a second
     call would otherwise walk into.
 
     Measured with no lock, two `upload()` calls over one session on this
@@ -2052,14 +2104,14 @@ def test_a_second_upload_at_the_same_time_is_refused(ruida, monkeypatch):
     session = a_fake_session(upload, monkeypatch)
     at_the_first_packet = threading.Event()
     let_it_go = threading.Event()
-    straight_to_the_session = upload._write
+    straight_to_the_session = session.write
 
     def held(data, **kwargs):
         at_the_first_packet.set()
         let_it_go.wait(5)
         return straight_to_the_session(data, **kwargs)
 
-    monkeypatch.setattr(upload, "_write", held)
+    monkeypatch.setattr(session, "write", held)
     first = {}
 
     def send_the_first():
@@ -2134,7 +2186,7 @@ def test_a_nameless_body_still_gets_no_further_than_the_connection(
 
     `test_write_actions.py` calls this route with `{}` to prove the token gate
     holds, and its comment has to say what would happen if the gate were gone.
-    The answer is not the name: `_upload()` asks for a live session before it
+    The answer is not the name: `_upload()` asks for a live line before it
     looks at the name at all, so on a machine that has never been connected the
     code is `upload.notConnected`, and with no device `upload.noMachine`. Either
     way nothing is built and nothing goes out, which is what that comment is
@@ -2142,7 +2194,7 @@ def test_a_nameless_body_still_gets_no_further_than_the_connection(
     reads a safety argument out of later.
 
     Deliberately not `a_server_with_a_fake_line`: the point is the *real*
-    `_session()`, on the `-i` service that has no session.
+    `_link()`, on the `-i` service whose link was never opened.
     """
     from fastapi.testclient import TestClient
 
@@ -2172,12 +2224,11 @@ class _NoMachine:
 
 def _no_machine(server, session, monkeypatch):
     upload = server.ruida_upload
-    # The real `_session()` back first, because `_device()` is what raises this
-    # and the fake line replaces the whole path to it — with `_session` patched,
-    # this case would have passed through to a *connected* line and proved
-    # nothing. `_write` stays on the fake, so there is still no way out to a
-    # machine; there is simply nothing here to write to.
-    monkeypatch.setattr(upload, "_session", type(upload)._session.__get__(upload))
+    # The real `_link()` back first, because `_device()` is what raises this and
+    # the fake line replaces the whole path to it — with `_link` patched, this
+    # case would have passed through to a *connected* line and proved nothing.
+    # With no machine there is no link to reach a machine through either.
+    monkeypatch.setattr(upload, "_link", type(upload)._link.__get__(upload))
     monkeypatch.setattr(upload, "kernel", _NoMachine())
 
 
@@ -2288,7 +2339,7 @@ def test_a_non_ruida_machine_refuses_through_the_route(kernel, tmp_path, monkeyp
     The last of the codes, on the only machine that can raise it.
 
     The plain `kernel` fixture's device is the dummy from `conftest.py`, which
-    keeps no `RDJob`. The fake line gets `upload()` past `_session()` so the
+    keeps no `RDJob`. The fake line gets `upload()` past `_link()` so the
     refusal comes from `build_job_bytes`, where it belongs, rather than from the
     connection check in front of it.
     """
@@ -2358,14 +2409,14 @@ class _HeldUpload:
         self.session = a_fake_session(server.ruida_upload, monkeypatch)
         self.at_the_first_packet = threading.Event()
         self.let_it_go = threading.Event()
-        straight_to_the_session = server.ruida_upload._write
+        straight_to_the_session = self.session.write
 
         def held(data, **kwargs):
             self.at_the_first_packet.set()
             self.let_it_go.wait(5)
             return straight_to_the_session(data, **kwargs)
 
-        monkeypatch.setattr(server.ruida_upload, "_write", held)
+        monkeypatch.setattr(self.session, "write", held)
         self.result = {}
         self._thread = threading.Thread(target=self._send, args=(server,), daemon=True)
 
@@ -2705,6 +2756,8 @@ def test_the_motors_are_not_released_while_a_job_is_burning(ruida, monkeypatch, 
 
 def test_upload_waits_for_its_own_receipt_even_when_queue_looks_empty(ruida, monkeypatch):
     upload = RuidaUpload(ruida)
+    session = FakeSession()
+    link = a_line_over(ruida, session)
     receipt = Future()
     written = threading.Event()
     finished = threading.Event()
@@ -2712,10 +2765,10 @@ def test_upload_waits_for_its_own_receipt_even_when_queue_looks_empty(ruida, mon
     def write(data, **kwargs):
         written.set()
         return receipt
-    monkeypatch.setattr(upload, "_write", write)
+    monkeypatch.setattr(session, "write", write)
     def send():
         try:
-            result["value"] = upload._send(FakeSession(), [b"\xe8\x02"], 0, "TEST", b"")
+            result["value"] = upload._send(link, [b"\xe8\x02"], 0, "TEST", b"")
         except Exception as exc:
             result["error"] = exc
         finally:
@@ -2733,31 +2786,46 @@ def test_upload_waits_for_its_own_receipt_even_when_queue_looks_empty(ruida, mon
 
 def test_failed_receipt_stops_before_next_packet(ruida, monkeypatch):
     upload = RuidaUpload(ruida)
+    session = FakeSession()
+    link = a_line_over(ruida, session)
     sent = []
     def write(data, **kwargs):
         sent.append(data)
         receipt = Future()
         receipt.set_exception(ConnectionError("ACK missing"))
         return receipt
-    monkeypatch.setattr(upload, "_write", write)
+    monkeypatch.setattr(session, "write", write)
     with pytest.raises(DesignError, match="stopped answering"):
-        upload._send(FakeSession(), [b"\xe8\x02", b"\xe7\x01TEST\x00"], 0, "TEST", b"")
+        upload._send(link, [b"\xe8\x02", b"\xe7\x01TEST\x00"], 0, "TEST", b"")
     assert sent == [b"\xe8\x02"]
 
 
 def test_claiming_upload_line_preserves_queued_commands(ruida):
-    upload = RuidaUpload(ruida)
+    """
+    Holding the line for a file deletes nothing that was queued on it before.
+
+    It was asked of the engine's `_job_lock` claim; on our line the claim is
+    `send_file` itself, which waits for a busy line to clear and, when it does
+    not within the wait, stops at packet 0 with both queued packets still there.
+    """
     session = FakeSession(queued=1)
     session.send_q.put(b"\xd8\x00")
-    with upload._the_line_to_ourselves(session):
-        assert session.send_q.qsize() == 2
+    link = a_line_over(ruida, session)
+    from openkerf_api.link import SendInterrupted
+
+    with pytest.raises(SendInterrupted) as stopped:
+        link.send_file([b"\xe8\x02"], packet_seconds=0.05)
+
+    assert (stopped.value.index, stopped.value.on_line, stopped.value.stalled) == (0, False, True)
+    assert session.send_q.qsize() == 2
+    assert not session.written
 
 
 def test_engine_without_receipts_refuses_before_any_bytes(ruida, monkeypatch):
     a_rectangle(ruida)
     upload = RuidaUpload(ruida)
     session = a_fake_session(upload, monkeypatch)
-    session.supports_write_completion = False
+    session.link.carries_files = False
     with pytest.raises(DesignError) as error:
         upload.upload("TEST")
     assert error.value.code == "upload.engineUpgrade"
@@ -2767,10 +2835,11 @@ def test_engine_without_receipts_refuses_before_any_bytes(ruida, monkeypatch):
 def test_upload_pins_session_generation_across_packets(ruida, monkeypatch):
     upload = RuidaUpload(ruida)
     session = FakeSession()
+    link = a_line_over(ruida, session)
     writes = []
-    def write(data, *, expected_generation=None):
-        if expected_generation != session.generation:
-            raise ConnectionError("Session changed")
+    def write(data, *, generation=None, priority=False):
+        if generation != session.generation:
+            raise ConnectionError("The connection to the Ruida changed during the transfer.")
         writes.append(data)
         session.generation += 1  # Disconnect/reconnect between confirmed packets.
         receipt = Future()
@@ -2778,5 +2847,5 @@ def test_upload_pins_session_generation_across_packets(ruida, monkeypatch):
         return receipt
     monkeypatch.setattr(session, "write", write)
     with pytest.raises(DesignError):
-        upload._send(session, [b"first", b"second"], 0, "TEST", b"")
+        upload._send(link, [b"first", b"second"], 0, "TEST", b"")
     assert writes == [b"first"]

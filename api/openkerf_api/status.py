@@ -173,7 +173,8 @@ class StatusReader:
         different faults: packets still queued, or a flag left standing. From
         outside the process they are indistinguishable — twice in one afternoon a
         cause was reasoned out from the symptom here and twice it was wrong. These
-        are the exact fields `RuidaUpload._line_is_busy` decides on, plus the
+        are the fields the upload's flow control decided on (for a Ruida now
+        `session.busy`, which `RuidaLink.send_file` waits on), plus the
         counters the engine already keeps and calls "Stats for test and debug"
         (`ruida/ruidasession.py:64`), so a measurement can replace the reasoning.
 

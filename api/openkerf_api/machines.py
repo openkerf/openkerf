@@ -783,11 +783,15 @@ SERIAL_SIGNATURES = (
         "vid": 0x0403,
         "pid": 0x6001,
         "title": "FTDI-seriële poort",
-        "kind": "co2-ruida",
-        "keys": ("ruida-beta", "grbl-generic"),
+        # Not a Ruida, although an RDC6442 hangs off USB through this very chip: OpenKerf
+        # keeps the line to a Ruida itself, over the network only (`link.py`), so a Ruida
+        # found here would be a machine that can never connect. A Ruida is found by the
+        # network search instead.
+        "kind": "diode",
+        "keys": ("grbl-generic",),
         "confidence": "onzeker",
-        "why": "A Ruida RDC6442 hangs off USB through this FTDI chip, but it is not exclusive.",
-        "settings": {"interface": "usb"},
+        "why": "An FTDI chip sits on some GRBL frames and on many other devices.",
+        "settings": {},
     },
     {
         "vid": 0x1A86,

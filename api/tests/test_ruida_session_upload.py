@@ -1,60 +1,53 @@
-"""Uploader against the actual engine session; no socket or kernel is created."""
-import queue
+"""
+The uploader against our own session, over a real UDP socket to the emulator peer.
+
+This was the same question asked of the engine's `RuidaSession` (through the session
+patch) when the upload still wrote on it: is the last packet confirmed, and is it
+written exactly once when its ACK goes missing? The upload now writes on
+`RuidaLink.send_file` and our `ruida/session.py`, so that is what is asked here.
+"""
+
 import time
 from types import SimpleNamespace
 
 import pytest
-from meerk40t.ruida.rdjob import ACK
-from meerk40t.ruida.ruidasession import RuidaSession
-from meerk40t.ruida.ruidatransport import TransportTimeout
+
 from openkerf_api.edits import DesignError
+from openkerf_api.ruida.link import RuidaLink
 from openkerf_api.ruida_upload import RuidaUpload
+from ruida_peer import ruida_peer
 
 
 @pytest.mark.parametrize("missing_ack", [False, True])
-def test_actual_session_confirms_final_upload_packet(monkeypatch, missing_ack):
-    class Transport:
-        connected = False
-        def __init__(self):
-            self.incoming = queue.Queue()
-            self.writes = []
-        def open(self):
-            self.connected = True
-        def close(self):
-            self.connected = False
-        def set_timeout(self, timeout):
-            pass
-        def write(self, data):
-            self.writes.append(data)
-            if not (missing_ack and data.endswith(b"last")):
-                self.incoming.put(ACK)
-        def read(self, size):
-            try:
-                return self.incoming.get(timeout=0.01)
-            except queue.Empty:
-                raise TransportTimeout()
+def test_our_session_confirms_the_final_upload_packet(missing_ack):
+    packets = [b"\xe8\x02", b"\xe7\x01TEST\x00", b"\xd7"]
+    with ruida_peer() as peer:
+        link = RuidaLink(SimpleNamespace(address="127.0.0.1", magic=0x88),
+                         send_port=peer.send_port, listen_port=0, reply_seconds=0.3,
+                         poll_seconds=0.05)
+        try:
+            assert link.connect()["state"] == "connected"
+            session = link.session
+            if missing_ack:
+                original = session.write
 
-    transport = Transport()
-    monkeypatch.setattr("meerk40t.ruida.ruidasession.udp.UDPTransport", lambda service: transport)
-    service = SimpleNamespace(interface="udp", safe_label="test",
-        channel=lambda *a, **kw: lambda *a: None, signal=lambda *a: None)
-    session = RuidaSession(service)
-    session.set_swizzles(bytes, bytes)
-    session._tries = 1
-    session.open()
-    try:
-        deadline = time.monotonic() + 2
-        while not session.connected:
-            assert time.monotonic() < deadline
-            time.sleep(0.005)
-        upload = RuidaUpload(SimpleNamespace())
-        packets = [b"header", b"name", b"last"]
-        if missing_ack:
-            with pytest.raises(DesignError) as error:
-                upload._send(session, packets, 1, "TEST", b"last")
-            assert error.value.code == "upload.interrupted"
-        else:
-            assert upload._send(session, packets, 1, "TEST", b"last")["chunks"] == 1
-        assert transport.writes.count(session._package(b"last")) == 1
-    finally:
-        session.shutdown()
+                def write(data, **kwargs):
+                    if data == packets[-1]:
+                        peer.drop_ack_next()
+                    return original(data, **kwargs)
+
+                session.write = write
+            upload = RuidaUpload(SimpleNamespace())
+            if missing_ack:
+                with pytest.raises(DesignError) as error:
+                    upload._send(link, packets, 1, "TEST", b"\xd7")
+                assert error.value.code == "upload.interrupted"
+                assert error.value.values == {"sent": 1, "chunks": 1, "announced": True}
+                time.sleep(0.5)  # the session reconnects; the packet must not come again
+            else:
+                assert upload._send(link, packets, 1, "TEST", b"\xd7")["chunks"] == 1
+            last = [entry for entry in peer.received if entry.payload == packets[-1]]
+            assert len(last) == 1, [entry.action for entry in last]
+            assert last[0].action == ("ack-dropped" if missing_ack else "ack")
+        finally:
+            link.close()
