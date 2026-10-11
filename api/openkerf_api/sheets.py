@@ -259,6 +259,13 @@ class Sheets:
                 code="sheet.tooMany",
             )
         bed_width, bed_height = self._bed()
+        # The next sheet is usually cut from the same board: asked for while on a
+        # birch sheet of 3 mm, it starts as birch of 3 mm, as it starts with that
+        # sheet's layers (`_keep_layers`). A material or thickness asked for wins.
+        current = self.active() or {}
+        if material_id is None and thickness_mm is None:
+            material_id = current.get("material_id")
+            thickness_mm = current.get("thickness_mm")
         number = max(
             (int(s["id"].rsplit("-", 1)[-1]) for s in sheets if s["id"][-1].isdigit()),
             default=0,

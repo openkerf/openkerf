@@ -365,3 +365,28 @@ def test_tiling_settings_survive_a_reload(client):
 
     assert again["tiling"]["enabled"] is True
     assert again["tiling"]["overlap_mm"] == 30.0
+
+
+def test_a_new_sheet_starts_on_the_same_board(client):
+    """
+    Asked for while on a birch sheet of 3 mm, the next sheet is birch of 3 mm: the user
+    added "Laag 1 vel 2" from "Laag 1 vel 1" and got a sheet without a material.
+    """
+    material = client.post("/api/library/materials", json={"name": "Birch"}).json()
+    client.patch("/api/sheets/sheet-1", json={"material_id": material["id"], "thickness_mm": 3})
+
+    added = client.post("/api/sheets", json={}).json()["sheets"][-1]
+
+    assert (added["material_id"], added["thickness_mm"]) == (material["id"], 3)
+
+
+def test_a_material_asked_for_wins_over_the_board_you_are_on(client):
+    birch = client.post("/api/library/materials", json={"name": "Birch"}).json()
+    acrylic = client.post("/api/library/materials", json={"name": "Acrylic"}).json()
+    client.patch("/api/sheets/sheet-1", json={"material_id": birch["id"], "thickness_mm": 3})
+
+    added = client.post(
+        "/api/sheets", json={"material_id": acrylic["id"], "thickness_mm": 5}
+    ).json()["sheets"][-1]
+
+    assert (added["material_id"], added["thickness_mm"]) == (acrylic["id"], 5)
