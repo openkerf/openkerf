@@ -22,6 +22,7 @@
 	 * in `aria-label` and its name plus shortcut in the tooltip.
 	 */
 	import ArrangeIcon from './ArrangeIcon.svelte';
+	import Icon from './Icon.svelte';
 	import { t } from '$lib/i18n/index.svelte';
 	import type { Action } from '$lib/actions';
 
@@ -57,7 +58,7 @@
 	<div class="group" role="group" aria-label={t('bar.history')}>
 		{#each history as action (action.id)}
 			<button
-				class="button"
+				class="btn ghost icon"
 				disabled={Boolean(action.off)}
 				title={tip(action)}
 				aria-label={action.label}
@@ -77,7 +78,7 @@
 	<div class="group" role="group" aria-label={t('bar.alignH')}>
 		{#each align.slice(0, 4) as action (action.id)}
 			<button
-				class="button"
+				class="btn ghost icon"
 				disabled={Boolean(action.off)}
 				title={tip(action)}
 				aria-label={action.label}
@@ -90,7 +91,7 @@
 	<div class="group" role="group" aria-label={t('bar.alignV')}>
 		{#each align.slice(4) as action (action.id)}
 			<button
-				class="button"
+				class="btn ghost icon"
 				disabled={Boolean(action.off)}
 				title={tip(action)}
 				aria-label={action.label}
@@ -106,7 +107,7 @@
 	<div class="group" role="group" aria-label={t('bar.arrange')}>
 		{#each arrange as action (action.id)}
 			<button
-				class="button"
+				class="btn ghost icon"
 				disabled={Boolean(action.off)}
 				title={tip(action)}
 				aria-label={action.label}
@@ -121,9 +122,9 @@
 
 	<!-- The way to the rest. A bar cannot carry everything, but it must say that
 	     there is more — otherwise the context menu is a secret. -->
-	<button class="btn mini more" title={t('bar.more.title')} onclick={onMore}>
+	<button class="btn mini ghost more" title={t('bar.more.title')} onclick={onMore}>
 		{t('bar.more')}
-		<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+		<Icon name="chevron-down" />
 	</button>
 
 	<span class="stretch"></span>
@@ -156,23 +157,13 @@
 		align-items: center;
 		gap: 1px;
 	}
-	.button {
-		display: grid;
-		place-items: center;
-		width: var(--space-8);
-		height: var(--space-8);
-		border-radius: var(--radius-field);
-		color: var(--text-1);
-		background: none;
-		border: none;
-	}
-	.button:hover:not(:disabled) {
-		background: var(--surface-2);
-	}
-	.button:disabled {
-		color: var(--text-2);
-		opacity: 0.38;
-		cursor: not-allowed;
+	/* The buttons are the shared ghost icon button (`.btn.ghost.icon`): 32px on a
+	   desk, 44 beside the machine. Disabled is drained, not faded: the icon is mixed
+	   toward the bar, as on the tool rail, because with nothing selected all fifteen
+	   are off and --text-2 alone left them looking ready to press. The reason is in
+	   the tooltip. */
+	.icon:disabled {
+		color: color-mix(in srgb, var(--text-2) 50%, var(--surface-1));
 	}
 	.divider {
 		width: 1px;
@@ -180,16 +171,10 @@
 		background: var(--line);
 	}
 	/* The same button as the layer list's *List*, which it is the twin of: both are a
-	   small text button with a chevron that opens a menu. What is its own is that it
-	   stands in a row of ghost icon buttons, so it carries no face of its own. */
+	   small text button with a chevron that opens a menu. It stands in a row of ghost
+	   icon buttons, so it is a ghost too. */
 	.more {
 		gap: var(--space-1h);
-		color: var(--text-2);
-		background: none;
-		border: none;
-	}
-	.more:hover {
-		color: var(--text-1);
 	}
 	.stretch {
 		flex: 1;
@@ -200,11 +185,18 @@
 		color: var(--text-2);
 		white-space: nowrap;
 	}
-	/* Below 1200px this is not the app this round is about; the bar keeps working
-	   but shrinks to what fits. Polishing belongs to the tablet round. */
+	/* Below 1200px the buttons are 44 px for a glove, and fifteen of them no longer fit
+	   one row beside the panel: at 1024 the bar was 758 px of buttons in 572 px, and the
+	   end of it — More included — scrolled out of sight. A button you have to scroll to
+	   is not a button, so the bar wraps onto a second row instead. */
 	@media (max-width: 1199px) {
 		.actionbar {
-			overflow-x: auto;
+			flex-wrap: wrap;
+			row-gap: var(--space-1);
+			padding-block: var(--space-1);
+		}
+		.group {
+			flex-wrap: wrap;
 		}
 		.state {
 			display: none;

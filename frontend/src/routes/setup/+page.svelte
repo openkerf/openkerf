@@ -2,6 +2,8 @@
 	import { onMount } from 'svelte';
 	import { i18n, t, type MessageKey } from '$lib/i18n/index.svelte';
 	import { createStore } from '$lib/setup.svelte';
+	import Notice from '$components/Notice.svelte';
+	import EmptyState from '$components/EmptyState.svelte';
 	import type { Machine } from '$lib/machines.svelte';
 
 	const store = createStore();
@@ -141,52 +143,54 @@
 <svelte:head><title>{t('setup.head.machines')}</title></svelte:head>
 
 <section class="setup">
-	{#if store.error}<p class="error" role="alert">{store.error}</p>{/if}
+	{#if store.error}<Notice tone="danger" live>{store.error}</Notice>{/if}
 
-	<h1>{t('setup.yourMachines')}</h1>
+	<h1 class="title">{t('setup.yourMachines')}</h1>
 	{#if eigen.length === 0}
-		<p class="empty">
-			<strong>{t('setup.none.title')}</strong>
-			<span class="muted">{t('setup.none.body')}</span>
-		</p>
+		<!-- The action that fills it is "Add a machine" in the row below, not a second
+		     primary here. -->
+		<EmptyState title={t('setup.none.title')} text={t('setup.none.body')} />
 	{:else}
 		<ul class="machines">
 			{#each eigen as machine (machine.path)}
-				<li class:active={machine.active}>
-					<div>
+				<li>
+					<div class="who">
 						<div class="name" title={machine.label}>{machine.label}</div>
-						<div class="muted mono">{machine.path}</div>
+						<div class="help mono">{machine.path}</div>
 					</div>
-					{#if machine.active}
-						<span class="badge">{t('setup.inUse')}</span>
-					{:else}
-						<button class="btn" onclick={() => useMachine(machine)}>{t('setup.use')}</button>
-					{/if}
-					<!-- Settings used to be reachable only while creating the machine. -->
-					<a class="btn" href="/setup/settings?machine={encodeURIComponent(machine.path)}">
-						{t('setup.settings')}
-					</a>
-					<!-- The rotary is bolted into *this* bed, so it belongs with this machine
-					     and not with the design. -->
-					<a class="btn" href="/setup/rotary?machine={encodeURIComponent(machine.path)}">
-						{t('setup.rotary')}
-					</a>
-					<!-- Gap E5: this machine as a file, for a second computer. -->
-					<button class="btn subtle" onclick={() => exporteer(machine)}
-						>{t('setup.exportProfile')}</button
-					>
-					{#if !machine.active}
-						<button class="btn subtle" onclick={() => removeMachine(machine)}
-							>{t('common.remove')}</button
+					<div class="verbs">
+						<!-- "In use" is a state, so a badge and never the accent. -->
+						{#if machine.active}
+							<span class="badge ok">{t('setup.inUse')}</span>
+						{:else}
+							<button class="btn" onclick={() => useMachine(machine)}>{t('setup.use')}</button>
+						{/if}
+						<!-- Settings used to be reachable only while creating the machine. -->
+						<a class="btn" href="/setup/settings?machine={encodeURIComponent(machine.path)}">
+							{t('setup.settings')}
+						</a>
+						<!-- The rotary is bolted into *this* bed, so it belongs with this machine
+						     and not with the design. -->
+						<a class="btn" href="/setup/rotary?machine={encodeURIComponent(machine.path)}">
+							{t('setup.rotary')}
+						</a>
+						<!-- Gap E5: this machine as a file, for a second computer. A quiet verb,
+						     not a faded one: it is available, just not the point of the row. -->
+						<button class="btn ghost" onclick={() => exporteer(machine)}
+							>{t('setup.exportProfile')}</button
 						>
-					{/if}
+						{#if !machine.active}
+							<button class="btn ghost" onclick={() => removeMachine(machine)}
+								>{t('common.remove')}</button
+							>
+						{/if}
+					</div>
 				</li>
 			{/each}
 		</ul>
 	{/if}
 
-	<div class="actions">
-		<a class="btn primary" href="/setup/kind">{t('setup.addMachine')}</a>
+	<div class="ask-actions">
 		<!-- Gap E5: the same route as "Add a machine", but with a profile someone else
 		     has already filled in. -->
 		<label class="btn file">
@@ -201,25 +205,26 @@
 				}}
 			/>
 		</label>
+		<a class="btn primary" href="/setup/kind">{t('setup.addMachine')}</a>
 	</div>
 
-	{#if profielFout}<p class="error" role="alert">{profielFout}</p>{/if}
-	{#if ingelezen}<p class="done" role="status">{ingelezen}</p>{/if}
+	{#if profielFout}<div class="after"><Notice tone="danger" live>{profielFout}</Notice></div>{/if}
+	{#if ingelezen}<div class="after"><Notice tone="ok" live>{ingelezen}</Notice></div>{/if}
 
 	{#if preview}
 		<!-- What is in it first, only then create. A profile decides the bed size, the
 		     connection and the mirroring; that should not happen *to* you. -->
-		<aside class="preview">
-			<h2>{t('setup.profile.title', { label: preview.label })}</h2>
+		<aside class="card inset preview">
+			<h2 class="title">{t('setup.profile.title', { label: preview.label })}</h2>
 			{#if preview.known}
-				<p class="muted">
+				<p class="help">
 					{t('setup.profile.known', {
 						name: `${preview.friendly_name}${preview.family ? ` · ${preview.family}` : ''}`,
 						n: preview.settings
 					})}
 				</p>
 			{:else}
-				<p class="muted">{t('setup.profile.unknown', { type: preview.info })}</p>
+				<p class="help">{t('setup.profile.unknown', { type: preview.info })}</p>
 			{/if}
 			<dl class="facts">
 				{#each Object.entries(preview.essential) as [name, value] (name)}
@@ -227,15 +232,18 @@
 				{/each}
 			</dl>
 			{#if Object.keys(preview.local).length}
-				<p class="lokaal">
+				<!-- The address of the other workbench is the first thing here that does not
+				     hold. Not an error, but something to check before you burn anything. -->
+				<Notice tone="warn">
 					{t('setup.profile.local', {
 						values: Object.entries(preview.local)
 							.map(([name, value]) => `${veldnaam(name)} ${value}`)
 							.join(', ')
 					})}
-				</p>
+				</Notice>
 			{/if}
-			<div class="uitknoppen">
+			<div class="ask-actions">
+				<button class="btn" onclick={() => (preview = null)}>{t('setup.profile.cancel')}</button>
 				<button
 					class="btn primary"
 					disabled={profileBusy || !preview.known}
@@ -244,49 +252,55 @@
 				>
 					{profileBusy ? t('common.busy') : t('setup.profile.create')}
 				</button>
-				<button class="btn subtle" onclick={() => (preview = null)}
-					>{t('setup.profile.cancel')}</button
-				>
 			</div>
 		</aside>
 	{/if}
 
 	{#if placeholder}
-		<aside class="placeholder">
-			<h2>{t('setup.placeholder.title')}</h2>
-			<p class="muted">{t('setup.placeholder.body', { label: placeholder.label })}</p>
-			<p class="muted">{t('setup.placeholder.yours')}</p>
-			<a class="btn" href="/setup/settings?machine={encodeURIComponent(placeholder.path)}">
-				{t('setup.placeholder.adopt')}
-			</a>
-		</aside>
+		<!-- A warning, not an error: this device works, it is simply not yours. -->
+		<div class="after placeholder">
+			<Notice tone="warn">
+				<strong>{t('setup.placeholder.title')}</strong>
+				<span>{t('setup.placeholder.body', { label: placeholder.label })}</span>
+				<span>{t('setup.placeholder.yours')}</span>
+				<span>
+					<a class="btn mini" href="/setup/settings?machine={encodeURIComponent(placeholder.path)}">
+						{t('setup.placeholder.adopt')}
+					</a>
+				</span>
+			</Notice>
+		</div>
 	{/if}
 </section>
 
 <style>
-	ul {
+	.machines {
 		list-style: none;
 		margin: 0;
 		padding: 0;
 	}
+	/* Rows on a hairline, not a card each: they already sit inside the step's card. */
 	.machines li {
 		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
-		gap: var(--space-2);
-		padding: 8px 12px;
-		border: 1px solid var(--line);
-		border-radius: var(--radius-card);
-		margin-bottom: var(--space-2);
+		gap: var(--space-2) var(--space-3);
+		padding: var(--space-3) 0;
 	}
-	.machines li.active {
-		border-color: var(--accent);
+	.machines li + li {
+		border-top: 1px solid var(--line);
 	}
-	.machines li > div:first-child {
-		flex: 1;
+	/* The name keeps at least a readable column; when the verbs do not fit beside it they
+	   go to the line below — the order in which you read them anyway. */
+	.who {
+		flex: 1 1 200px;
 		min-width: 0;
 	}
-	.machines .mono {
-		font-size: var(--text-xs);
+	.verbs {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--space-2);
 	}
 	.name {
 		font-weight: 500;
@@ -297,63 +311,12 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
-	/* Below ~420px there is no column left beside the name: at 390 the name kept 74px of
-	   the 308 and "Ruida 5030" collided with the badge. The name then gets the whole line,
-	   the actions the line below — which is also the order in which you read them. */
-	@media (max-width: 420px) {
-		.machines li {
-			flex-wrap: wrap;
-		}
-		.machines li > div:first-child {
-			flex: 1 0 100%;
-		}
-		/* The buttons may then share the full width; here they are the target of a thumb,
-		   not of a mouse. */
-		.machines li .btn,
-		.machines li .badge {
-			min-height: 44px;
-			display: inline-flex;
-			align-items: center;
-		}
-	}
-	/* Accent on a 14% accent tint does not make AA (measured: 4.10 in light, 4.46 in
-	   dark). The tint keeps carrying the accent colour, the text does not — the same way
-	   out as in ToolRail, and without shifting the brand colour. */
-	.badge {
-		font-size: var(--text-xs);
-		padding: 4px 8px;
-		border-radius: var(--radius-dot);
-		background: color-mix(in srgb, var(--accent) 14%, transparent);
-		color: var(--text-1);
-	}
-	.empty {
-		display: grid;
-		gap: var(--space-2);
-		margin: 0;
-		padding: var(--space-4);
-		border: 1px dashed var(--line);
-		border-radius: var(--radius-card);
+	.after {
+		margin-top: var(--space-4);
 	}
 	.placeholder {
 		margin-top: var(--space-8);
-		padding: var(--space-4);
-		border-radius: var(--radius-card);
-		/* A warning surface, not an error: this device works, it is simply not yours. See
-		   DESIGN-SYSTEM, "certainty is a sentence". */
-		border-left: 3px solid var(--warn);
-		background: var(--surface-2);
 	}
-	.placeholder h2 {
-		font-size: var(--text-sm);
-		font-weight: 600;
-		margin: 0 0 var(--space-2);
-	}
-	.placeholder p {
-		margin: 0 0 var(--space-2);
-		font-size: var(--text-xs);
-	}
-
-	/* ------------------------------- machineprofiel uitwisselen (gat E5) */
 
 	/* A file picker that looks like the button beside it: the input itself is invisible
 	   but stays the touch surface, so keyboard and screen reader simply get an input with
@@ -361,7 +324,6 @@
 	.btn.file {
 		position: relative;
 		overflow: hidden;
-		cursor: pointer;
 	}
 	.btn.file input {
 		position: absolute;
@@ -369,44 +331,21 @@
 		opacity: 0;
 		cursor: pointer;
 	}
-	.done {
-		margin: var(--space-4) 0 0;
-		padding: var(--space-3);
-		border-radius: var(--radius-field);
-		border-left: 3px solid var(--ok);
-		background: color-mix(in srgb, var(--ok) 14%, transparent);
-		font-size: var(--text-xs);
-	}
 	.preview {
+		display: grid;
+		gap: var(--space-2);
 		margin-top: var(--space-4);
-		padding: var(--space-4);
-		border: 1px solid var(--line);
-		border-radius: var(--radius-card);
-		background: var(--surface-2);
 	}
-	.preview h2 {
-		font-size: var(--text-sm);
-		font-weight: 600;
-		margin: 0 0 var(--space-2);
+	.preview .ask-actions {
+		margin-top: var(--space-2);
 	}
-	.preview p { margin: 0 0 var(--space-2); font-size: var(--text-xs); }
 	.facts {
 		display: grid;
 		gap: var(--space-1);
-		margin: 0 0 var(--space-3);
+		margin: 0;
 		font-size: var(--text-xs);
 	}
 	.facts div { display: flex; justify-content: space-between; gap: var(--space-3); }
 	.facts dt { color: var(--text-2); }
 	.facts dd { margin: 0; }
-	/* The address of the other workbench is the first thing here that does not hold. Not
-	   an error, but something to check before you burn anything. */
-	.lokaal {
-		padding: var(--space-2) var(--space-3);
-		border-left: 3px solid var(--warn-solid, var(--warn));
-		border-radius: var(--radius-field);
-		background: color-mix(in srgb, var(--warn-solid, var(--warn)) 12%, transparent);
-		color: var(--text-1);
-	}
-	.uitknoppen { display: flex; gap: var(--space-2); flex-wrap: wrap; }
 </style>

@@ -15,6 +15,8 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import NumberField from '$components/NumberField.svelte';
+	import Notice from '$components/Notice.svelte';
+	import Why from '$components/Why.svelte';
 	import { i18n, t } from '$lib/i18n/index.svelte';
 	import { createStore } from '$lib/setup.svelte';
 	import { rotary } from '$lib/rotary.svelte';
@@ -137,34 +139,34 @@
 <svelte:head><title>{t('rotary.head')}</title></svelte:head>
 
 <section class="setup">
-	{#if rotary.error}<p class="error" role="alert">{rotary.error}</p>{/if}
+	{#if rotary.error}<Notice tone="danger" live>{rotary.error}</Notice>{/if}
 
-	<h1>{t('rotary.title')}</h1>
+	<h1 class="title">{t('rotary.title')}</h1>
 
 	{#if !machinePath}
-		<p class="muted">{t('rotary.needsMachine')}</p>
-		<div class="actions"><a class="btn primary" href="/setup">{t('rotary.backToMachines')}</a></div>
+		<p>{t('rotary.needsMachine')}</p>
+		<div class="ask-actions"><a class="btn primary" href="/setup">{t('rotary.backToMachines')}</a></div>
 	{:else}
-		<p class="muted">{t('ux.rotary.purpose')}</p>
+		<p>{t('ux.rotary.purpose')}</p>
 		{#if machine}
-			<p class="muted">{t('rotary.forMachine', { machine: machine.label })}</p>
+			<p class="help">{t('rotary.forMachine', { machine: machine.label })}</p>
 		{/if}
 
 		{#if rotary.state.engine_rotary}
 			<!-- grbl, lhystudios and family bring MeerK40t's own rotary. That one has the
 			     user's settings in it and ours would fight it, so we say so instead of
 			     offering a second scale. -->
-			<p class="note">{t('rotary.engineOwn')}</p>
+			<div class="after"><Notice tone="info">{t('rotary.engineOwn')}</Notice></div>
 		{:else}
 			<label class="switch">
 				<input type="checkbox" bind:checked={active} />
 				<span>{t('rotary.use')}</span>
 			</label>
-			<p class="hint">{t('rotary.use.hint')}</p>
-			<p class="hint">{t('ux.rotary.home')}</p>
+			<p class="help">{t('rotary.use.hint')}</p>
+			<p class="help warn">{t('ux.rotary.home')}</p>
 
-			<fieldset>
-				<legend>{t('rotary.kind')}</legend>
+			<fieldset class="group">
+				<legend class="label-section">{t('rotary.kind')}</legend>
 				<label class="radio">
 					<input type="radio" bind:group={kind} value="chuck" />
 					<span>{t('rotary.kind.chuck')}</span>
@@ -182,7 +184,7 @@
 						step={1}
 						min={0}
 					/>
-					<p class="hint">{t('rotary.diameter.hint')}</p>
+					<p class="help">{t('rotary.diameter.hint')}</p>
 				{:else}
 					<NumberField
 						label={t('rotary.circumference')}
@@ -191,16 +193,17 @@
 						step={1}
 						min={0}
 					/>
-					<p class="hint">{t('rotary.circumference.hint')}</p>
+					<p class="help">{t('rotary.circumference.hint')}</p>
 				{/if}
 				{#if draftCircumference > 0}
 					<p class="fact">{t('rotary.circumference.is', { mm: i18n.number(Math.round(draftCircumference * 100) / 100) })}</p>
 				{/if}
 			</fieldset>
 
-			<fieldset>
-				<legend>{t('rotary.scale')}</legend>
-				<p class="hint">{t('rotary.scale.explain')}</p>
+			<fieldset class="group">
+				<legend class="label-section">{t('rotary.scale')}</legend>
+				<!-- Why the first choice is the default: reasoning, so behind the fold. -->
+				<Why>{t('rotary.scale.explain')}</Why>
 				<label class="radio">
 					<input type="radio" bind:group={scaleSource} value="none" />
 					<span>{t('rotary.scale.source.none')}</span>
@@ -235,14 +238,16 @@
 				<p class="fact">{t('rotary.scale.now', { factor: i18n.number(Math.round(draftScale * 10000) / 10000) })}</p>
 				<!-- The factor in the terms of the thing you drew. 1.0363 says nothing;
 				     "100 mm burns 103.6 mm" says everything. -->
-				<p class="hint">
+				<p class="help">
 					{t('rotary.scale.example', {
 						drawn: i18n.number(100),
 						burned: i18n.number(Math.round(burnedHeightMm(100, draftScale) * 10) / 10)
 					})}
 				</p>
 				{#if !scaleIsSane(draftScale)}
-					<p class="note">{t('rotary.scale.range', { min: i18n.number(SCALE_MIN), max: i18n.number(SCALE_MAX) })}</p>
+					<!-- A warning, not an error: the setting is possible, it is simply not a
+					     calibration any more. -->
+					<Notice tone="warn">{t('rotary.scale.range', { min: i18n.number(SCALE_MIN), max: i18n.number(SCALE_MAX) })}</Notice>
 				{/if}
 			</fieldset>
 
@@ -251,11 +256,11 @@
 					{rotary.busy ? t('common.busy') : t('rotary.save')}
 				</button>
 			</div>
-			{#if saved}<p class="done" role="status">{t('rotary.saved')}</p>{/if}
+			{#if saved}<div class="after"><Notice tone="ok" live>{t('rotary.saved')}</Notice></div>{/if}
 
-			<fieldset>
-				<legend>{t('rotary.calibrate.title')}</legend>
-				<p class="hint">{t('rotary.calibrate.body')}</p>
+			<fieldset class="group">
+				<legend class="label-section">{t('rotary.calibrate.title')}</legend>
+				<p class="help">{t('rotary.calibrate.body')}</p>
 				<NumberField
 					label={t('rotary.calibrate.commanded')}
 					unit="mm"
@@ -288,7 +293,7 @@
 					</button>
 				</div>
 				{#if rotary.state.last_calibration}
-					<p class="hint">
+					<p class="help">
 						{t('rotary.calibrate.last', {
 							commanded: i18n.number(rotary.state.last_calibration.commanded_mm),
 							measured: i18n.number(rotary.state.last_calibration.measured_mm),
@@ -322,21 +327,23 @@
 </section>
 
 <style>
-	h1 {
-		margin-bottom: var(--space-2);
-	}
-	fieldset {
-		border: 1px solid var(--line);
-		border-radius: var(--radius-card);
-		padding: var(--space-3) var(--space-4);
-		margin: var(--space-4) 0 0;
+	/* Groups under a heading, not boxes: they already stand in the step's card. */
+	.group {
 		display: grid;
 		gap: var(--space-2);
+		min-width: 0;
+		margin: var(--space-6) 0 0;
+		padding: 0;
+		border: 0;
 	}
-	legend {
-		font-size: var(--text-sm);
-		font-weight: 600;
-		padding: 0 var(--space-2);
+	/* A stepper as wide as the card puts − and + so far apart that they no longer read
+	   as one control; the same width as on the work-area step. */
+	.group > :global(.field) {
+		max-width: 320px;
+	}
+	.group legend {
+		padding: 0;
+		margin-bottom: var(--space-2);
 	}
 	.switch,
 	.radio {
@@ -344,48 +351,28 @@
 		align-items: center;
 		gap: var(--space-2);
 		/* Beside a machine, with gloves on: a row you have to hit with a mouse pointer is
-		   not a row you hit. Same minimum as the machine list. */
-		min-height: 32px;
+		   not a row you hit. */
+		min-height: max(32px, var(--target-min));
 	}
 	.switch {
 		margin-top: var(--space-4);
 		font-weight: 500;
-	}
-	.hint {
-		margin: 0;
-		font-size: var(--text-xs);
-		color: var(--text-2);
 	}
 	.fact {
 		margin: 0;
 		font-size: var(--text-xs);
 		font-variant-numeric: tabular-nums;
 	}
-	/* A warning surface, not an error: the setting is possible, it is simply not a
-	   calibration any more. See DESIGN-SYSTEM, "certainty is a sentence". */
-	.note {
-		margin: var(--space-2) 0 0;
-		padding: var(--space-2) var(--space-3);
-		border-left: 3px solid var(--warn);
-		border-radius: var(--radius-field);
-		background: var(--surface-2);
-		font-size: var(--text-xs);
-	}
-	.done {
-		margin: var(--space-3) 0 0;
-		padding: var(--space-3);
-		border-radius: var(--radius-field);
-		border-left: 3px solid var(--ok);
-		background: color-mix(in srgb, var(--ok) 14%, transparent);
-		font-size: var(--text-xs);
+	.after {
+		margin-top: var(--space-3);
 	}
 	.actions {
 		display: flex;
 		gap: var(--space-2);
 		flex-wrap: wrap;
-		margin-top: var(--space-3);
+		margin-top: var(--space-4);
 	}
 	.rotary-help { margin-top: var(--space-4); }
-	.rotary-help p, .rotary-help li { font-size: var(--text-xs); margin: var(--space-2) 0; }
-	.rotary-help ul, .rotary-help ol { padding-left: var(--space-5); }
+	.rotary-help p, .rotary-help li { font-size: var(--text-xs); margin: var(--space-2) 0; max-width: var(--measure); }
+	.rotary-help ul, .rotary-help ol { padding-left: var(--space-6); }
 </style>

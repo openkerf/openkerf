@@ -314,17 +314,16 @@ function readLayerColors(): string[] {
 /**
  * Keeping a layer colour readable on the bed it lies on.
  *
- * Most imported drawings are black. On the dark bed that is black on black, and
- * then you can no longer see the outline of your own workpiece. Choosing a
+ * A layer colour can sit too close to the bed it lies on — pale yellow on a white
+ * bed — and then you can no longer see the outline of your own workpiece. Choosing a
  * different colour is not allowed — the layer colour belongs to the user — so we
  * shift the same colour in luminance until it comes loose from the background.
- * Black becomes grey, dark blue becomes blue; the layer stays recognisable.
+ * Yellow becomes ochre, light blue becomes blue; the layer stays recognisable.
  *
  * The threshold is 3.0 and no lower: a line on the bed is a graphical object, and
  * WCAG 1.4.11 asks 3:1 for that. At 2.6 exactly the colours that are the problem
- * came through untouched — purple (--layer-7) gets 2.78 on the dark bed and orange
- * 2.97 on the light one, so those were *not* adjusted while sitting under the
- * norm.
+ * came through untouched — orange gets 2.97 on the bed, so it was *not* adjusted
+ * while sitting under the norm.
  */
 const THRESHOLD = 3.0;
 
@@ -354,40 +353,33 @@ function contrast(a: [number, number, number], b: [number, number, number]) {
 	return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
 }
 
-/** The bed colour of the active theme, read again as soon as that switches. */
-let bedColour: { theme: string; rgb: [number, number, number] } | null = null;
+/** The bed colour, read once from `--bed`. */
+let bedColour: [number, number, number] | null = null;
 
 function bed(): [number, number, number] | null {
 	if (typeof window === 'undefined') return null;
-	const theme = document.documentElement.dataset.theme ?? '';
-	if (bedColour?.theme === theme) return bedColour.rgb;
-	const rgb = parseColour(getComputedStyle(document.documentElement).getPropertyValue('--bed'));
-	if (!rgb) return null;
-	bedColour = { theme, rgb };
-	return rgb;
+	if (bedColour) return bedColour;
+	bedColour = parseColour(getComputedStyle(document.documentElement).getPropertyValue('--bed'));
+	return bedColour;
 }
 
 /**
- * Remember the outcome per colour and theme.
+ * Remember the outcome per colour.
  *
- * This function runs once per element per redraw, and again for *everything* on a
- * theme switch. On five thousand paths that cost 145 ms — over the stopwatch bound,
- * and visible as a stutter. The outcome depends only on the colour and the bed
- * colour, and a design has a handful of different layer colours at most, so
- * remembering saves nearly all the work. The key carries the theme, so a switch
- * does not hand back the old value.
+ * This function runs once per element per redraw. On five thousand paths that cost
+ * 145 ms — over the stopwatch bound, and visible as a stutter. The outcome depends
+ * only on the colour and the bed colour, and a design has a handful of different
+ * layer colours at most, so remembering saves nearly all the work.
  */
 const remembered = new Map<string, string>();
 
 export function readable(colour: string): string {
-	const theme = typeof document === 'undefined' ? '' : (document.documentElement.dataset.theme ?? '');
-	const key = `${theme}|${colour}`;
-	const known = remembered.get(key);
+	const known = remembered.get(colour);
 	if (known !== undefined) return known;
 	const outcome = computeReadable(colour);
 	// A design has a handful of colours; this bound is only here so a pathological
 	// case does not eat the memory.
-	if (remembered.size < 512) remembered.set(key, outcome);
+	if (remembered.size < 512) remembered.set(colour, outcome);
 	return outcome;
 }
 
@@ -396,8 +388,8 @@ function computeReadable(colour: string): string {
 	const own = parseColour(colour);
 	if (!background || !own) return colour;
 	if (contrast(own, background) >= THRESHOLD) return colour;
-	// Away from the bed: towards white on a dark bed, towards black on a light one.
-	const pool = luminance(background) < 0.2 ? 255 : 0;
+	// Away from the bed, which is light: towards black.
+	const pool = 0;
 	for (let part = 15; part <= 75; part += 5) {
 		const f = part / 100;
 		const mixed = own.map((c) => c + (pool - c) * f) as [number, number, number];
@@ -405,7 +397,7 @@ function computeReadable(colour: string): string {
 			return `rgb(${mixed.map((c) => Math.round(c)).join(' ')})`;
 		}
 	}
-	return pool === 255 ? 'rgb(235 235 235)' : 'rgb(30 30 30)';
+	return 'rgb(30 30 30)';
 }
 
 /**
@@ -414,8 +406,7 @@ function computeReadable(colour: string): string {
  * The number on a layer chip was fixed at --on-color, so always white. On yellow
  * (--layer-3) that is 1.58:1 and then you simply cannot read the digit. For eight
  * of the ten layer colours black wins, for purple and brown white does; that choice
- * hangs on the colour and not on the theme, because the chip shows the layer colour
- * unchanged in both themes.
+ * hangs on the colour alone, because the chip shows the layer colour unchanged.
  */
 /**
  * Is there nothing here that will burn?
@@ -706,23 +697,6 @@ export class DesignStore {
 	/** Set by the page to make the URL follow the selection. */
 	onSelect: ((ids: string[]) => void) | null = null;
 
-	/**
-	 * The active theme, as a reactive value.
-	 *
-	 * Stroke colours are weighed against the bed colour (see `readable`), and that
-	 * changes when the theme is switched. CSS variables switch along by themselves,
-	 * but a colour we have computed sits in the DOM as a fixed value — without this
-	 * the canvas kept the old colours after a switch.
-	 */
-	theme = $state(typeof document === 'undefined' ? '' : (document.documentElement.dataset.theme ?? ''));
-
-	constructor() {
-		if (typeof document === 'undefined') return;
-		new MutationObserver(() => {
-			this.theme = document.documentElement.dataset.theme ?? '';
-		}).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
-	}
-
 	#pending = false;
 	/** The re-entry lock of `load()`; deliberately not `$state` — see load(). */
 	#busy = false;
@@ -855,8 +829,6 @@ export class DesignStore {
 	 * colour — then we take the palette colour in order.
 	 */
 	colorFor(operationId: string | null): string {
-		// Touched so Svelte recomputes this colour on a theme switch.
-		void this.theme;
 		const operations = this.operations;
 		const index = operations.findIndex((o) => o.id === operationId);
 		if (index < 0) return 'var(--text-2)';

@@ -8,28 +8,24 @@ here, the cut path you can walk through before pressing anything, what the two
 taps that start a job do, what you can see and change while the machine is
 burning, and the controls for moving the head when it is not.
 
-The last section is about the phone view — the screen for somebody who is
-standing at the machine rather than at the keyboard.
-
 ## Where burning is operated
 
 Three surfaces, and each keeps the same job all the time.
 
-- **The top bar**, on the right: **Stop**, **Pause** / **Resume**, **Prepare job**
-  (**Prepare** on a narrow bar). These four never move, so the stop button is in
-  the same place whether something is running or not — and it is on the far side
-  of the row from **Prepare job**, on every screen that carries both. **Show frame** sits with
-  them, and only there: the pre-flight used to carry a second copy of it and no
-  longer does.
+- **The top bar**, on the right: **Stop**, **Pause** / **Resume** and **Show frame**
+  — the machine verbs. They never move, so the stop button is in the same place
+  whether something is running or not. **Show frame** sits there and only there: the
+  pre-flight used to carry a second copy of it and no longer does.
 - **The Job tab** in the right-hand panel: the pre-flight before, the progress
-  during, and the machine controls under both.
+  during, and the machine controls under both. **Prepare job** lives here and only
+  here, as the one filled button on the tab.
 - **The status bar** at the bottom: the head position, your pointer position, how
   many elements the design holds, how much time is left, whether the machine is on
   the line, and **Server connected** for the separate connection from this page to OpenKerf. The machine connection is named beside the machine in the header. It is the same on
   every tab, so you never have to switch tabs to read the progress or the count.
 
-**Prepare job** does not open a window. It switches the right-hand panel to the Job
-tab and arms the pre-flight that was standing there anyway.
+**Prepare job** does not open a window. It arms the pre-flight that was standing
+there anyway.
 
 ## The pre-flight
 
@@ -38,11 +34,20 @@ shows the preparation in full. You do not have to press anything to see it, and
 it follows your drawing: change a shape and the estimate is worked out again
 about half a second later.
 
+It reads top to bottom the way you check a job: what it burns on (the material,
+and the zero point or print-and-cut alignment when one is set), what is wrong with
+it (the warnings, each in a tinted box with an icon), then **Prepare job** with the
+time on it, and then the evidence you can work down — **Show cut path**, the layer
+table and the drawing. The button row stays put where it fits; should the warnings
+ever run past the foot of the panel, it stops at the bottom edge rather than
+scrolling away. Explanations that are reasons rather than instructions wait behind
+a **Why?** fold, so they do not push the buttons down on a tablet.
+
 ![Job review in an isolated test installation: material and connection warnings, four layers with their settings, the drawing preview, the start button and the collapsed machine section.](images/12-job-preflight.png)
 
 ### Time, material and zero point
 
-**How long it takes** stands on the start button at the foot of the panel, and
+**How long it takes** stands on the start button, under the warnings, and
 nowhere else: "Prepare job 1:19". The engine works it out by building the whole cut
 plan, and while it does that the last known time stays where it is, at the contrast
 it always has, with a small ellipsis after it: "Prepare job 1:19…". The button keeps
@@ -76,8 +81,8 @@ Starting works regardless — the machine does not wait for it."
 
 One row per layer, with a coloured chip carrying the layer number — the same
 number and colour as on the canvas and in the Layers tab. Then the four things a
-laser cutter checks before putting material in the machine: **mm/s**, **%**, **×**
-(the number of passes) and **Source**.
+laser cutter checks before putting material in the machine: **mm/s**, **%**,
+**Passes** and **Source**.
 
 Source says where those numbers came from, in two words: *measured*, *not
 measured*, *extrapolated — not measured*, *set by hand*, *from someone else's
@@ -91,10 +96,10 @@ the table, with its number and colour, and with those same three words where its
 speed and power would be. It used to be left out of the table altogether, which
 made a layer full of shapes look like no layer at all.
 
-Above the table, a compact confidence note identifies unverified layers: "3 unverified layers · test on a scrap first." Each affected row keeps its source label, and material mismatches remain visible below the table.
+With the warnings above the start button, a compact confidence note identifies unverified layers: "3 unverified layers · test on a scrap first." Each affected row keeps its source label.
 
-Under the table, the objections. One line per layer, heaviest first, and when the
-top one really outweighs the bottom one it is tagged **First**.
+Beside it, the objections, in one amber box: one line per layer, heaviest first, and
+when the top one really outweighs the bottom one it carries the badge **First**.
 
 **When it goes wrong.** Raster layers do not burn on this server. The pre-flight
 says so before you start: "This server cannot burn raster layers." followed by
@@ -117,11 +122,8 @@ its own page: [The rotary](rotary.md).
 
 ### The drawing
 
-At the foot of the column, under the numbers: what is going to be burned, drawn
-on the sheet. It stands there and not at the top because the strip with the start
-button lies over whatever is last, and a picture is the one thing here you can
-scroll to — measured at 1440 by 900, the material row, both warnings and the whole
-table now stand clear of that strip, where the table used to run on under it. The sheet is the
+At the foot of the column, under the table: what is going to be burned, drawn on
+the sheet. The sheet is the
 plain rectangle; everything beyond its edge is hatched, because there is no
 material there. Each shape is drawn in the colour of its layer. A shape in no
 burning layer is dotted grey — the machine will skip it.
@@ -137,11 +139,11 @@ deliberate:
 
 - **Outside the bed.** followed by, for one shape, "One shape lies outside the
   reach of the machine, which reaches to 500 × 300 mm. The head does not go
-  there: move or scale it." Red, and it is the worst of the three: the machine
-  cannot get there at all.
+  there: move or scale it." In a red box, and it is the worst of the three: the
+  machine cannot get there at all.
 - "One shape falls outside Sheet 1. There is no material there — whatever sticks
-  out burns into your honeycomb or your bench." Amber. You lose the workpiece,
-  not the machine.
+  out burns into your honeycomb or your bench." In an amber box. You lose the
+  workpiece, not the machine.
 - "One shape sits in no layer that burns — dashed grey above. The machine skips
   it." Grey; a statement, not a warning.
 - "2 shapes are in a layer that is switched off (Fine lines) — dashed grey above.
@@ -154,29 +156,22 @@ Three lines under the heading **Run through this**: *Lid closed*, *Extraction an
 air assist on*, *Workpiece is clamped and flat*. There is nothing to tick. A
 checklist you get used to ticking off protects nobody.
 
-You meet it on the tap that arms the burn. Press **Prepare job** and the strip at
-the foot of the panel grows the three lines, directly above the **Start now** that
-fires — the moment between the two taps is the moment you walk round the machine.
-Cancel, and the strip is the two buttons again.
-
-It used to stand higher up in the column, and with four layers the column is
-longer than the panel is high: measured at 1440 by 900, two of the three lines lay
-behind that strip — the last one behind the start button itself. Then it stood in
-the strip the whole time, and there it cost 90 pixels of a 211.6-pixel foot for
-eleven words that never change, with the layer table underneath it. Resting, that
-foot is 69 pixels now.
+You meet it on the tap that arms the burn. Press **Prepare job** and the button
+row grows the three lines, directly above the **Start now** that fires — the
+moment between the two taps is the moment you walk round the machine. Cancel, and
+the row is the two buttons again.
 
 ### Sending the job to the machine
 
-The start button has a second part: a narrower button with a downward arrow, joined
-to its right-hand end. It opens a small menu with one line in it, **Send to the
+The start button has a second part: a narrower, plain button with a downward arrow,
+joined to its right-hand end. It opens a small menu with one line in it, **Send to the
 machine**, and that line does the other thing you can do with a job that is ready:
 instead of burning it from here, it puts it in the machine's own memory as a file and
 leaves it standing there. The arrow itself does nothing to the machine, and the start
 button beside it keeps its two taps.
 
-The line opens a window of the same name. Its first sentence says what will happen,
-and it is also the tooltip on the button that does it: "The file goes into the machine
+The line opens a window of the same name. A **Why?** fold at its top says what will
+happen, and the same sentence is the tooltip on the button that does it: "The file goes into the machine
 and stays there. You start it on the machine’s own panel — nothing burns from here."
 
 That is the point of it. Once the file is in the machine, nothing has to stay
@@ -399,9 +394,9 @@ Four figures under the drawing: **On the clock**, **Burning** (millimetres with 
 laser on), **Travelling** (millimetres and the percentage) and **Contours**.
 
 The order and the travel are exact. The clock is not, and the window says so in
-its own words:
+its own words, in a fold headed **What this cannot promise.**:
 
-> **What this cannot promise.** "The order and the travel are exactly what the
+> "The order and the travel are exactly what the
 > machine has been given. The clock is the cut plan's own arithmetic, and the
 > machine can be slower: the engine mixes its burn model with the pace measured on
 > a finished pass, and neither of the two knows how your laser slows down in a
@@ -487,8 +482,6 @@ bed."
   away, "Running the frame has to wait until the server is back."
 - The machine itself can refuse the frame: "The frame (295x176 mm from 0,0) falls
   outside the bed of 500x300 mm."
-- If a job is already under way the top bar's start button says "A job is already
-  under way".
 
 When the job goes out, one flash crosses the bed with the words **Job started**.
 That happens once, and only when something really starts.
@@ -544,10 +537,12 @@ Under the phase: a bar, the percentage in large figures, the step count
 two times — "1:04 elapsed" on the left and "0:15 left" on the right. The same
 remaining time is in the status bar on every tab, next to the total.
 
-Two buttons: **Stop** on the left and, well away from it on the other side of the
-row, **Pause**. The distance is on purpose; a bad tap here costs the workpiece —
-and stop stands where it stands in the top bar, not on the spot the green
-**Prepare job** had a moment earlier. Their
+Directly under the figures, two buttons: **Stop** on the left and, well away from
+it on the other side of the row, **Pause**. The distance is on purpose; a bad tap
+here costs the workpiece — and stop stands where it stands in the top bar, not on
+the spot the filled **Prepare job** had a moment earlier. Both are at least 44
+pixels tall on a tablet, and they stand above the phase's own sentence, so on a
+1024 by 768 screen the bar, Stop and Pause are on screen without scrolling. Their
 keyboard shortcuts are on the buttons themselves, as the second line of their
 tooltip: "The key works anywhere in the app, as long as this window is in front —
 outside it a browser cannot receive keystrokes." (On a Mac, ⌘ + . instead of
@@ -555,6 +550,16 @@ Ctrl + .) At 1199 px and below the same sentence stands as a line under the two
 buttons, because there is no hover to read a tooltip with.
 
 **Clear queue (2)** appears as soon as there is anything in the queue.
+
+**When the machine is not answering.** The job keeps its state when the link to
+the controller drops, but then its figures are a memory rather than a report. The
+block says so: the phase heading becomes "Last known state: Burning, 42%." in muted
+ink instead of the accent, the bar stands still in grey, and where the app knows
+when it last heard, a line under the buttons says "The last report from the machine
+came in 2 minutes ago." The kerf line on the job in the queue stops moving for the
+same reason — it means "the laser is working now", and that is exactly what is not
+known. **Stop** stays exactly as available as it was: whether it can be pressed does
+not depend on this.
 
 **When it goes wrong.**
 
@@ -575,7 +580,7 @@ the job** appears with a row for **Power** and one for **Speed**, each reading *
 designed* until you touch it, then +10 %, −1 % and so on. Buttons: −10 %, −1 %,
 +1 %, +10 % and **Reset**.
 
-The note under it: "This scales what the machine is doing right now. The layer
+Behind **Why?** under it: "This scales what the machine is doing right now. The layer
 keeps its own setting — which may come from a preset, and then it is evidence."
 
 **When it goes wrong.** Most machines have no realtime channel for this and the
@@ -586,8 +591,9 @@ job, change the layer and start again."
 ## The queue
 
 Below the job block, **Queue** — but only when there is something to say. Each
-job waiting shows its name, its state (**In the queue**, **Busy**, **Paused**,
-**Done**) and **Total** — how long it will take. The bar, the percentage, the step
+job waiting shows its name, its state as a badge (**In the queue**, **Busy**,
+**Paused**, **Done**; a paused job's card is tinted amber with the badge in the same
+tone) and **Total** — how long it will take. The bar, the percentage, the step
 count, **Elapsed** and **Passes** appear when it starts running: five figures about
 not having started read as a job that is stuck. Above the list: "2 more jobs after
 this one. They start in this order."
@@ -613,7 +619,7 @@ do not need them."
 
 Below the job, **Operate machine** starts collapsed. Open it when positioning the
 head or setting up the work. It closes when a job begins and stays closed when the
-job ends, with *— not during a job* shown while work is in flight. Opening the
+job ends, with *not during a job* shown beside its title while work is in flight. Opening the
 section does not issue a machine command.
 
 Inside, the jog pad and step size are immediately available. **Go to a point**,
@@ -621,7 +627,9 @@ Inside, the jog pad and step size are immediately available. **Go to a point**,
 adjustments each have their own fold. Open the group you need. A set zero point or
 print-and-cut setup opens its group and remains identified in the summary when you
 collapse it. The Job panel is slightly wider on desktop to give warnings and values
-more space; job warnings and the start checklist remain outside these setup folds. Active speed
+more space; job warnings and the start checklist remain outside these setup folds.
+A set zero point or print-and-cut alignment is a tinted group with its value as a
+badge in the summary line. Active speed
 or power corrections are shown above the job, even while machine controls are closed.
 
 **Move** is an inverted T of arrows, laid out like the arrow keys on a keyboard,
@@ -699,7 +707,8 @@ Print and cut showing "2.5, 1.2 mm — mark 1 has moved that far, and the sheet 
 the sentence about the zero point staying out of it, and the buttons Mark 1 again, Mark 2
 again and Forget the alignment.](images/34-printcut.png)
 
-While an alignment is on, the zero point stays out of it: "The job goes onto the
+While an alignment is on, the zero point stays out of it — the **Why?** under the
+measurement says so: "The job goes onto the
 sheet as measured. The zero point stays out of it while this is on: both at once
 would shift the work twice." Nothing happens to your drawing — it stays where you
 drew it, on screen and in the file. The pose is applied once while the job is being
@@ -783,72 +792,9 @@ confirm its state through the connection.
 - A failed attempt reports what the engine said, or, when it says nothing:
   "Connecting did not work, and the engine does not say why. Is the machine on,
   and is the address in the machine settings right?" The connection has not been confirmed.
-- On the far right of the status bar, **OpenKerf live** or **OpenKerf away** — the
+- On the far right of the status bar, **Server connected** or **Server offline** — the
   line between this page and the server, which can break on its own.
 - If the server restarts while the page is open: "The server has restarted" and
   "This page still shows the design from before the restart; the engine started
   empty. Reload to see what is really there.", with a **Reload** button. The page
   will not reload by itself, because that would throw work away.
-
-## On your telephone
-
-Open OpenKerf on a phone and you get a different screen: no canvas, no tools, no
-layers. It monitors and it stops. At the bottom: "You design on the desktop — this
-screen keeps an eye on the machine."
-
-The top line never scrolls: a coloured dot, the machine state (**Ready**,
-**Busy**, **Paused**, **Alarm**, **Not connected**, **Connection unknown**, or **No
-connection** when the
-server is away) and the machine's name.
-
-What comes below depends on what there is to do.
-
-**While a job runs** the progress is on top: one ring with the percentage inside
-it and, under that, either "0:41 left" with "done at 16:52" beside it, or
-*paused*, or *pause requested…*. Under the ring the job's name and its step count.
-If a camera is linked and switched on you get the camera image with a flat
-progress bar under it instead.
-
-**When the machine is idle** you get the bed drawn to scale: the sheet inside it,
-the work in its layer colours, and a cross where the head is. Under it **Bed**,
-**Head** and **On the bed** ("5 shapes burn, 2 do not burn"), and one line saying
-why it is quiet — "Nothing is burning. You start a job on the desktop." Captions
-too small to read at this size are left out of the drawing, but never out of the
-counts.
-
-**When a burned test grid is waiting for a photo** and the machine is idle, that
-goes first, because it is the one job in the whole app you need a phone in your
-hand for. The machine state shrinks to a single tappable line, **Nothing is
-burning**, with the head position beside it.
-
-![A phone screen. At the top an amber dot with "Not connected" and KH-5030 on the right. Then the heading 1 TEST GRID IS WAITING FOR A PHOTO and one card — Berkentriplex 3 mm · cut, 4×4 · 8–20 mm/s · 40–90 % · 3 Sept 09:28 — with a "Take a photo" button. Below it a drawing of the bed with the work on it, then Bed 500 × 300 mm, Head 0.0, 0.0 mm, and On the bed "5 shapes burn, 2 do not burn". Under that the line about no machine being attached to the server, a "Switch the camera on" button, a Notifications row reading Blocked, and the note "You design on the desktop — this screen keeps an eye on the machine." Fixed at the bottom of the screen a red-outlined "Stop" and a greyed-out "Pause".](images/24-phone.png)
-
-Each card carries the material, the operation, the range the board sweeps and
-when it was made. **Take a photo** opens the camera straight away. After the
-upload: "Photo saved. You get the preset out of it on the desktop." A grid whose
-photo is in but which has not been lined up yet stays in the list, marked "photo
-in — align it on the desktop", with **Again** in place of the photo button —
-because a half-finished step should not vanish.
-
-Below the list, a collapsed **Notifications** row that says whether the browser
-is letting them through, and the question is only asked while something is
-actually burning.
-
-### The emergency stop
-
-**Stop** and, beside it, **Pause** (or **Resume**) are fixed at the bottom of the
-phone screen, in the order the top bar has them. They never scroll away, however long the list above them gets, and they
-are far apart. **Stop** turns fully red only while there is really a job and a
-connection.
-
-The pause button says what it has done rather than what it hopes: press it and it
-reads **Pausing…**, and the ring says *pause requested…*, because not every driver
-reports a pause back. That is a request, not a claim.
-
-**When it goes wrong.** Without a connection to OpenKerf both buttons are off,
-and the screen says so instead of leaving you to work it out from two grey
-buttons: "No connection — stopping is only possible with the button on the
-machine." with a **Try again** button beside it (counting down, "Try again
-(automatically in 4 s)"). A red button that looks pressable and arrives nowhere is
-the most dangerous thing on this screen — you press it, walk away, and believe it
-stopped.

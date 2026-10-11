@@ -2,8 +2,8 @@
 	/**
 	 * The language picker.
 	 *
-	 * Next to the theme toggle, because it is the same kind of thing: a preference
-	 * about the whole app rather than about the document or the machine (see the
+	 * At the right end of the top bar, because it is a preference about the whole
+	 * app rather than about the document or the machine (see the
 	 * placement rule in DESIGN-SYSTEM.md v4). It uses the same menu component as
 	 * everything else, so it opens, walks and closes the way every other menu in
 	 * the app does.
@@ -36,7 +36,7 @@
 </script>
 
 <button
-	class="language"
+	class="btn ghost language"
 	aria-haspopup="menu"
 	aria-expanded={open}
 	title={t('app.language')}
@@ -47,16 +47,7 @@
 		open = !open;
 	}}
 >
-	<svg
-		width="15"
-		height="15"
-		viewBox="0 0 24 24"
-		fill="none"
-		stroke="currentColor"
-		stroke-width="1.7"
-		stroke-linecap="round"
-		aria-hidden="true"
-	>
+	<svg class="icon-svg" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
 		<circle cx="12" cy="12" r="9" />
 		<path d="M3.5 9h17M3.5 15h17" />
 		<path d="M12 3c2.5 2.6 2.5 15.4 0 18M12 3c-2.5 2.6-2.5 15.4 0 18" />
@@ -69,20 +60,16 @@
 {/if}
 
 <style>
+	/* The shared ghost button, a little narrower. It was 52 x 32 on a tablet — its own
+	   `min-height: 32px` outranked the 44px net — so the floor is written into it. */
 	.language {
-		display: inline-flex;
-		align-items: center;
-		gap: 4px;
-		flex: none;
+		gap: var(--space-1);
 		padding: 0 var(--space-2);
-		min-height: 32px;
-		border: none;
-		border-radius: var(--radius-field);
-		background: none;
+		min-height: max(32px, var(--target-min));
+		min-width: var(--target-min);
 		color: var(--text-2);
 	}
 	.language:hover {
-		background: var(--surface-2);
 		color: var(--text-1);
 	}
 	/* Two letters in the numeric font, so EN and NL are the same width and the bar

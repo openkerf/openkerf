@@ -143,12 +143,12 @@ for (const [width, height, switchWidth, oneLine] of SIZES) {
 					// A value line of numbers only, or one that also carries a word ("does
 					// not burn", "hidden", air assist): the second may keep a line of its
 					// own, the first may not.
-					const words = row.querySelectorAll('.vals .tag, .vals .pill').length;
+					const words = row.querySelectorAll('.vals .badge').length;
 					// One line of this row: the tallest thing in it that cannot wrap,
 					// plus the row's own padding and border.
 					const box = getComputedStyle(row);
 					const unwrappable = [
-						...row.querySelectorAll('.chip, .layer-name, .out, .more, .short')
+						...row.querySelectorAll('.layer-swatch, .layer-name, .out, .more, .short')
 					].map((e) => e.getBoundingClientRect().height);
 					const oneLineHeight =
 						Math.max(...unwrappable) +

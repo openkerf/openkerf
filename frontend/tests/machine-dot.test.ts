@@ -3,13 +3,13 @@
  *
  * Run: `node --test frontend/tests/machine-dot.test.ts`
  *
- * The coloured dot beside the machine name appears in three places: the top bar, the
- * status bar and the phone view. Each of them wrote its own list of states, and the
- * lists were not the same. Measured with an unplugged port: `.dot.unplugged` on the
- * phone gave `rgb(184, 134, 11)` (`--warn-solid`) at 390 wide, and `rgb(91, 100, 112)`
- * (`--text-2`) at 1440 — because the top bar has no rule for that state at all. So the
- * same machine looked like a warning in your hand and like nothing on your desk. The
- * status bar had one state of the six.
+ * The coloured dot beside the machine name appears in more than one place: the top bar
+ * and the status bar. Each of them wrote its own list of states, and the lists were not
+ * the same. Measured with an unplugged port: `.dot.unplugged` gave `rgb(184, 134, 11)`
+ * (`--warn-solid`) on one surface, and `rgb(91, 100, 112)` (`--text-2`) at 1440 —
+ * because the top bar had no rule for that state at all. So the same machine looked like
+ * a warning in one place and like nothing in another. The status bar had one state of
+ * the six.
  *
  * Both earlier repairs are still visible in the comments there: `.dot.running` that
  * matched nothing because the state is called `busy`, and `unplugged` that did not
@@ -49,7 +49,7 @@ test('every state the API can report has a colour', () => {
 });
 
 test('no surface keeps a colour list of its own', () => {
-	for (const file of ['components/TopBar.svelte', 'components/StatusBar.svelte', 'components/PhoneView.svelte']) {
+	for (const file of ['components/TopBar.svelte', 'components/StatusBar.svelte']) {
 		const source = read(...file.split('/'));
 		for (const state of STATES) {
 			assert.ok(

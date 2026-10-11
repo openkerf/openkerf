@@ -44,22 +44,6 @@ export class CameraStore {
 	}
 
 	/**
-	 * One frame instead of a stream.
-	 *
-	 * `GET /api/camera/frame.png` says in its own docstring that it is there "for
-	 * calibrating, and as a fallback without a stream", and nothing used it as one: an
-	 * MJPEG connection that drops left the browser's broken-image icon and a sentence
-	 * saying there was no picture. A still that refreshes is not a stream, and it is a
-	 * great deal more than nothing when you are standing at the machine.
-	 *
-	 * The counter is in the URL because a cached picture of the bed is exactly what you
-	 * must not be looking at.
-	 */
-	still(tick = 0): string {
-		return `/api/camera/frame.png?v=${this.generation}.${tick}`;
-	}
-
-	/**
 	 * The cameras the engine knows about.
 	 *
 	 * `GET /api/camera/list` had no callers at all, and `start()` takes a `uri` nobody

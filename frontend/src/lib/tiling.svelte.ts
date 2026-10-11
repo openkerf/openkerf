@@ -3,7 +3,7 @@
  *
  * The division is computed and not stored — it is fetched again as soon as the
  * design or the board size changes. The running series comes from the status
- * payload, so canvas, top bar and phone all see the same state.
+ * payload, so canvas and top bar both see the same state.
  */
 
 import { machineDisconnected, type Device } from './api';

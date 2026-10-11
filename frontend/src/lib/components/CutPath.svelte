@@ -33,6 +33,9 @@
 	} from '$lib/cutpath';
 	import { i18n, t } from '$lib/i18n/index.svelte';
 	import Dialog from './Dialog.svelte';
+	import Notice from './Notice.svelte';
+	import EmptyState from './EmptyState.svelte';
+	import Why from './Why.svelte';
 
 	let {
 		open = $bindable(),
@@ -226,10 +229,21 @@
 	 * height is not one em but about 1.3 of it. Numbers that would land on each other
 	 * are folded into the lowest of them (`contourStarts`), which is what the question
 	 * "does it cut inside before outside" needs.
+	 *
+	 * The box claimed is a quarter wider and taller than the ink. With the ink alone two
+	 * labels could stand edge to edge — "3+14" against "18+2" read as one string,
+	 * "3+1418+2", on the gauntlet's caption — so the allowance is the air between two
+	 * labels: a character's width beside a four-character label, a line's gap above.
 	 */
+	const LABEL_AIR = 1.25;
 	let numbers = $derived(
 		contourStarts(steps, {
-			box: { char: unit * 9 * 0.62, height: unit * 9 * 1.4, dx: unit * 3, dy: unit * -3 }
+			box: {
+				char: unit * 9 * 0.62 * LABEL_AIR,
+				height: unit * 9 * 1.4 * LABEL_AIR,
+				dx: unit * 3,
+				dy: unit * -3
+			}
 		})
 	);
 	let order = $derived(contourList(steps));
@@ -361,41 +375,41 @@
 	}
 </script>
 
-<Dialog title={t('cutpath.title')} bind:open width="1040px">
+<Dialog title={t('cutpath.title')} bind:open size="xl">
 	<!-- Outside the branches on purpose: a live region only announces changes that
 	     happen while it is already on the page. -->
 	<p class="offscreen" aria-live="polite">{status}</p>
 	{#if answer === undefined}
-		<p class="note working">{t('cutpath.building')}</p>
+		<p class="help">{t('cutpath.building')}</p>
 	{:else if answer === null}
-		<p class="note" role="alert">{t('cutpath.unreachable')}</p>
+		<Notice tone="danger" live>{t('cutpath.unreachable')}</Notice>
 	{:else if answer.state === 'building'}
-		<p class="note working">{t('cutpath.building')}</p>
+		<p class="help">{t('cutpath.building')}</p>
 		{#if slow}
-			<p class="note">{t('cutpath.building.slow')}</p>
+			<p class="help">{t('cutpath.building.slow')}</p>
 		{/if}
 	{:else if answer.state === 'empty'}
-		<p class="note">{t('cutpath.empty')}</p>
+		<EmptyState title={t('cutpath.empty')} />
 	{:else if answer.state === 'busy'}
-		<p class="note">{t('cutpath.busy')}</p>
+		<Notice tone="info">{t('cutpath.busy')}</Notice>
 	{:else if answer.state === 'too_big'}
-		<p class="note" role="alert">
+		<Notice tone="warn" live>
 			{t('cutpath.tooBig', {
 				n: i18n.number(answer.planned_segments ?? 0, 0),
 				limit: i18n.number(answer.limit ?? 0, 0)
 			})}
-		</p>
-		<p class="note">{t('cutpath.tooBig.hint')}</p>
+		</Notice>
+		<p class="help below">{t('cutpath.tooBig.hint')}</p>
 	{:else if answer.state === 'failed'}
-		<p class="note" role="alert">{t('cutpath.failed', { message: answer.message ?? '' })}</p>
+		<Notice tone="danger" live>{t('cutpath.failed', { message: answer.message ?? '' })}</Notice>
 	{:else if answer.limited}
-		<p class="note" role="alert">
+		<Notice tone="warn" live>
 			{t('cutpath.limited', {
 				n: i18n.number(answer.steps_total ?? 0, 0),
 				limit: i18n.number(answer.step_limit ?? 0, 0)
 			})}
-		</p>
-		<p class="note">{t('cutpath.limited.totals', {
+		</Notice>
+		<p class="help below">{t('cutpath.limited.totals', {
 			time: formatDuration(answer.seconds),
 			travel: mm(answer.travel_mm ?? 0)
 		})}</p>
@@ -467,6 +481,7 @@
 						x={mark.x}
 						y={mark.y}
 						font-size={unit * 9}
+						style:stroke-width={unit * 2.5}
 						dx={unit * 3}
 						dy={unit * -3}>{mark.more ? `${mark.n}+${mark.more}` : mark.n}</text
 					>
@@ -509,7 +524,7 @@
 				/>
 				<span class="clock mono">{formatDuration(now)} / {formatDuration(total)}</span>
 			</div>
-			<p class="rate">
+			<p class="help rate">
 				{t('cutpath.rate', { n: i18n.number(Math.max(1, Math.round(rate)), 0) })}
 			</p>
 
@@ -535,9 +550,9 @@
 			</dl>
 
 			{#if !numbers.length && contours}
-				<p class="note quiet">{t('cutpath.tooManyNumbers', { n: i18n.number(contours, 0) })}</p>
+				<p class="help below">{t('cutpath.tooManyNumbers', { n: i18n.number(contours, 0) })}</p>
 			{:else if folded}
-				<p class="note quiet">{t('cutpath.cluster')}</p>
+				<p class="help below">{t('cutpath.cluster')}</p>
 			{/if}
 
 			<!-- The order in words. The drawing is one `role="img"` with one label, so
@@ -584,20 +599,20 @@
 			     filled area the window claimed "measured on one design with a filled
 			     area: 51:13 against 47:53". The measurement is the measurement; this
 			     design's numbers are this design's. -->
-			<p class="note quiet">
-				<strong>{t('cutpath.honest.title')}</strong>
-				{t('cutpath.honest.body')}
-				{t('cutpath.honest.slower')}
-			</p>
+			<div class="below">
+				<Why label={t('cutpath.honest.title')}>
+					<p>{t('cutpath.honest.body')} {t('cutpath.honest.slower')}</p>
+				</Why>
+			</div>
 			{#if estimate !== null}
-				<p class="note quiet">
+				<p class="help below">
 					{t('cutpath.honest.here', {
 						here: formatDuration(total),
 						there: formatDuration(estimate)
 					})}
 				</p>
 			{/if}
-			<p class="note quiet">
+			<p class="help below">
 				{t('cutpath.built', { seconds: i18n.number(answer.built_in_s ?? 0, 2) })}
 			</p>
 		</div>
@@ -649,9 +664,14 @@
 		stroke-linejoin: round;
 		stroke-linecap: round;
 	}
+	/* A halo in the drawing's own ground under each number, so a label stays legible
+	   where it crosses a path. */
 	.order {
 		fill: var(--text-2);
 		font-family: var(--font-mono);
+		paint-order: stroke;
+		stroke: var(--surface-2);
+		stroke-linejoin: round;
 	}
 	.order.passed {
 		fill: var(--text-1);
@@ -666,9 +686,6 @@
 		fill: none;
 		stroke: var(--accent);
 	}
-	/* The twelfth component to define its own `.btn` (X1 in FEATURE-GAPS.md); the
-	   same eight lines as the eleven before it, because a bare `.btn` in tokens.css
-	   cannot outweigh a component selector. */
 	.transport {
 		display: flex;
 		align-items: center;
@@ -684,9 +701,10 @@
 		color: var(--text-1);
 	}
 	.rate {
-		margin: var(--space-1) 0 0;
-		font-size: var(--text-xs);
-		color: var(--text-2);
+		margin-top: var(--space-1);
+	}
+	.below {
+		margin-top: var(--space-2);
 	}
 	.sums {
 		display: flex;
@@ -700,7 +718,7 @@
 	.sums > div {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: var(--space-1);
 		/* And wide enough for its own label: without `max-content` the column takes
 		   the width of the number under it and the label runs into the next one — the
 		   screen read "On the clockBurning". */
@@ -731,7 +749,7 @@
 	.swatch {
 		width: 14px;
 		height: 4px;
-		border-radius: 2px;
+		border-radius: var(--radius-sharp);
 	}
 	/* The travel swatch has to read as the dashed line it stands for, or the legend
 	   claims a colour that is not on the drawing. */
@@ -745,18 +763,6 @@
 	}
 	.mono {
 		font-family: var(--font-mono);
-	}
-	.note {
-		margin: var(--space-2) 0 0;
-		font-size: var(--text-sm);
-		line-height: 1.5;
-	}
-	.note.quiet {
-		color: var(--text-2);
-		font-size: var(--text-xs);
-	}
-	.note.working {
-		color: var(--text-2);
 	}
 	/* A live region has to be in the DOM to announce anything, and it has nothing to
 	   show: off the screen, not `display: none` (which is not announced either). */

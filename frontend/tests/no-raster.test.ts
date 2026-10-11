@@ -125,7 +125,7 @@ test('the pre-flight says the server cannot burn raster layers when the API says
 		await page.goto(`${BASE}/?tab=job`, { waitUntil: 'domcontentloaded' });
 		await page.waitForSelector('.pf-actions .btn.primary', { timeout: 20000 });
 		await page.waitForSelector('.pf-blind', { timeout: 20000 });
-		const block = page.locator('.pf-no-raster');
+		const block = page.locator('.preflight .notice.danger');
 		assert.equal(await block.count(), 1, 'one block under the layer table');
 		const text = (await block.textContent()) ?? '';
 		assert.ok(text.includes(en['job.noRaster.title']), `block says "${en['job.noRaster.title']}"`);
@@ -153,7 +153,8 @@ test('the test-grid wizard says so for a raster board when the API says so', asy
 		const operation = page.locator('.wizard select').filter({ has: page.locator('option[value="graveren-raster"]') });
 		await operation.waitFor({ timeout: 20000 });
 		await operation.selectOption('graveren-raster');
-		const block = page.locator('.wizard .waarschuwing.ernstig', { hasText: en['job.noRaster.title'] });
+		// The shared danger Notice now, where it was a bespoke `.waarschuwing.ernstig`.
+		const block = page.locator('.wizard .notice.danger', { hasText: en['job.noRaster.title'] });
 		await block.waitFor({ timeout: 20000 });
 		assert.equal(await block.count(), 1, 'one block in the wizard');
 		assert.ok(((await block.textContent()) ?? '').includes(en['grid.noRaster.body']));

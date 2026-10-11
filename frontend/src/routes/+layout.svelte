@@ -119,8 +119,10 @@
 		opacity: 0;
 		/* Duration and timing written out separately: --transition is "150ms ease-out",
 		   so in an animation shorthand it produces a second timing function and the whole
-		   rule is dropped as invalid. Measured: opacity stayed 0. */
-		animation: opdoemen 150ms ease-out 400ms forwards;
+		   rule is dropped as invalid. Measured: opacity stayed 0. The 400 ms wait is
+		   twice the panel duration, so it stays a token too. */
+		animation: opdoemen var(--duration) var(--ease) forwards;
+		animation-delay: calc(var(--duration-panel) * 2);
 	}
 	@keyframes opdoemen {
 		to {

@@ -288,7 +288,7 @@ async function card(id: string) {
 			name:
 				document.querySelector('.selected .head .name')?.textContent?.replace(/\s+/g, ' ').trim() ??
 				'',
-			chips: [...document.querySelectorAll('.selected .laagchip')].map((c) =>
+			chips: [...document.querySelectorAll('.selected .layer-ref')].map((c) =>
 				(c.textContent ?? '').replace(/\s+/g, ' ').trim()
 			)
 		}));
@@ -363,11 +363,11 @@ async function badgeAndChip(id: string, width: number) {
 	const page = await context_.newPage();
 	try {
 		await page.goto(`${BASE}/?tab=design&select=${id}`, { waitUntil: 'domcontentloaded' });
-		await page.waitForSelector('.selected .stip', { timeout: 20000 });
+		await page.waitForSelector('.selected .layer-num', { timeout: 20000 });
 		await page.waitForTimeout(1200);
 		return await page.evaluate(() => {
 			const root = getComputedStyle(document.documentElement);
-			const badge = document.querySelector('.selected .stip')!;
+			const badge = document.querySelector('.selected .layer-num')!;
 			const b = getComputedStyle(badge);
 			const box = badge.getBoundingClientRect();
 			return {

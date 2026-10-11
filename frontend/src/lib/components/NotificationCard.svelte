@@ -15,6 +15,7 @@
 	 */
 	import { i18n, t } from '$lib/i18n/index.svelte';
 	import { permissionText, type Notifications } from '$lib/notifications.svelte';
+	import Notice from './Notice.svelte';
 
 	let {
 		notifications,
@@ -44,9 +45,11 @@
 	}
 </script>
 
-<div class="card" class:ask={variant === 'prompt'}>
+<!-- The question is a card of its own (it floats over the work); the settings live
+     inside a window that is already one, and a card inside a card is a box in a box. -->
+<div class="notify" class:card={variant === 'prompt'}>
 	{#if variant === 'prompt'}
-		<h3>{t('notify.ask.title')}</h3>
+		<h3 class="title">{t('notify.ask.title')}</h3>
 		<p>{t('notify.ask.body')}</p>
 		<div class="actions">
 			<button class="btn" onclick={() => { notifications.notNow(); onDone?.(); }}
@@ -56,7 +59,7 @@
 				{busy ? t('common.busy') : t('notify.ask.turnOn')}
 			</button>
 		</div>
-		<p class="small">{t('notify.ask.after')}</p>
+		<p class="help">{t('notify.ask.after')}</p>
 	{:else}
 		<!--
 			The switch is off as long as the browser does not co-operate, even when the
@@ -75,8 +78,8 @@
 			/>
 			<span class="track" aria-hidden="true"><span class="knob"></span></span>
 			<span class="words">
-				<span class="title">{t('notify.switch.title')}</span>
-				<span class="small">{t('notify.switch.body')}</span>
+				<span class="name">{t('notify.switch.title')}</span>
+				<span class="help">{t('notify.switch.body')}</span>
 			</span>
 		</label>
 
@@ -94,56 +97,44 @@
 				{busy ? t('common.busy') : t('notify.askPermission')}
 			</button>
 		{:else if notifications.permission === 'denied'}
-			<p class="fix">{t('notify.blocked.howto')}</p>
+			<Notice tone="warn">{t('notify.blocked.howto')}</Notice>
 		{:else if notifications.permission === 'granted'}
 			<button class="btn" onclick={() => notifications.test()}>{t('notify.sendTest')}</button>
 		{/if}
 
 		{#if notifications.failure}
-			<p class="failure" role="alert">{notifications.failure}</p>
+			<p class="refusal" role="alert">{notifications.failure}</p>
 		{/if}
 
 		{#if notifications.last}
-			<p class="last">
+			<p class="help">
 				{t('notify.last', {
 					time: clockTime(notifications.last.time),
 					title: notifications.last.title
 				})}
 				{#if !notifications.last.shown}
-					<span class="small">{t('notify.last.notShown')}</span>
+					<span>{t('notify.last.notShown')}</span>
 				{/if}
 			</p>
 		{/if}
 
-		<p class="small edge">{t('notify.limits')}</p>
+		<p class="help edge">{t('notify.limits')}</p>
 	{/if}
 </div>
 
 <style>
-	.card {
+	.notify {
 		display: grid;
 		gap: var(--space-3);
 	}
-	.card.ask {
-		padding: var(--space-4);
-		border: 1px solid var(--line);
-		border-radius: var(--radius-card);
-		background: var(--surface-1);
+	.notify.card {
 		box-shadow: var(--lift-1);
 	}
-	h3 {
+	.notify .refusal {
 		margin: 0;
-		font-size: var(--text-md);
-		font-weight: 600;
-		letter-spacing: -0.01em;
 	}
 	p {
 		margin: 0;
-		color: var(--text-1);
-	}
-	.small {
-		font-size: var(--text-xs);
-		color: var(--text-2);
 	}
 	.edge {
 		padding-top: var(--space-3);
@@ -205,15 +196,17 @@
 	.toggle.powerless {
 		cursor: default;
 	}
-	.toggle.powerless .track,
+	/* Drained, like every control that cannot be used now: the track keeps its well
+	   and the knob loses its lift, so it reads as set in place rather than as faded. */
 	.toggle.powerless .knob {
-		opacity: 0.55;
+		background: var(--line);
+		box-shadow: none;
 	}
 	.words {
 		display: grid;
 		gap: 2px;
 	}
-	.title {
+	.name {
 		font-weight: 500;
 	}
 
@@ -241,21 +234,5 @@
 	}
 	.state.bad .dot {
 		background: var(--warn-solid);
-	}
-	.fix {
-		font-size: var(--text-xs);
-		line-height: 1.5;
-		padding: var(--space-3);
-		border-left: 3px solid var(--warn-solid);
-		border-radius: var(--radius-sharp);
-		background: var(--surface-2);
-	}
-	.failure {
-		font-size: var(--text-xs);
-		color: var(--danger);
-	}
-	.last {
-		font-size: var(--text-xs);
-		color: var(--text-2);
 	}
 </style>

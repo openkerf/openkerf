@@ -77,7 +77,7 @@ tells you whether a design fits round the object.
 | **A factor I fill in** | Something is a percent or two out, and you have measured it. |
 | **Computed from the two motors** | You know the steps per millimetre of the flat bed and of the rotary, and want the ratio worked out. |
 
-The explanation on the page is the reason the first one is the default: "The scale
+The reason the first one is the default waits behind **Why?** under the heading: "The scale
 corrects a rotary that turns a little too far or not far enough. Leave it at 1
 when the controller already converts Y to rotation itself, because two corrections
 multiply." A controller that already converts *and* a factor of 1.036 here is a

@@ -21,8 +21,9 @@
  * and is set in the interface face, not in mono.
  *
  * Three are left out and each says why in the code below: the buttons inside a number
- * field's stepper or a segmented switch, which are parts of a field and not verbs, and the jog
- * pad's Home, which deliberately spans both rows of that pad.
+ * field's stepper or a segmented switch, which are parts of a field and not verbs, and the
+ * keys of the jog pad — Home deliberately spans both rows of it, and the Z keys stand at
+ * the height of the arrows beside them.
  */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -101,6 +102,10 @@ const facedButtons = () => {
 	if (!panel) return [] as Face[];
 	return [...panel.querySelectorAll('button')]
 		.filter((node) => {
+			// Only what is on screen: a button in a shut fold measured 0 px on one run and
+			// its laid-out height on the next. The job tab opens its fold below, so the
+			// machine controls are still measured.
+			if (!node.checkVisibility()) return false;
 			const style = getComputedStyle(node);
 			// A face: a border you can see. A button drawn as a link (Clear, the
 			// section headings) is a different thing and is not held to this.
@@ -109,8 +114,12 @@ const facedButtons = () => {
 			// A stepper inside a number field and a segment of a switch are parts of a
 			// field, not verbs; they have their own shapes and their own tests.
 			if (node.closest('.stepper, .segmented, .tabs')) return false;
-			// Home spans both rows of the jog pad on purpose.
-			if (node.classList.contains('home')) return false;
+			// The jog pad is one instrument whose keys are sized to each other: Home spans
+			// both rows on purpose, and the Z keys stand beside the arrows at the arrows'
+			// height. Measured with a Z axis (the scratch server offers focus): every key
+			// of the pad at 35.4 px, the two "Z" keys included, so held to the button
+			// scale they were the only keys of the pad that "failed".
+			if (node.closest('.pad')) return false;
 			// A button that is only an icon — the ratio chain between width and height,
 			// the burn-along switch in a layer row — is sized to the row it sits in, not
 			// to the scale of the buttons that carry a word.
@@ -144,6 +153,12 @@ for (const tab of ['design', 'layers', 'job']) {
 			// The estimate and the layer list land after the page; wait for the answer,
 			// not for a guess about how long it takes.
 			await page.waitForTimeout(4000);
+			// The machine controls start shut. Opening a fold is not a verb; nothing in
+			// it is pressed.
+			await page.evaluate(() =>
+				document.querySelectorAll<HTMLDetailsElement>('.panel details.machinevouw').forEach((d) => (d.open = true))
+			);
+			await page.waitForTimeout(300);
 			const buttons: Face[] = await page.evaluate(facedButtons);
 			assert.ok(buttons.length > 0, `no button with a face on the ${tab} tab`);
 			const notShared = buttons.filter((b) => !b.btn).map((b) => `${b.cls}: "${b.text}"`);

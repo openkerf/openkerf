@@ -4,6 +4,7 @@
 	import { page } from '$app/stores';
 	import { t } from '$lib/i18n/index.svelte';
 	import { createStore } from '$lib/setup.svelte';
+	import Notice from '$components/Notice.svelte';
 	import type { CatalogMachine } from '$lib/machines.svelte';
 
 	const store = createStore();
@@ -64,24 +65,24 @@
 
 <svelte:head><title>{t('setup.head.name')}</title></svelte:head>
 
-<section class="setup narrow">
-	{#if store.error}<p class="error" role="alert">{store.error}</p>{/if}
+<section class="setup">
+	{#if store.error}<Notice tone="danger" live>{store.error}</Notice>{/if}
 
 	{#if !typeKey}
-		<h1>{t('setup.noType')}</h1>
-		<p class="muted">{t('setup.noType.body')}</p>
-		<div class="actions">
+		<h1 class="title">{t('setup.noType')}</h1>
+		<p>{t('setup.noType.body')}</p>
+		<div class="ask-actions">
 			<a class="btn primary" href="/setup/type">{t('setup.toTypeChoice')}</a>
 		</div>
 	{:else}
-		<h1>{t('setup.nameIt')}</h1>
-		<p class="muted">
+		<h1 class="title">{t('setup.nameIt')}</h1>
+		<p>
 			{chosen ? t('setup.nameIt.bodyModel', { model: chosen.friendly_name }) : t('setup.nameIt.body')}
 		</p>
 		{#if found}
-			<p class="found">{t('setup.found', { what: found })}</p>
+			<Notice tone="ok">{t('setup.found', { what: found })}</Notice>
 		{/if}
-		<label class="field">
+		<label class="field-label name">
 			<span>{t('panel.name')}</span>
 			<input
 				type="text"
@@ -94,14 +95,18 @@
 			<!-- Warn, do not block: maybe there really are two of the same in the
 			     workshop. But then you have to know, because the top bar shows nothing
 			     but this name. -->
-			<p class="botsing" role="alert">
-				{t('setup.nameClash', { name: label.trim() })}
-				<button class="link" type="button" onclick={() => { label = uniek(label.trim()); touched = true; }}>
-					{t('setup.nameClash.fix', { name: uniek(label.trim()) })}
-				</button>
-			</p>
+			<div role="alert">
+				<Notice tone="warn">
+					<span>{t('setup.nameClash', { name: label.trim() })}</span>
+					<span>
+						<button class="link" type="button" onclick={() => { label = uniek(label.trim()); touched = true; }}>
+							{t('setup.nameClash.fix', { name: uniek(label.trim()) })}
+						</button>
+					</span>
+				</Notice>
+			</div>
 		{/if}
-		<div class="actions">
+		<div class="ask-actions">
 			<!-- Whoever got here via the search button chose no model in step 2; going
 			     back to the model list would show a step they never saw. -->
 			<a class="btn" href={found ? '/setup/kind' : '/setup/type'}>{t('common.back')}</a>
@@ -113,46 +118,7 @@
 </section>
 
 <style>
-	.field {
-		display: grid;
-		gap: var(--space-1);
-		margin: var(--space-4) 0;
-		font-weight: 500;
-	}
-	.botsing {
-		margin: calc(-1 * var(--space-2)) 0 0;
-		padding: var(--space-2) var(--space-3);
-		font-size: var(--text-xs);
-		border-left: 3px solid var(--warn, var(--accent));
-		background: var(--surface-2);
-		border-radius: var(--radius-field);
-	}
-	.botsing .link {
-		display: block;
-		margin-top: 4px;
-		padding: 0;
-		font: inherit;
-		color: var(--accent);
-		background: none;
-		border: 0;
-		text-decoration: underline;
-		cursor: pointer;
-	}
-	.found {
-		margin: var(--space-3) 0 0;
-		padding: var(--space-2) var(--space-3);
-		font-size: var(--text-xs);
-		border-left: 3px solid var(--ok);
-		background: var(--surface-2);
-		border-radius: var(--radius-field);
-	}
-	.field input {
-		font: inherit;
-		font-weight: 400;
-		padding: 8px 8px;
-		border: 1px solid var(--line);
-		border-radius: var(--radius-field);
-		background: var(--surface-2);
-		color: var(--text-1);
+	.name {
+		margin: var(--space-4) 0 var(--space-2);
 	}
 </style>

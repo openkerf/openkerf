@@ -14,6 +14,8 @@
 	import { i18n, t } from '$lib/i18n/index.svelte';
 	import Dialog from './Dialog.svelte';
 	import NumberField from './NumberField.svelte';
+	import Segmented from './Segmented.svelte';
+	import Notice from './Notice.svelte';
 
 	let {
 		open = $bindable(false),
@@ -55,25 +57,17 @@
 	});
 </script>
 
-<Dialog title={t('corners.title')} bind:open width="420px">
+<Dialog title={t('corners.title')} bind:open size="s">
 	<div class="corners">
 		<div class="row">
-			<div class="stijl" role="radiogroup" aria-label={t('corners.styleAria')}>
-				<button
-					class="choice"
-					class:on={stijl === 'round'}
-					role="radio"
-					aria-checked={stijl === 'round'}
-					onclick={() => (stijl = 'round')}>{t('corners.round')}</button
-				>
-				<button
-					class="choice"
-					class:on={stijl === 'chamfer'}
-					role="radio"
-					aria-checked={stijl === 'chamfer'}
-					onclick={() => (stijl = 'chamfer')}>{t('corners.chamfer')}</button
-				>
-			</div>
+			<Segmented
+				label={t('corners.styleAria')}
+				options={[
+					{ value: 'round' as const, label: t('corners.round') },
+					{ value: 'chamfer' as const, label: t('corners.chamfer') }
+				]}
+				bind:value={stijl}
+			/>
 			<svg class="preview" viewBox="0 0 34 34" aria-hidden="true">
 				<path d={preview} />
 			</svg>
@@ -82,12 +76,12 @@
 		<NumberField label={t('corners.size')} unit="mm" step={0.5} min={0.1} bind:value={size} />
 
 		{#if stijl === 'chamfer'}
-			<p class="row let-op">{t('corners.chamferWarning')}</p>
+			<Notice tone="warn">{t('corners.chamferWarning')}</Notice>
 		{:else}
-			<p class="row">{t('corners.roundKeeps')}</p>
+			<p class="help">{t('corners.roundKeeps')}</p>
 		{/if}
 		{#if notice}
-			<p class="row let-op" role="status">{notice}</p>
+			<Notice tone="warn" live>{notice}</Notice>
 		{/if}
 	</div>
 
@@ -114,39 +108,11 @@
 		align-items: center;
 		gap: var(--space-4);
 	}
-	.stijl {
-		display: flex;
-		gap: var(--space-2);
-	}
-	.choice {
-		padding: 7px 16px;
-		border: 1px solid var(--line);
-		border-radius: var(--radius-field);
-		background: var(--surface-1);
-		color: var(--text-1);
-	}
-	.choice.on {
-		border-color: var(--accent);
-		background: color-mix(in srgb, var(--accent) 10%, var(--surface-1));
-		color: var(--accent);
-	}
 	.preview {
 		width: 56px;
 		height: 56px;
 		fill: none;
 		stroke: var(--text-2);
 		stroke-width: 1.6;
-	}
-	.row {
-		margin: 0;
-		font-size: var(--text-xs);
-		line-height: 1.5;
-		color: var(--text-2);
-	}
-	.row.let-op {
-		color: var(--text-1);
-		padding: var(--space-2) var(--space-3);
-		border-radius: var(--radius-field);
-		background: var(--surface-2);
 	}
 </style>

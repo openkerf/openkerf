@@ -52,7 +52,18 @@ const H = new Proxy({}, { get: () => () => {} }) as Handlers;
 
 test('the project menu is in order and its verbs carry their shortcuts', () => {
 	const ids = projectActions(CTX, H).map((a) => a.id);
-	assert.deepEqual(ids, ['project.new', 'project.open', 'project.save', 'project.saveAs', 'project.download', 'project.upload']);
+	// The project's six verbs, then the two that work on the sheet in hand — Import…
+	// and Export, which left the top bar for this menu when the bar became the machine's.
+	assert.deepEqual(ids, [
+		'project.new',
+		'project.open',
+		'project.save',
+		'project.saveAs',
+		'project.download',
+		'project.upload',
+		'sheet.import',
+		'sheet.export'
+	]);
 	assert.equal(KEYS.open, 'mod+o');
 	assert.equal(KEYS.save, 'mod+s');
 	assert.equal(KEYS.saveAs, 'mod+shift+s');
@@ -61,7 +72,8 @@ test('the project menu is in order and its verbs carry their shortcuts', () => {
 test('without a token every project verb that writes says why', () => {
 	const off = projectActions({ ...CTX, may: false }, H);
 	for (const a of off) {
-		if (a.id === 'project.download') assert.equal(a.off, undefined, 'downloading only reads');
+		if (a.id === 'project.download' || a.id === 'sheet.export')
+			assert.equal(a.off, undefined, 'downloading only reads');
 		else assert.ok(a.off, `${a.id} is silent about the missing token`);
 	}
 });

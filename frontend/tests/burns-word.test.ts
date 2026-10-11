@@ -158,7 +158,7 @@ async function header(id: string, width: number) {
 			const card = document.querySelector('.selected')!;
 			const head = card.querySelector('.head')!;
 			const chips = head.querySelector('.in-layers');
-			const chip = head.querySelector('.laagchip, .geenlaag');
+			const chip = head.querySelector('.layer-ref, .no-layer');
 			return {
 				// The card, not the header: the word sits under the name, where the
 				// Layers row keeps it too — in the header there was no room for it.
@@ -212,12 +212,13 @@ test('the pre-flight names the switched-off layer, in the same word', async (t) 
 		await page.waitForSelector('.pf-layers tbody tr', { timeout: 20000 });
 		// The drawing and its sentence come with the overview, not with the clock;
 		// wait for the sentence itself rather than for a guess about how long it takes.
-		await page.waitForSelector('.notice.silent', { timeout: 20000 });
+		// The two "skips it" sentences are shared `.help` lines now, named `.silent`.
+		await page.waitForSelector('.help.silent', { timeout: 20000 });
 		const seen = await page.evaluate(() => ({
 			rows: [...document.querySelectorAll('.pf-layers tbody tr')].map((row) =>
 				(row.textContent ?? '').replace(/\s+/g, ' ').trim()
 			),
-			notices: [...document.querySelectorAll('.notice.silent')].map((n) =>
+			notices: [...document.querySelectorAll('.help.silent')].map((n) =>
 				(n.textContent ?? '').replace(/\s+/g, ' ').trim()
 			)
 		}));

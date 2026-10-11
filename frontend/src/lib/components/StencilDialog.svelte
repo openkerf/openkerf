@@ -14,6 +14,7 @@
 	import { i18n, t } from '$lib/i18n/index.svelte';
 	import Dialog from './Dialog.svelte';
 	import NumberField from './NumberField.svelte';
+	import Why from './Why.svelte';
 
 	type Report = {
 		islands: number;
@@ -76,7 +77,7 @@
 	);
 </script>
 
-<Dialog title={t('stencil.title')} bind:open width="440px">
+<Dialog title={t('stencil.title')} bind:open size="s">
 
 	{#if error}
 		<p class="refusal" role="alert">{error}</p>
@@ -89,25 +90,25 @@
 			<!-- `mm` and not `n`: `n` is the plural selector and is deliberately the one
 			     value that does *not* go through `Intl`, so a crossing named `n` would
 			     print 3.594 to a reader whose canvas writes 3,594 everywhere else. -->
-			<p class="hint">{t('stencil.crossing', { mm: i18n.mm(report.shortest_mm) })}</p>
+			<p class="help line">{t('stencil.crossing', { mm: i18n.mm(report.shortest_mm) })}</p>
 		{/if}
 		{#if report.unbridged}
 			<!-- The one thing here that cannot be seen on the drawing: the shape looks
 			     finished and that island still drops out. A narrower bridge is the way out,
 			     because a gap has to fit inside the contour it sits on. -->
-			<p class="hint warn">{t('stencil.unbridged', { n: report.unbridged })}</p>
+			<p class="help warn line">{t('stencil.unbridged', { n: report.unbridged })}</p>
 		{/if}
 		{#if report.open_contours}
 			<!-- The engine layer has counted these since the first version and the window
 			     never said so. An open contour has no inside, so "what falls out" is a
 			     guess there — and this is the one screen where that matters. -->
-			<p class="hint warn">{t('stencil.open', { n: report.open_contours })}</p>
+			<p class="help warn line">{t('stencil.open', { n: report.open_contours })}</p>
 		{/if}
 		{#if tight}
-			<p class="hint warn">{t('stencil.wide')}</p>
+			<p class="help warn line">{t('stencil.wide')}</p>
 		{/if}
 	{:else}
-		<p class="hint">{t('stencil.looking')}</p>
+		<p class="help line">{t('stencil.looking')}</p>
 	{/if}
 
 	<div class="fields">
@@ -115,8 +116,8 @@
 		<NumberField label={t('stencil.per')} step={1} min={1} max={6} bind:value={per} />
 	</div>
 
-	{#if report?.bridges && !error}<p class="hint">{t('ux.stencil.testMaterial')}</p>{/if}
-	<details class="fold"><summary>{t('ux.stencil.help')}</summary><p class="why">{t('stencil.why')}</p></details>
+	{#if report?.bridges && !error}<p class="help line">{t('ux.stencil.testMaterial')}</p>{/if}
+	<Why label={t('ux.stencil.help')}>{t('stencil.why')}</Why>
 
 	<!-- The window's own footer, not a row in the body: `Dialog` puts the ask row under
 	     a rule and outside the part that scrolls, and `.ask-actions` in tokens.css lays
@@ -151,20 +152,13 @@
 </Dialog>
 
 <style>
-	.why {
-		margin: 0 0 var(--space-3);
-		max-width: 46ch;
-		font-size: var(--text-sm);
-		color: var(--text-1);
-	}
 	.found {
 		margin: 0 0 var(--space-1);
 		font-size: var(--text-sm);
 		font-weight: 600;
 		color: var(--text-1);
 	}
-	.hint { margin: 0 0 var(--space-2); font-size: var(--text-xs); color: var(--text-2); }
-	.warn { color: var(--warn-text, var(--text-1)); }
+	.line { margin: 0 0 var(--space-2); }
 	.fields {
 		display: grid;
 		grid-template-columns: 1fr 1fr;

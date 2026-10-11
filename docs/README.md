@@ -41,12 +41,12 @@ order or looked up when you need them.
 | [Shapes, text, images and generators](shapes-and-generators.md) | Everything else that puts geometry on the bed — text, images, clipart, the eight generators — and the path operations that reshape it afterwards. |
 | [Variable text](variable-text.md) | One design burned once per row of a list: the CSV or the counted range of numbers, `{name}` in a text, more than one on a plate, the run you press through at the machine, and a jig frame that burns only once. |
 | [Layers](layers.md) | What the machine does with a shape: the four kinds of layer, speed, power and passes, the colour strip, burn order, raster settings, drop per pass and air assist. |
-| [Burning](job.md) | The Job tab from top to bottom: the pre-flight, the cut path you can walk through before anything moves, the two taps that start a job, progress and adjustment while it burns, the queue, jogging the head, connecting, and the phone screen. |
+| [Burning](job.md) | The Job tab from top to bottom: the pre-flight, the cut path you can walk through before anything moves, the two taps that start a job, progress and adjustment while it burns, the queue, jogging the head, and connecting. |
 | [The rotary](rotary.md) | Burning on a cylinder: where the settings live, calibrating from a burned line, what changes on the machine while a rotary is fitted, and the ten steps to work through standing at the laser. |
 | [Test grids](test-grid.md) | Burning a board of squares to find the presets for a material, photographing it, aligning the photo and turning the best square into a saved preset — plus the code that lets a photograph find its own board, and cutting the board loose as a tile. |
 | [The material library](library.md) | Keeping those presets: where a number came from and how far to trust it, applying one to a layer, renaming, merging and removing what is in the library, machine profiles, moving a library between computers, and taking a starting point from the catalogue other people share. |
 | [Plates larger than the bed](tiling.md) | Burning a plate that does not fit, in tiles: alignment marks, sliding the plate along, and the two taps that tell the machine where it now lies. |
-| [Reference](reference.md) | Every keyboard shortcut, every operation in the menus and the action bar, every reason a button is greyed out, and the app-wide settings — language, theme, notifications, the token and the camera. |
+| [Reference](reference.md) | Every keyboard shortcut, every operation in the menus and the action bar, every reason a button is greyed out, and the app-wide settings — language, notifications, the token and the camera. |
 | [Running in Docker](running-in-docker.md) | One compose file for a Linux box beside the laser: the image, the token, the data volume, the camera, updating, and the two limits — no machine discovery on Docker Desktop, and no laser over USB in this version. |
 
 ## How to update these pages

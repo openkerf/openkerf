@@ -17,6 +17,8 @@
 	import { page } from '$app/stores';
 	import SettingFieldInput from '$components/SettingField.svelte';
 	import NumberField from '$components/NumberField.svelte';
+	import Notice from '$components/Notice.svelte';
+	import Why from '$components/Why.svelte';
 	import { t, type MessageKey } from '$lib/i18n/index.svelte';
 	import { createStore } from '$lib/setup.svelte';
 	import {
@@ -295,35 +297,37 @@
 <svelte:head><title>{t('setup.head.workarea')}</title></svelte:head>
 
 <section class="setup">
-	{#if store.error}<p class="error" role="alert">{store.error}</p>{/if}
+	{#if store.error}<Notice tone="danger" live>{store.error}</Notice>{/if}
 
 	{#if !machinePath}
-		<h1>{t('setup.noMachine')}</h1>
-		<p class="muted">{t('setup.noMachine.body')}</p>
-		<div class="actions"><a class="btn primary" href="/setup">{t('setup.toOverview')}</a></div>
+		<h1 class="title">{t('setup.noMachine')}</h1>
+		<p>{t('setup.noMachine.body')}</p>
+		<div class="ask-actions"><a class="btn primary" href="/setup">{t('setup.toOverview')}</a></div>
 	{:else}
 		{#if connection}
 			{@const filled = Object.entries(connection).filter(([attr]) => attr in values)}
-			<p class="connection">
-				<strong>{t('setup.connection.filled')}</strong>
-				{#if filled.length}
-					<span class="mono">
-						{filled
-							.map(
-								([attr, value]) =>
-									`${inWords(CONNECTION_WORD, attr)}: ${inWords(CONNECTION_VALUE, value)}`
-							)
-							.join(' · ')}
-					</span>
-				{:else}
-					<span class="muted">{t('setup.connection.unknown')}</span>
-				{/if}
-				<span class="muted">{t('setup.connection.notYet')}</span>
-			</p>
+			<div class="connection">
+				<Notice tone="ok">
+					<strong>{t('setup.connection.filled')}</strong>
+					{#if filled.length}
+						<span class="mono">
+							{filled
+								.map(
+									([attr, value]) =>
+										`${inWords(CONNECTION_WORD, attr)}: ${inWords(CONNECTION_VALUE, value)}`
+								)
+								.join(' · ')}
+						</span>
+					{:else}
+						<span>{t('setup.connection.unknown')}</span>
+					{/if}
+					<span>{t('setup.connection.notYet')}</span>
+				</Notice>
+			</div>
 		{/if}
 
-		<h1>{t('setup.bedSize')}</h1>
-		<p class="muted">{t('ux.setup.bed')}</p>
+		<h1 class="title">{t('setup.bedSize')}</h1>
+		<p>{t('ux.setup.bed')}</p>
 
 		<div class="workarea">
 			<div class="fields">
@@ -331,11 +335,11 @@
 					<NumberField label={t('gen.width')} unit="mm" bind:value={width} step={10} min={1} />
 					<NumberField label={t('gen.height')} unit="mm" bind:value={height} step={10} min={1} />
 				{:else}
-					<p class="muted">{t('setup.noBedSize')}</p>
+					<p class="help">{t('setup.noBedSize')}</p>
 				{/if}
 
 				{#if hasCorner}
-					<label class="choice">
+					<label class="field-label">
 						<span>{t('setup.whereIsZero')}</span>
 						<select
 							value={corner}
@@ -345,7 +349,7 @@
 								<option value={option.id}>{option.label}</option>
 							{/each}
 						</select>
-						<span class="hint">{t('setup.corner.hint')}</span>
+						<span class="help">{t('setup.corner.hint')}</span>
 					</label>
 				{/if}
 			</div>
@@ -373,7 +377,7 @@
 							{/if}
 					</g>
 				</svg>
-				<figcaption>
+				<figcaption class="help">
 					<span class="size mono">{width} × {height} mm</span>
 					{#if originDot}{t('setup.zeroOnDot')}{:else}{t('setup.zeroByMachine')}{/if}
 				</figcaption>
@@ -385,11 +389,11 @@
 		     settings would suit this laser: measured before this, an 80 W catalogue
 		     showed all 26 of its rows to a machine nobody had described. Asked once,
 		     here, because machine-wide facts belong to the setup flow. -->
-		<fieldset class="laser">
-			<legend>{t('setup.laser')}</legend>
-			<p class="muted hint">{t('ux.setup.laserPurpose')}</p>
+		<fieldset class="group">
+			<legend class="label-section">{t('setup.laser')}</legend>
+			<p class="help">{t('ux.setup.laserPurpose')}</p>
 			<div class="fields">
-				<label class="choice">
+				<label class="field-label">
 					<span>{t('setup.laser.kind')}</span>
 					<select bind:value={laserKind}>
 						<option value="unknown">{t('laser.kind.unknown')}</option>
@@ -398,10 +402,7 @@
 						{/each}
 					</select>
 				</label>
-				<details class="fold">
-						<summary>{t('ux.setup.laserHelp')}</summary>
-						<p class="hint">{t('ux.setup.laserKinds')}</p>
-				</details>
+				<Why label={t('ux.setup.laserHelp')}>{t('ux.setup.laserKinds')}</Why>
 				<NumberField
 					label={t('setup.laser.watt')}
 					unit="W"
@@ -416,9 +417,13 @@
 					<input type="checkbox" bind:checked={wattUnknown} />
 					<span>{t('setup.laser.wattUnknown')}</span>
 				</label>
-				<p class="muted hint">
-					{wattUnknown ? t('setup.laser.wattUnknown.then') : t('setup.laser.watt.why')}
-				</p>
+				<!-- Ticked, the sentence says what it costs, and that stays on screen; the
+				     reason the number matters waits behind the fold. -->
+				{#if wattUnknown}
+					<p class="help">{t('setup.laser.wattUnknown.then')}</p>
+				{:else}
+					<Why>{t('setup.laser.watt.why')}</Why>
+				{/if}
 				<NumberField
 					label={t('setup.laser.lens')}
 					unit="mm"
@@ -432,8 +437,8 @@
 		<!-- What the machine *can* do. This is not in the engine — it is a statement by
 		     the user about their own device, and it decides what appears in the jog
 		     controls. -->
-		<fieldset class="capabilities">
-			<legend>{t('setup.capabilities')}</legend>
+		<fieldset class="group">
+			<legend class="label-section">{t('setup.capabilities')}</legend>
 			<label class="toggle">
 				<input type="checkbox" bind:checked={hasZ} />
 				<span>{t('setup.hasZ')}</span>
@@ -448,28 +453,30 @@
 			<details class="fold rest" bind:open={restOpen}>
 				<summary>
 					{t('setup.more')}
-					<span class="muted">{t('setup.more.what')}</span>
+					<span class="help">{t('setup.more.what')}</span>
 				</summary>
-				<p class="muted warning">{t('setup.more.warning')}</p>
-				<label class="toggle">
-					<input
-						type="checkbox"
-						checked={!essentialOnly}
-						onchange={(e) => {
-							essentialOnly = !e.currentTarget.checked;
-							loaded = false;
-							reload();
-						}}
-					/>
-					<span>{t('setup.showHidden')}</span>
-				</label>
-				{#each otherFields as field (field.attr)}
-					<SettingFieldInput {field} bind:value={values[field.attr]} />
-				{/each}
+				<div class="restbody">
+					<p class="help warn">{t('setup.more.warning')}</p>
+					<label class="toggle">
+						<input
+							type="checkbox"
+							checked={!essentialOnly}
+							onchange={(e) => {
+								essentialOnly = !e.currentTarget.checked;
+								loaded = false;
+								reload();
+							}}
+						/>
+						<span>{t('setup.showHidden')}</span>
+					</label>
+					{#each otherFields as field (field.attr)}
+						<SettingFieldInput {field} bind:value={values[field.attr]} />
+					{/each}
+				</div>
 			</details>
 		{/if}
 
-		<div class="actions">
+		<div class="ask-actions">
 			<a class="btn" href="/setup">{t('setup.skip')}</a>
 			<button class="btn primary" onclick={save} disabled={store.busy} title={store.busy ? t('reason.busy') : undefined}>
 				{store.busy ? t('setup.saving') : t('setup.saveAndFinish')}
@@ -480,17 +487,7 @@
 
 <style>
 	.connection {
-		display: grid;
-		gap: 4px;
-		margin: 0 0 var(--space-4);
-		padding: var(--space-2) var(--space-3);
-		font-size: var(--text-xs);
-		border-left: 3px solid var(--ok);
-		background: var(--surface-2);
-		border-radius: var(--radius-field);
-	}
-	.connection .muted {
-		color: var(--text-2);
+		margin-bottom: var(--space-4);
 	}
 	.workarea {
 		display: grid;
@@ -506,27 +503,6 @@
 		/* A 520px stepper for a three-digit number puts − and + so far apart that you
 		   no longer read them as one control. */
 		max-width: 320px;
-	}
-	.choice {
-		display: grid;
-		gap: 4px;
-	}
-	.choice > span:first-child {
-		font-size: var(--text-xs);
-		color: var(--text-2);
-	}
-	.choice select {
-		font: inherit;
-		padding: 8px;
-		min-height: 40px;
-		border: 1px solid var(--line);
-		border-radius: var(--radius-field);
-		background: var(--surface-2);
-		color: var(--text-1);
-	}
-	.hint {
-		font-size: var(--text-xs);
-		color: var(--text-2);
 	}
 
 	.drawing {
@@ -559,9 +535,8 @@
 	}
 	.drawing figcaption {
 		display: grid;
-		gap: 2px;
-		font-size: var(--text-xs);
-		color: var(--text-2);
+		gap: var(--space-1);
+		max-width: none;
 		text-align: center;
 		margin-top: var(--space-2);
 	}
@@ -569,76 +544,47 @@
 		color: var(--text-1);
 	}
 
-	/* The same block as the capabilities below it: a set of related fields with a
-	   heading, which is what DESIGN-SYSTEM v4's form rule 7 asks for as soon as there
-	   are more than two of them. */
-	.laser {
-		margin: var(--space-4) 0;
-		padding: var(--space-3);
-		border: 1px solid var(--line);
-		border-radius: var(--radius-card);
-		display: grid;
-		gap: var(--space-3);
-	}
-	.laser legend {
-		font-size: var(--text-xs);
-		color: var(--text-2);
-		padding: 0 4px;
-	}
-	.laser .fields {
-		max-width: 320px;
-	}
-	.laser .hint {
-		margin: 0;
-	}
-
-	.capabilities {
-		margin: var(--space-4) 0;
-		padding: var(--space-3);
-		border: 1px solid var(--line);
-		border-radius: var(--radius-card);
+	/* A set of related fields with a heading, which is what DESIGN-SYSTEM v4's form
+	   rule 7 asks for as soon as there are more than two of them. Not a box: they
+	   already stand in the step's card, and a card in a card says nothing a heading
+	   and some room do not. */
+	.group {
 		display: grid;
 		gap: var(--space-2);
+		margin: var(--space-6) 0 0;
+		padding: 0;
+		border: 0;
+		min-width: 0;
 	}
-	.capabilities legend { font-size: var(--text-xs); color: var(--text-2); padding: 0 4px; }
+	.group legend {
+		padding: 0;
+		margin-bottom: var(--space-2);
+	}
 
 	.rest {
-		border: 1px solid var(--line);
-		border-radius: var(--radius-card);
-		padding: var(--space-3);
+		margin-top: var(--space-6);
 	}
-	/* The line you press is the shared fold in tokens.css — the same marker, case and
-	   weight as the folds in the panel, and 44 px under a glove where this one was 32.
-	   Its text is a step larger than the panel's folds because the whole wizard is. */
+	/* The line you press is the shared fold in tokens.css. Its text is a step larger
+	   than the panel's folds because the whole wizard is. */
 	.rest > summary {
 		font-size: inherit;
 		flex-wrap: wrap;
 	}
-	.rest .warning {
-		font-size: var(--text-xs);
-		margin: var(--space-3) 0 0;
+	.restbody {
+		display: grid;
+		gap: var(--space-2);
+		margin-top: var(--space-2);
 	}
 
 	.toggle {
 		display: flex;
 		align-items: center;
 		gap: var(--space-2);
-		margin: var(--space-3) 0;
-		font-size: var(--text-xs);
-		color: var(--text-2);
+		min-height: max(24px, var(--target-min));
 	}
-	.toggle input { width: 16px; height: 16px; accent-color: var(--accent); }
 
-	/* On a tablet and a phone the drawing sits *below* the fields: side by side the
-	   stepper gets so narrow there that the buttons touch each other. */
-	/* Touch targets hold on tablet *and* phone; this was at 767px and so left the
-	   tablet at 40px (measured: select 40, expander row 32). */
-	@media (max-width: 1199px) {
-		.choice select {
-			min-height: 44px;
-		}
-		.toggle input { width: 22px; height: 22px; }
-	}
+	/* Below the tablet's two columns the drawing sits *below* the fields: side by side
+	   the stepper gets so narrow there that the buttons touch each other. */
 	@media (max-width: 767px) {
 		.workarea {
 			grid-template-columns: minmax(0, 1fr);

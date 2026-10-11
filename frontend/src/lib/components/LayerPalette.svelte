@@ -128,7 +128,7 @@
 				{#if found?.number}
 					<span class="mono">{found.number}</span>
 				{:else}
-					<span class="dot" aria-hidden="true"></span>
+					<span class="free" aria-hidden="true"></span>
 				{/if}
 			</button>
 		{/each}
@@ -152,17 +152,20 @@
 			</span>
 			{#if figures}
 				<span class="figures mono">{figures}</span>
+				<!-- Deliberately the neutral badge, not an accent or status colour: this is
+				     habit, not evidence. Green or amber are forbidden here — on presets those
+				     mean "verified" and "extrapolated", and that is something else entirely. -->
 				<span
-					class="source"
+					class="badge"
 					title={found ? t('palette.layerValues') : t('palette.memory')}
 				>{found ? t('palette.inUse') : t('palette.remembered')}</span>
 			{:else}
-				<span class="none">{t('palette.nothingRemembered')}</span>
+				<span class="badge">{t('palette.nothingRemembered')}</span>
 			{/if}
 		{/if}
 	</div>
 
-	<span class="hint">
+	<span class="help closing">
 		{selection
 			? selection === 1
 				? t('palette.clickHintOne')
@@ -190,7 +193,6 @@
 	.head {
 		font-size: var(--text-xs);
 		color: var(--text-2);
-		text-transform: none;
 		white-space: nowrap;
 		flex: 0 0 auto;
 	}
@@ -206,7 +208,7 @@
 	.strip {
 		display: flex;
 		flex-wrap: wrap;
-		gap: 4px;
+		gap: var(--space-1);
 		min-width: 0;
 		/* `auto` as the basis keeps the ten swatches on one row as long as they fit;
 		   only when that is no longer possible does it break. With basis 0 it wrapped
@@ -216,7 +218,7 @@
 	.swatch {
 		width: 26px;
 		height: 26px;
-		border: 1px solid rgb(0 0 0 / 0.18);
+		border: 1px solid var(--edge-on-color);
 		border-radius: var(--radius-field);
 		display: grid;
 		place-items: center;
@@ -227,38 +229,36 @@
 		/* A swatch without a layer is present more faintly: that way the strip shows
 		   at a glance which colours this design uses. */
 		opacity: 0.55;
-		transition: opacity 150ms ease-out, border-color 150ms ease-out;
+		transition: opacity var(--transition), border-color var(--transition);
 	}
 	.swatch.used {
 		opacity: 1;
 	}
 	/* No lift on hover: a 26px target that jumps up a pixel shifts under your
 	   cursor while you are aiming. The design system forbids layout shift on hover
-	   and focus; the emphasis comes from the opacity and a slightly heavier
-	   border. */
+	   and focus; the emphasis comes from the opacity and a heavier border. */
 	.swatch:hover:not(:disabled) {
 		opacity: 1;
-		border-color: rgb(0 0 0 / 0.45);
+		border-color: var(--text-2);
 	}
 	.swatch:disabled {
 		cursor: default;
-	}
-	.swatch:focus-visible {
-		outline: 2px solid var(--accent);
-		outline-offset: 2px;
 	}
 	/* The colour for new work: a ring in the app's text colour, not in the accent —
 	   the accent means "action" here, and this is a state. */
 	.swatch.now {
 		box-shadow: 0 0 0 2px var(--surface-1), 0 0 0 3px var(--text-1);
 	}
-	.dot {
+	/* A colour with no layer: an empty swatch, but not a dead one. */
+	.free {
 		width: 4px;
 		height: 4px;
 		border-radius: var(--radius-dot);
 		background: currentColor;
 		opacity: 0.5;
 	}
+	/* The state and the explanation are captions to the swatches; when there is too
+	   little room, *they* give way. The swatches are the control and stay whole. */
 	.memory {
 		display: flex;
 		align-items: center;
@@ -266,14 +266,15 @@
 		font-size: var(--text-xs);
 		color: var(--text-2);
 		min-width: 0;
-		flex: 1;
+		flex: 0 1 auto;
+		overflow: hidden;
 	}
 	.dot {
 		width: 8px;
 		height: 8px;
 		border-radius: var(--radius-dot);
 		flex: none;
-		border: 1px solid rgb(0 0 0 / 0.2);
+		border: 1px solid var(--edge-on-color);
 	}
 	.who {
 		color: var(--text-1);
@@ -282,63 +283,27 @@
 		text-overflow: ellipsis;
 	}
 	.figures {
-		font-variant-numeric: tabular-nums;
 		color: var(--text-1);
 		white-space: nowrap;
 	}
-	.source,
-	.none {
-		border: 1px solid var(--line);
-		border-radius: var(--radius-dot);
-		padding: 1px var(--space-2);
-		white-space: nowrap;
-		/* Deliberately not an accent or status colour: this is habit, not evidence.
-		   Green or amber are forbidden here — on presets those mean "verified" and
-		   "extrapolated", and that is something else entirely. */
-		background: var(--surface-2);
-	}
-	/* The closing text gives way first — it is explanation, not control. */
-	.hint {
+	/* The closing sentence gives way first — it is explanation, not control — and below
+	   1200px it is not there at all. */
+	.closing {
 		min-width: 0;
+		margin-left: auto;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
-	}
-	/* The state and the explanation are captions to the swatches; when there is too
-	   little room, *they* give way. The swatches are the control and stay whole. */
-	.memory { min-width: 0; flex: 0 1 auto; overflow: hidden; }
-	@media (max-width: 820px) {
-		.memory,
-		.hint { display: none; }
-	}
-	.hint {
-		font-size: var(--text-xs);
-		color: var(--text-2);
-		white-space: nowrap;
-		margin-left: auto;
 	}
 	@media (max-width: 1199px) {
-		/* The closing text gives way first — it is explanation, not control. */
-	.hint {
-		min-width: 0;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
+		.closing { display: none; }
 	}
-	/* The state and the explanation are captions to the swatches; when there is too
-	   little room, *they* give way. The swatches are the control and stay whole. */
-	.memory { min-width: 0; flex: 0 1 auto; overflow: hidden; }
 	@media (max-width: 820px) {
-		.memory,
-		.hint { display: none; }
-	}
-	.hint {
-			display: none;
-		}
+		.memory { display: none; }
 	}
 	@media (max-width: 720px) {
 		.memory {
-			/* On the phone the strip is on one line with the memory below it; clipping
+			/* In a narrow window the strip is on one line with the memory below it; clipping
 			   would remove exactly the part that matters. */
 			flex-basis: 100%;
 		}

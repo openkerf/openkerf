@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { t } from '$lib/i18n/index.svelte';
 	import Dialog from './Dialog.svelte';
+	import Notice from './Notice.svelte';
 	import type { CameraStore } from '$lib/camera.svelte';
 
 	let {
@@ -79,11 +80,11 @@
 	}
 </script>
 
-<Dialog title={t('calibrate.title')} bind:open width="720px">
-	<p class="lead">{t('calibrate.lead')}</p>
+<Dialog title={t('calibrate.title')} bind:open size="l">
+	<p class="help lead">{t('calibrate.lead')}</p>
 
 	{#if camera.error}
-		<p class="error" role="alert">{camera.error}</p>
+		<div class="error"><Notice tone="danger" live>{camera.error}</Notice></div>
 	{/if}
 
 	<!-- Which camera. Only with more than one, because a choice of one is not a choice.
@@ -163,10 +164,10 @@
 </Dialog>
 
 <style>
-	.lead { margin: 0 0 var(--space-3); font-size: var(--text-xs); color: var(--text-2); line-height: 1.5; }
+	.lead { margin: 0 0 var(--space-3); }
 	.pick { display: flex; align-items: center; gap: var(--space-2); margin: 0 0 var(--space-3); }
 	.pick span { font-size: var(--text-xs); color: var(--text-2); }
-	.error { margin: 0 0 var(--space-2); font-size: var(--text-xs); color: var(--danger); }
+	.error { margin: 0 0 var(--space-2); }
 	.stage {
 		position: relative;
 		width: 100%;
@@ -206,10 +207,11 @@
 	}
 	text {
 		fill: var(--on-color);
-		font-size: 18px;
+		/* In image pixels, like the grips: the viewBox is the camera frame. */
+		font-size: var(--text-lg);
 		font-family: var(--font-mono);
 		paint-order: stroke;
-		stroke: rgb(0 0 0 / 0.6);
+		stroke: color-mix(in srgb, var(--void) 60%, transparent);
 		stroke-width: 3;
 	}
 	.numbers {

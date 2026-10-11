@@ -6,6 +6,7 @@
 		isStalled,
 		jobLabel,
 		jobStatusLabel,
+		progressIsLive,
 		remainingSeconds,
 		totalSeconds,
 		type Device,
@@ -20,6 +21,7 @@
 	import JobControls from './JobControls.svelte';
 	import TileRun from './TileRun.svelte';
 	import SeriesRun from './SeriesRun.svelte';
+	import EmptyState from './EmptyState.svelte';
 
 	let {
 		device,
@@ -96,6 +98,9 @@
 	 * two to believe as soon as they drift a poll apart.
 	 */
 	let waiting = $derived(jobs.filter((job) => job !== activeJob));
+	/** Live, or the last thing we heard (`progressIsLive`): a remembered job does not
+	 *  get the moving kerf line, because that line says "the laser is working now". */
+	let reporting = $derived(progressIsLive(device, connection.online));
 </script>
 
 <TileRun {tiling} />
@@ -111,17 +116,17 @@
 <div class="section">
 	<!-- "Spooler" is what the engine calls it. What it is to the user is the
 	     queue. -->
-	<h2 class="section-title">{t('queue.title')}</h2>
+	<h2 class="label-section queue-title">{t('queue.title')}</h2>
 	<!-- Three kinds of emptiness, and they do not mean the same thing: we do not
 	     know (no connection), the machine has no queue (protocol problem), or
 	     nothing is lined up. One line "the queue is empty" for all three
 	     reassured the user at moments when it should not have. -->
 	{#if !connection.online}
-		<p class="empty">{t('queue.unknown')}</p>
+		<p class="help">{t('queue.unknown')}</p>
 	{:else if !spooler?.present}
-		<p class="empty">{t('queue.noQueue')}</p>
+		<p class="help">{t('queue.noQueue')}</p>
 	{:else}
-		<p class="empty small">{t('queue.after', { n: waiting.length })}</p>
+		<p class="help queue-count">{t('queue.after', { n: waiting.length })}</p>
 		{#each waiting as job, i (i)}
 			<!-- Only the job the controls are about can stall; the rest are simply
 			     waiting their turn. Without that distinction every waiting job got
@@ -131,16 +136,17 @@
 			     card may speak in figures. One name for the rule the four blocks below
 			     read. -->
 			{@const live = job.running || quiet}
+			<!-- The state is a badge and, when paused, a tint: a stripe down one side
+			     said the same in a way the eye reads as decoration. -->
 			<article class="job" class:running={live} class:paused={quiet}>
 				<header>
 					<!-- "Spooler:3 items" is the engine's internal tally, not a name
-					     (gap P4). The wording lives in api.ts, so the Job panel, the
-					     status bar and the phone view do not each keep their own
-					     detour. -->
+					     (gap P4). The wording lives in api.ts, so the Job panel and the
+					     status bar do not each keep their own detour. -->
 					<span class="name" title={job.label}>{jobLabel(job)}</span>
 					<!-- The engine says "running"/"queued"; this app speaks the user's
 					     language. -->
-					<span class="status" class:now={job.running && !quiet} class:pause={quiet}
+					<span class="badge status" class:warn={quiet}
 						>{quiet ? t('job.status.paused') : jobStatusLabel(job)}</span
 					>
 				</header>
@@ -171,7 +177,8 @@
 							x2={Math.max(0.01, job.progress * 100)}
 							y2="3"
 							class="fill job-progress"
-							class:kerf-anim={job.running}
+							class:kerf-anim={job.running && reporting}
+							class:stale={!reporting}
 						/>
 					</svg>
 					<div class="figures mono">
@@ -221,8 +228,7 @@
 		     you are least likely to want. Opened and empty it says both: that nothing has
 		     come in, and what would come in if it did. -->
 		{#if events.length === 0}
-			<p class="empty">{t('queue.messages.none')}</p>
-			<p class="empty hint">{t('queue.messages.hint')}</p>
+			<EmptyState icon={false} title={t('queue.messages.none')} text={t('queue.messages.hint')} />
 		{:else}
 			<ul class="events mono">
 				{#each events.slice(0, 12) as event (event.time + event.code)}
@@ -237,25 +243,17 @@
 	.section {
 		margin-top: var(--space-6);
 	}
-	.section-title {
-		font-size: var(--text-xs);
-		font-weight: 600;
-		text-transform: uppercase;
-		letter-spacing: 0.06em;
-		color: var(--text-2);
-		margin: 0 0 var(--space-2);
+	.queue-title {
+		margin-bottom: var(--space-2);
 	}
-	/* The fold's own face — marker, case, weight — is the shared fold in tokens.css.
-	   This one used to draw a chevron of its own on the right, in the uppercase of a
-	   section title, a few hundred pixels from the fold above it, which used a '▸' on
-	   the left. Only the count stays: how many messages there are, without opening. */
+	/* The fold's own face is the shared fold in tokens.css. Only the count stays: how
+	   many messages there are, without opening. */
 	.fold .count {
 		margin-left: auto;
 		color: var(--text-2);
 	}
-	.empty {
-		color: var(--text-2);
-		margin: 0;
+	.queue-count {
+		margin-bottom: var(--space-2);
 	}
 	.job {
 		border: 1px solid var(--line);
@@ -265,15 +263,15 @@
 	.job + .job {
 		margin-top: var(--space-2);
 	}
-	/* The running job should not look like the three below it in the queue: a border in
-	   the accent colour was lost on a full-screen panel. */
+	/* The job on the machine should not look like the ones waiting below it. Running,
+	   it carries its kerf line and a raised edge; paused, the warning tint and edge with
+	   the badge in the same tone. */
 	.job.running {
-		border-color: var(--accent);
-		box-shadow: inset 3px 0 0 var(--accent);
+		border-color: var(--text-2);
 	}
 	.job.paused {
-		border-color: var(--warn-solid);
-		box-shadow: inset 3px 0 0 var(--warn-solid);
+		border-color: var(--warn-edge);
+		background: var(--warn-tint);
 	}
 	.remaining {
 		display: flex;
@@ -304,12 +302,8 @@
 		white-space: nowrap;
 	}
 	.status {
-		font-size: var(--text-xs);
-		color: var(--text-2);
 		flex: none;
 	}
-	.status.now { color: var(--accent); font-weight: 600; }
-	.status.pause { color: var(--warn); font-weight: 600; }
 	.progress {
 		width: 100%;
 		height: 6px;
@@ -328,6 +322,10 @@
 		stroke-dasharray: 6 4;
 		vector-effect: non-scaling-stroke;
 	}
+	/* Last known, not live: the line stands still in muted ink. */
+	.fill.stale {
+		stroke: var(--text-2);
+	}
 	.figures {
 		display: flex;
 		justify-content: space-between;
@@ -340,28 +338,20 @@
 		gap: var(--space-2);
 		margin: var(--space-3) 0 0;
 	}
+	/* A caption over a figure, in the interface face; the figure is the value. */
 	.meta dt {
 		font-size: var(--text-xs);
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
 		color: var(--text-2);
 		font-family: var(--font-ui);
 	}
 	.meta dd {
-		margin: 2px 0 0;
+		margin: var(--space-1) 0 0;
 		font-size: var(--text-sm);
 	}
-	/* One figure does not want a third of the card's width; it sits where the first
-	   column was, beside empty space rather than in the middle of it. */
+	/* One figure does not want a third of the card's width. */
 	.meta.one {
 		grid-template-columns: 1fr;
 		justify-items: start;
-	}
-	/* What the messages are, under the line that says there are none. Quieter than
-	   that line: it is background, not state. */
-	.empty.hint {
-		margin-top: var(--space-1);
-		font-size: var(--text-xs);
 	}
 	.events {
 		list-style: none;
@@ -372,11 +362,11 @@
 	.events li {
 		display: flex;
 		gap: var(--space-2);
-		padding: 4px 0;
+		padding: var(--space-1) 0;
 		border-bottom: 1px solid var(--line);
 	}
 	.code {
-		color: var(--accent);
+		color: var(--text-1);
 		flex: none;
 	}
 	.args {

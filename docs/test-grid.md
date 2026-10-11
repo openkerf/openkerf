@@ -152,7 +152,7 @@ and the seconds of cutting. What cannot be done is refused there too — a quart
 after the switch goes on, beside the field that has to change, rather than after the button
 with a plank already in the machine.
 
-![The lower part of the test-grid form: the fieldset What else goes on the board, with four switches. Engrave the caption and axis labels is on, Border around the board is off, and both Burn the board’s own name on it as a QR code and Cut the board loose from the sheet are on. Under the code switch: why it is there, the line naming the board (the name is minted per board, so it differs from yours), a Code size field reading 18, and what it costs — a strip of 20 mm below the squares, about 14 s of burning, modules of 0.62 mm. Under the cut-out: the rim is cut at 12 mm/s and 65%, 1× from the library; the cut runs 4 mm outside everything else with four bridges of 2 mm; about 23 s of burning. At the bottom, that no board with a code or a cut-out has been burned yet on any material.](images/43-board-extras.png)
+![The lower part of the test-grid form: the fieldset What else goes on the board, with four switches. Engrave the caption and axis labels is on, Border around the board is off, and both Burn the board’s own name on it as a QR code and Cut the board loose from the sheet are on. Under the code switch: a Why? fold that says why it is there, the line naming the board (the name is minted per board, so it differs from yours), a Code size field reading 18, and what it costs — a strip of 20 mm below the squares, about 14 s of burning, modules of 0.62 mm. Under the cut-out: the rim is cut at 12 mm/s and 65%, 1× from the library; the cut runs 4 mm outside everything else with four bridges of 2 mm; about 23 s of burning. At the bottom, that no board with a code or a cut-out has been burned yet on any material.](images/43-board-extras.png)
 
 ### The code, and what it is for
 
@@ -413,8 +413,9 @@ the same name is overwritten; without one it becomes a recipe for all materials.
 
 The main button names what it is about to do: **Draw the grid — 16 squares, 57.9 × 58.3 mm**.
 
-Without a material it reads **Draw it anyway, without a material** and stays an ordinary
-button rather than the highlighted one, with the warning above it:
+Without a material it reads **Draw it anyway, without a material**, with the warning above
+it. It stays the highlighted button — it is still the step's way forward — and its own words
+say what you give up:
 
 > Pick a material. A preset is a statement about one particular laser on one particular
 > material — without a material the burned board yields nothing later.
@@ -424,8 +425,10 @@ and **Create and choose** add the material without leaving the window.
 
 Once the board is drawn:
 
-> Grid #33 is on the bed — 16 squares, as one group in your design. Check the frame first,
-> burn it after, and come back for step 3.
+> Grid #33 is on the bed
+>
+> It has 16 squares, as one group in your design. Check the frame first, burn it after, and
+> come back for step 3.
 
 Two buttons sit under that message, in that order: **Show frame** sends the head round the
 outline of the work with the laser off, so you can see whether your plank lies where the
@@ -435,7 +438,8 @@ board is going to be, and **Start job** puts the board in the queue.
 
 > The job is in the queue. Stay with it until the board comes out of the machine.
 
-**Set up another grid** puts you back at the presets for the next board — it does not draw
+**Set up another grid**, now a quiet button at the bottom (Start is the step's highlighted
+one), puts you back at the presets for the next board — it does not draw
 straight away, because a second board would fall on the first.
 
 **When it goes wrong.** Starting is refused when part of the board is off the bed:
@@ -481,7 +485,7 @@ The same door stands in the material library — **Read a burned board from a ph
 because that is where somebody with a freshly burned plank goes first, looking for the
 presets it was burned for.
 
-![The top of the reading panel: a search box reading "Name, material, thickness", a list showing a board by its own name followed by the date, the material and the operation, and below it a "Read a burned board from a photograph" button with the sentence explaining that the board names itself. Under that, the block for a board with no photograph yet: "Burn this grid and photograph the board", an "Add a photo" button, and the line about using a phone.](images/44-board-readback.png)
+![The top of the reading panel: a search box reading "Name, material, thickness", a list showing a board by its own name followed by the date, the material and the operation, and below it a "Read a burned board from a photograph" button with the sentence explaining that the board names itself. Under that, the block for a board with no photograph yet: "Burn this grid and photograph the board" and an "Add a photo" button.](images/44-board-readback.png)
 
 **When there is no code to read.** A board burned before this existed, a code photographed
 too small, or an installation without OpenCV: then pick the board from the list, and the
@@ -498,12 +502,8 @@ A board without a photo says:
 > Burn this grid and photograph the board. Straight from above, the whole board in frame —
 > you align the corners yourself afterwards.
 
-**Add a photo** takes one from the camera or from a file. On a phone the shot itself is
-easier: open OpenKerf on it, and the boards waiting for a photo are listed under
-*3 test grids are waiting for a photo*, each with a **Take a photo** button. After the
-upload the phone says:
-
-> Photo saved. You get the preset out of it on the desktop.
+**Add a photo** takes one from the camera or from a file. On a phone or a tablet it opens
+the camera straight away, so the shot can be taken at the machine.
 
 **When it goes wrong.** An empty file or a failed upload gives *Saving the photo failed.*
 Taking another shot is **Another photo**, which replaces the one that is there.
@@ -547,8 +547,9 @@ square**.
 > 2 presets saved with Acrylaat (geëxtrudeerd). You will find them in the material library.
 
 The squares a preset has already come out of stay marked on the photo, with the line
-**Became a preset:** and a chip per square underneath. Pointing at a chip lights the square
-up on the photo — *— pointing at it highlights the square on the photo.*
+**Became a preset:** and a chip with a check per square beside it. Pointing at a chip lights
+the square up on the photo, and the line under the chips says so: *Pointing at one of these
+highlights its square on the photo.*
 
 **When it goes wrong.** Saving is refused without a material on the board:
 

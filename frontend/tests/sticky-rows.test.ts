@@ -16,8 +16,10 @@
  * with `bottom: calc(-1 * var(--space-4))`, ended exactly at its body's bottom. So the
  * test grid gets the same rule, and this test holds both to it.
  *
- * What is measured: with the body scrolled to the top, the row's bottom edge and the
- * body's bottom edge are the same line, in both windows.
+ * What is measured: with the body scrolled to the top and the test grid's form longer
+ * than its body, that row's bottom edge and the body's bottom edge are the same line.
+ * The series' row has since become the window's foot, and there the foot's top and the
+ * body's bottom are the same line.
  */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -59,7 +61,11 @@ const measure = (rowSelector: string) => {
 	body.scrollTop = 0;
 	const rowBox = row.getBoundingClientRect();
 	const bodyBox = body.getBoundingClientRect();
+	// The block the row sticks in: the row can only stick while that block runs on under
+	// the body's bottom edge.
+	const block = row.parentElement!.getBoundingClientRect();
 	return {
+		blockBelow: Math.round((block.bottom - bodyBox.bottom) * 10) / 10,
 		rowBottom: Math.round(rowBox.bottom * 10) / 10,
 		bodyBottom: Math.round(bodyBox.bottom * 10) / 10,
 		slit: Math.round((bodyBox.bottom - rowBox.bottom) * 10) / 10,
@@ -90,18 +96,24 @@ async function inWindow(tool: string, rowSelector: string, prepare?: (page: impo
 test('the test grid’s sticky row reaches the bottom of its body', async (t) => {
 	if (!reachable || !browser) return noServer(t, BASE);
 	const seen = await inWindow('="Test grid"', '.actions', async (page) => {
-		// Picking a material is what turns the empty form into a plan, and the plan is
-		// what makes the body long enough to scroll at all.
+		// Picking a material is what turns the empty form into a plan.
 		const material = page.locator('[role="dialog"] label:has(span:text-is("Material")) select').first();
 		const values = await material
 			.locator('option')
 			.evaluateAll((nodes) => nodes.map((n) => (n as HTMLOptionElement).value).filter((v) => v && v !== 'null'));
 		if (values.length) await material.selectOption(values[0]);
+		// Since the desktop review the set-up form is two columns and fits at 1440 x 900
+		// with its folds shut: measured, the wizard ended at 758 in a body ending at 809,
+		// so the row stood where it was laid out and never stuck. Open folds are what make
+		// the form longer than its body; opening one presses nothing.
+		await page.evaluate(() =>
+			document.querySelectorAll<HTMLDetailsElement>('[role="dialog"] .wizard details').forEach((d) => (d.open = true))
+		);
 	});
 	assert.ok(seen, 'no sticky row found in the test grid window');
 	assert.ok(
-		seen.scrollHeight > seen.clientHeight,
-		`the body does not scroll (${seen.scrollHeight} in ${seen.clientHeight}), so the row was not measured where it sticks`
+		seen.blockBelow > 0,
+		`the form ends ${-seen.blockBelow} px above the body's bottom, so the row was not measured where it sticks`
 	);
 	assert.equal(
 		seen.slit,
@@ -110,13 +122,37 @@ test('the test grid’s sticky row reaches the bottom of its body', async (t) =>
 	);
 });
 
-test('the series’ sticky row reaches the bottom of its body', async (t) => {
+/**
+ * The series' row is no longer sticky: since the desktop review it is the window's own
+ * foot (Dialog's `footer` slot), under the body instead of in it. What this test held it
+ * to — no strip between the row and the body's edge — then means the foot begins where
+ * the body ends.
+ */
+const measureFoot = () => {
+	const dialog = document.querySelector('[role="dialog"]');
+	const foot = dialog?.querySelector(':scope footer');
+	const body = dialog?.querySelector(':scope .body');
+	if (!foot || !body) return null;
+	return {
+		slit: Math.round((foot.getBoundingClientRect().top - body.getBoundingClientRect().bottom) * 10) / 10,
+		buttons: foot.querySelectorAll('button').length
+	};
+};
+
+test('the series’ action row reaches the bottom of its body', async (t) => {
 	if (!reachable || !browser) return noServer(t, BASE);
-	const seen = await inWindow('^="Series"', '.knoppen');
-	assert.ok(seen, 'no sticky row found in the series window');
-	assert.equal(
-		seen.slit,
-		0,
-		`the row ends ${seen.slit} px above the body it scrolls in (row ${seen.rowBottom}, body ${seen.bodyBottom})`
-	);
+	const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+	const page = await context.newPage();
+	try {
+		await page.goto(`${BASE}/?tab=design`, { waitUntil: 'domcontentloaded' });
+		await page.locator('.rail button.tool[title^="Series"]').click();
+		await page.waitForSelector('[role="dialog"]', { timeout: 20000 });
+		await page.waitForTimeout(2500);
+		const seen = await page.evaluate(measureFoot);
+		assert.ok(seen, 'no action row found at the foot of the series window');
+		assert.ok(seen.buttons > 0, 'the series window’s foot holds no button');
+		assert.equal(seen.slit, 0, `the row starts ${seen.slit} px below the body it closes`);
+	} finally {
+		await context.close();
+	}
 });

@@ -3,8 +3,7 @@
 	 * The alarm: what the engine reports about the connection, loudly on screen.
 	 *
 	 * Pinned at the top, above everything, impossible to scroll away — that is the
-	 * whole point. On the phone it sits against the top edge; on the desktop below
-	 * the top bar, so the buttons that stop the machine stay reachable. An alarm
+	 * whole point. It sits below the top bar, so the buttons that stop the machine stay reachable. An alarm
 	 * that covers the emergency stop is not an alarm but an obstacle.
 	 *
 	 * What is *not* there: a judgement we cannot back up. The text quotes the
@@ -12,19 +11,15 @@
 	 * machine (decision B3).
 	 */
 	import { t } from '$lib/i18n/index.svelte';
+	import Icon from './Icon.svelte';
 	import type { Watchdog } from '$lib/notifications.svelte';
 
-	let { watchdog, large = false }: { watchdog: Watchdog; large?: boolean } = $props();
+	let { watchdog }: { watchdog: Watchdog } = $props();
 </script>
 
 {#if watchdog.show && watchdog.alarm}
-	<div class="alarm" class:large role="alert" aria-live="assertive">
-		<svg class="sign" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"
-			stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-			<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" />
-			<path d="M12 9v4" />
-			<path d="M12 17h.01" />
-		</svg>
+	<div class="alarm" role="alert" aria-live="assertive">
+		<span class="sign"><Icon name="warn" size={20} /></span>
 		<div class="words">
 			<strong>{watchdog.alarm.title}</strong>
 			<p>{watchdog.alarm.body}</p>
@@ -70,7 +65,7 @@
 		/* Below the bars that sit above the canvas (action bar + sheet bar), not
 		   over them: it used to cover those, and those are exactly the buttons you
 		   need while a notice is up. `--topedge-height` is measured in
-		   `+page.svelte`; zero as long as there are no bars (phone). */
+		   `+page.svelte`; zero as long as there are no bars. */
 		top: calc(
 			var(--topbar-height) + var(--topedge-height, 0px) + var(--space-3) +
 				var(--notice-column, 0px)
@@ -109,9 +104,8 @@
 	}
 	.sign {
 		flex: none;
-		width: 22px;
-		height: 22px;
-		margin-top: 1px;
+		display: grid;
+		margin-top: 2px;
 	}
 	.words {
 		flex: 1;
@@ -132,26 +126,33 @@
 	/*
 	 * No transparency as hierarchy on this surface.
 	 *
-	 * Measured at 390 px: white on `--danger-solid` reaches 5.60 in light and 4.67
-	 * in dark, but at opacity 0.9 the advice drops to 4.05 in dark and at 0.75 the
-	 * source line drops to 3.23 — both below AA, and on the very line that says
-	 * what to do. The hierarchy here comes from size and font (24 px bold / 15 px /
-	 * 13 px mono), not from fading.
+	 * Measured: white on `--danger-solid` reaches 5.60. Every step of opacity
+	 * spends that margin, and on the very line that says what to do. The hierarchy
+	 * here comes from size and font (24 px bold / 15 px / 13 px mono), not from
+	 * fading.
 	 */
 	.source {
 		font-size: var(--text-xs);
 	}
+	/* The one button drawn here rather than taken from `.btn`: it sits on the red,
+	   so its ink and its outline are the white the rest of the card is written in. */
 	.seen {
 		flex: none;
-		min-height: 36px;
+		min-height: max(36px, var(--target-min));
 		padding: 0 var(--space-3);
 		border: 1px solid var(--on-color);
 		border-radius: var(--radius-field);
 		color: var(--on-color);
 		font-weight: 600;
+		transition: background var(--transition);
 	}
 	.seen:hover {
-		background: rgb(255 255 255 / 0.15);
+		background: color-mix(in srgb, var(--on-color) 15%, transparent);
+	}
+	/* The global ring is the accent, and teal on this red is barely a ring at all; on
+	   this one surface it is drawn in the card's white instead. */
+	.seen:focus-visible {
+		outline-color: var(--on-color);
 	}
 
 	/* Tablet: at 1024 the right-hand panel starts at x≈700, so 620 px from the rail
@@ -161,43 +162,9 @@
 	   together they are one column. Without a wrapper element (which would touch
 	   `+page.svelte`, where these two are rendered in different places) this is the
 	   price: one measure in two places, with this reference as the link. */
-	@media (min-width: 768px) and (max-width: 1199px) {
-		.alarm:not(.large) {
+	@media (max-width: 1199px) {
+		.alarm {
 			width: min(560px, calc(100vw - var(--rail-width) - 2 * var(--space-3)));
 		}
-	}
-
-	/* Phone: not an overlay but a block at the top that pushes the rest down. It
-	   sits outside the scroll area, so it cannot be scrolled away — and at the same
-	   time it cuts nothing off. Bigger, and the button below the text instead of
-	   beside it: with a thumb you do not aim at a 36 px button in a corner. */
-	.alarm.large {
-		position: static;
-		/* The floating variant hangs off the rail and no longer has a transform, but
-		   these rules stay as a lock on the door: `transform` and `left` work on a
-		   static element too, and when the floating variant still carried
-		   `translateX(-50%)` this block slid half a screen width out of view with
-		   it. */
-		transform: none;
-		left: auto;
-		right: auto;
-		top: auto;
-		flex: none;
-		width: 100%;
-		border-radius: 0;
-		flex-wrap: wrap;
-		padding: max(var(--space-3), env(safe-area-inset-top)) var(--space-3) var(--space-3);
-	}
-	.alarm.large .sign {
-		width: 28px;
-		height: 28px;
-	}
-	.alarm.large strong {
-		font-size: var(--text-lg);
-	}
-	.alarm.large .seen {
-		width: 100%;
-		min-height: 48px;
-		margin-top: var(--space-2);
 	}
 </style>

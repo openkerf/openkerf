@@ -10,18 +10,23 @@
  * Why it exists (gauntlet P33). "Use Import in the top bar for an existing design, or
  * pick a shape on the left and click the bed." was rendered at every width, while the
  * bar it points at only holds Import from 1200 px up: at 1024 the bar has machine,
- * Material, project, frame, Pause, Stop, Start, EN and theme, and Import is a row in the
+ * Material, project, frame, Pause, Stop, Start and EN, and Import is a row in the
  * rail's More menu. So on the one device that stands beside the machine the first
  * sentence a new user reads sent them to a button that was not there. The bar itself
  * already changes its words per width ("Show frame" / "Frame"); the sentence now does too.
+ *
+ * Import… has since moved out of the bar into the project menu (the bar is the machine's
+ * now), so the desk sentence names that row, and the control it depends on is the
+ * project button that opens the menu. On a tablet Import… is also in the rail's More,
+ * and the tablet sentence names that.
  *
  * The Edit panel's own empty text ("Nothing on the bed yet. Import in the top bar…")
  * sent the reader to the same absent button one panel away, so it is held here too.
  *
  * What is measured, in English and in Dutch, at 1440 (desk) and at 1024 and 800
- * (tablet): for both empty texts, the words the sentence uses for its control — the
- * bar's Import label or the rail's More label — belong to a button that is visible at
- * that width, and no word of a button that is hidden at that width appears in it.
+ * (tablet): every empty text names exactly one of the two routes — the project menu's
+ * Import… row or the rail's More — and the button that route starts from is visible at
+ * that width.
  */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -91,26 +96,19 @@ for (const language of Object.keys(CATALOGUES)) {
 						const box = node.getBoundingClientRect();
 						return box.width > 0 && box.height > 0 && getComputedStyle(node).display !== 'none';
 					};
-					const barLabels = [...document.querySelectorAll('.topbar .btn')]
-						.filter(visible)
-						.map((node) => (node.textContent ?? '').trim());
+					const project = [...document.querySelectorAll('.topbar .project-button')].some(visible);
 					const railLabels = [...document.querySelectorAll('.rail .tool')]
 						.filter(visible)
 						.map((node) => (node.textContent ?? '').trim());
 					return {
-						sentences: [...document.querySelectorAll('.blank p, p.empty')]
+						sentences: [...document.querySelectorAll('.blank p, p.empty, .empty-state p.help')]
 							.filter(visible)
 							.map((node) => (node.textContent ?? '').trim()),
-						barLabels,
+						project,
 						railLabels
 					};
 				});
-				const barHasImport = measured.barLabels.includes(importWord);
 				const railHasMore = measured.railLabels.includes(moreWord);
-				assert.ok(
-					barHasImport !== railHasMore,
-					`expected exactly one of bar Import (${barHasImport}) and rail More (${railHasMore}) at ${width} px`
-				);
 				// The bed's text is always there; the panel's is there at 1440 and 1024 and
 				// gone at 800, where the right-hand panel is folded shut.
 				assert.ok(
@@ -118,16 +116,19 @@ for (const language of Object.keys(CATALOGUES)) {
 					`expected the empty texts on screen, got ${JSON.stringify(measured.sentences)}`
 				);
 				for (const sentence of measured.sentences) {
-					assert.equal(
-						names(sentence, importWord),
-						barHasImport,
-						`"${sentence}" names "${importWord}" but the bar shows ${JSON.stringify(measured.barLabels)}`
+					const viaMenu = names(sentence, importWord);
+					const viaMore = names(sentence, moreWord);
+					assert.ok(
+						viaMenu !== viaMore,
+						`"${sentence}" should name exactly one of "${importWord}" and "${moreWord}"`
 					);
-					assert.equal(
-						names(sentence, moreWord),
-						railHasMore,
-						`"${sentence}" names "${moreWord}" but the rail shows ${JSON.stringify(measured.railLabels)}`
-					);
+					if (viaMenu)
+						assert.ok(measured.project, `"${sentence}" names "${importWord}" but the project button is hidden at ${width} px`);
+					if (viaMore)
+						assert.ok(
+							railHasMore,
+							`"${sentence}" names "${moreWord}" but the rail shows ${JSON.stringify(measured.railLabels)}`
+						);
 				}
 			} finally {
 				await context.close();

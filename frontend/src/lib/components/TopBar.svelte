@@ -3,16 +3,15 @@
 	import { i18n, t } from '$lib/i18n/index.svelte';
 	import LanguagePicker from './LanguagePicker.svelte';
 	import { screen } from '$lib/screen.svelte';
-	import { saveFile } from '$lib/saving';
 	import { connection } from '$lib/connection.svelte';
 	import Logo from './Logo.svelte';
 	import Menu from './Menu.svelte';
+	import Icon from './Icon.svelte';
 	import type { Menu as MenuList } from '$lib/actions';
 
 	let {
 		device,
 		state: machineState,
-		canStart,
 		canStop,
 		stopArmed = false,
 		mayLeave = true,
@@ -23,7 +22,6 @@
 		paused = false,
 		onPause,
 		onResume,
-		onStart,
 		onStop,
 		onFrame,
 		canFrame = false,
@@ -31,16 +29,12 @@
 		material = null,
 		thicknessMm = null,
 		onOpenMaterial,
-		onOpenFile,
-		onSaved,
-		onToggleTheme,
 		projectName = null,
 		dirty = false,
 		projectMenu
 	}: {
 		device: Device | null;
 		state: MachineState;
-		canStart: boolean;
 		canStop: boolean;
 		/** There is something to stop. The button always stays usable — if our state
 		 *  detection is wrong you must not lose the emergency stop — but it only shouts
@@ -59,15 +53,14 @@
 		 * have to change in the same step; it may go there.
 		 */
 		tablet?: boolean;
-		/** Below ~950px the file buttons no longer fit; they then live in the tool
-		 *  rail's menu. */
+		/** Tablet width: the material chip says "Material" instead of "Choose
+		 *  material" and keeps its name short. */
 		narrow?: boolean;
 		canPause?: boolean;
 		canResume?: boolean;
 		paused?: boolean;
 		onPause?: () => void;
 		onResume?: () => void;
-		onStart: () => void;
 		onStop: () => void;
 		onFrame?: () => void;
 		/** There is something on the bed *and* this machine can move. */
@@ -81,34 +74,15 @@
 		material?: string | null;
 		thicknessMm?: number | null;
 		onOpenMaterial?: () => void;
-		onOpenFile?: (file: File) => void;
-		/** After a successful download: the page has to fetch its "changed" flag again,
-		 *  because the server has declared the design clean. */
-		onSaved?: () => void;
-		onToggleTheme: () => void;
 		/** The open project's name, or `null` for one that has never been saved. */
 		projectName?: string | null;
 		/** Unsaved changes — the dot beside the name. */
 		dirty?: boolean;
 		/** The project menu's rows, built by `projectActions` on the page: New, Open…,
-		 *  Save, Save as…, Download, Upload…, with the reasons and shortcuts that belong
-		 *  to them. */
+		 *  Save, Save as…, Download, Upload…, and then Import… and Export for the sheet
+		 *  in hand, with the reasons and shortcuts that belong to them. */
 		projectMenu: MenuList;
 	} = $props();
-
-	/**
-	 * Saving goes through `saveFile` and not through a bare `<a download>`.
-	 *
-	 * The link works perfectly well on its own, but afterwards the app should know the
-	 * design has been saved — otherwise `dirty` stays set on the client and the next
-	 * dialog claims there is unsaved work. See `$lib/saving`. The `href` stays, so that
-	 * the button is a real link without JavaScript as well.
-	 */
-	async function save(event: MouseEvent, url: string, name: string) {
-		event.preventDefault();
-		projectOpen = false;
-		if (await saveFile(url, name)) onSaved?.();
-	}
 
 	/**
 	 * Het projectmenu.
@@ -138,7 +112,6 @@
 	// The top bar is always there; the listening to the screen width hangs here, so
 	// the rest of the app does not have to do it again.
 	$effect(() => screen.follow());
-	let barCarries = $derived(screen.controlsInBar);
 
 	/**
 	 * Without a server this is no longer a control, and you have to see that.
@@ -180,13 +153,6 @@
 		gone
 			? `${t('transport.noServer')} ${t('transport.noServer.resume')}`
 			: t('transport.resume.title')
-	);
-	let startTitle = $derived(
-		gone
-			? `${t('transport.noServer')} ${t('transport.noServer.start')}`
-			: stopArmed
-				? t('transport.start.busy')
-				: t('transport.start.preflight')
 	);
 
 	/**
@@ -258,6 +224,16 @@
 
 <svelte:window onkeydown={sneltoets} />
 
+<!--
+	The bar is state and machine verbs, in three weights.
+
+	Quiet: the two state chips (what machine, what material) and the project menu —
+	things you read, or open at the start and end of a session. Secondary: Show frame
+	and Pause, bordered buttons you aim at deliberately. Strongest: Stop, red at every
+	width and with its word at every width, full red while something is running.
+	Import and Export are rows of the project menu, and preparing a job is the Job
+	tab's: the bar no longer competes with the panel for the verb that starts a burn.
+-->
 <header class="topbar" class:narrow class:gone>
 	<div class="brand" title={t('app.name')}><Logo /><span class="woord">OpenKerf</span></div>
 
@@ -283,7 +259,7 @@
 	>
 		<span class="dot machinedot {machineState}" aria-hidden="true"></span>
 		<span class="name">{device?.label ?? t('topbar.machine.setup')}</span>
-		<span class="muted toestand">{machineStateLabel(machineState)}</span>
+		<span class="toestand">{machineStateLabel(machineState)}</span>
 	</svelte:element>
 
 	<!-- What with (machine) and what into (material) belong beside each other: together
@@ -296,8 +272,8 @@
 		title={materialTitle}
 		onclick={onOpenMaterial}
 	>
-		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M3 8.5 12 4l9 4.5-9 4.5z"/><path d="M3 8.5V15l9 4.5 9-4.5V8.5"/></svg>
-		<!-- On a narrow tablet "Choose material" is 49px that push the start button off
+		<svg class="icon-svg" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8.5 12 4l9 4.5-9 4.5z"/><path d="M3 8.5V15l9 4.5 9-4.5V8.5"/></svg>
+		<!-- On a narrow tablet "Choose material" is 49px that push the stop button off
 		     the screen. One word beside a dashed border and a little plank invites just
 		     as well, and the whole sentence is in the tooltip. -->
 		<span class="name">{material ?? (narrow ? t('topbar.material.short') : t('topbar.material.choose'))}</span>
@@ -306,17 +282,20 @@
 
 	<div class="spacer"></div>
 
-	<!-- Opening and saving the project: one button, at every width.
+	<!-- Opening and saving the project, and bringing a file into the sheet: one button,
+	     at every width from 880 up.
 	     Two separate buttons *with* their word cost 310px, and below 1600 they were not
 	     there — they only lived in the tool rail's menu, and the user did not find them
 	     there for two rounds ("all I see is export and import"). The decision "the
-	     project leads" stands; only the execution was no good.
-	     This button costs 106px with its word and 44px without, so it fits at 768 beside
+	     project leads" stands; only the execution was no good. Import and Export joined
+	     the menu when the bar became the machine's: they are what you do with the sheet,
+	     and the menu reads project first, then the sheet.
+	     This button costs 106px with its word and 44px without, so it fits at 880 beside
 	     the emergency stop as well (measured with c7-bar). The word "Project" is on
 	     screen with it: *that* is what was missing — not the action, but the existence
 	     of the concept in the bar. -->
 	<button
-		class="btn project-button"
+		class="btn ghost project-button"
 		aria-haspopup="menu"
 		aria-expanded={projectOpen}
 		aria-label={t(dirty ? 'topbar.project.aria.unsaved' : 'topbar.project.aria', {
@@ -325,50 +304,21 @@
 		title={t('topbar.project.name', { name: projectName ?? t('topbar.project.untitled') })}
 		onclick={(e) => openProjectMenu(e.currentTarget as HTMLElement)}
 	>
-		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h6l2 2h10v10H3z"/></svg>
-		<!-- Without `stays`: below 1200px the word drops away, as with the other file
-		     buttons. Measured with c7-bar: *with* the word the bar runs 44px over the
-		     edge at 768 and then the start button slides off the screen. A folder with a
-		     downward arrow is the menu idiom at that width, and the tooltip and the
-		     aria-label carry the word. -->
+		<svg class="icon-svg" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h6l2 2h10v10H3z"/></svg>
+		<!-- Without `stays`: below 1200px the word drops away. Measured with c7-bar:
+		     *with* the word the bar runs 44px over the edge at 768 and then the stop
+		     button slides off the screen. A folder with a downward arrow is the menu
+		     idiom at that width, and the tooltip and the aria-label carry the word. -->
 		<span class="btn-label">{t('topbar.project.name', { name: projectName ?? t('topbar.project.untitled') })}</span>
-		{#if dirty}<span class="unsaved-dot" title={t('topbar.project.unsaved')} aria-label={t('topbar.project.unsaved')}>●</span>{/if}
-		<svg class="pijl" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+		{#if dirty}<span class="unsaved-dot" title={t('topbar.project.unsaved')}></span>{/if}
+		<span class="pijl"><Icon name="chevron-down" /></span>
 	</button>
 
 	{#if projectOpen}
 		<Menu menu={projectMenu} x={projectPos.x} y={projectPos.y} onClose={() => (projectOpen = false)} />
 	{/if}
 
-	<span class="scheiding docs" aria-hidden="true"></span>
-	<label class="btn file docs" title={t('topbar.import.title')}>
-		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h6l2 2h10v10H3z"/><path d="M12 17v-5m0 0-2 2m2-2 2 2"/></svg>
-		<span class="btn-label">{t('topbar.import')}</span>
-		<input
-			type="file"
-			aria-label={t('topbar.import.aria')}
-			accept=".svg,.dxf,.rd,.egv,.gcode,.nc,.lbrn,.lbrn2,.ezd,.xcs,.png,.jpg,.jpeg,.gif,.bmp"
-			onchange={(e) => {
-				const input = e.currentTarget as HTMLInputElement;
-				const file = input.files?.[0];
-				input.value = '';
-				if (file) onOpenFile?.(file);
-			}}
-		/>
-	</label>
-
-	<!-- Save as SVG: MeerK40t's own writer, so operations come back along on
-	     reload. -->
-	<a
-		class="btn docs"
-		href="/api/design/export.svg"
-		download="design.svg"
-		title={t('topbar.export.title')}
-		onclick={(e) => save(e, '/api/design/export.svg', 'design.svg')}
-	>
-		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h11l3 3v13H5z"/><path d="M12 9v6m0 0-2.5-2.5M12 15l2.5-2.5"/></svg>
-		<span class="btn-label">{t('topbar.export')}</span>
-	</a>
+	<span class="scheiding" aria-hidden="true"></span>
 
 	<!-- The last check before you burn: does it fit, is it straight, is the clamp in
 	     the way. The laser stays off. -->
@@ -384,7 +334,7 @@
 					: undefined}
 		onclick={onFrame}
 	>
-		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="1" stroke-dasharray="4 3"/></svg>
+		<svg class="icon-svg" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="1" stroke-dasharray="4 3"/></svg>
 		<!-- The word stays even on a tablet, because there this is a first-class
 		     action and a thin dashed square says nothing. On a narrow bar only the
 		     short form is left. Two whole labels rather than a word plus a
@@ -400,7 +350,7 @@
 	     *then*. A tooltip is no answer here — on a tablet, where this is the only stop
 	     button, hover does not exist. -->
 	<button
-		class="btn danger"
+		class="btn danger stop"
 		class:sluimer={!stopArmed && !gone}
 		class:dood={gone}
 		disabled={!canStop || gone}
@@ -413,61 +363,40 @@
 		>
 	</button>
 	<!--
-		Pausing belongs beside starting and stopping, at every width. It stands between
-		stop and start, and stop stands at the start of the row: the button that cannot
-		be undone is never next to the one you reach for most, and the running block in
-		the right-hand panel reads the same way round (`JobControls`, `.now-actions`).
+		Pausing belongs beside stopping, at every width, and it keeps its place when
+		nothing is running: a button that jumps as soon as the job starts is unfindable
+		at exactly that moment. It comes after Stop, the way the running block in the
+		right-hand panel reads (`JobControls`, `.now-actions`). Pause and Stop have
+		opposing consequences — one saves your workpiece, the other throws it away — so
+		24px stand between them.
 
 		This sat behind `barCarries`, so on the desktop the top bar carried start and
 		stop but *not* pause — that lived in the status bar, at the bottom of the screen.
-		Two of the three transport buttons together and the third somewhere else is the
-		kind of inconsistency you only discover at the moment you need it. The status bar
-		keeps the progress (which belongs there: it holds for the whole app) and has lost
-		its buttons.
-
-		It keeps its place when nothing is running too: a button that jumps as soon as
-		the job starts is unfindable at exactly that moment.
+		Two of the transport buttons together and the third somewhere else is the kind
+		of inconsistency you only discover at the moment you need it.
 	-->
-		{#if paused}
-			<button
-				class="btn resume"
-				disabled={!canResume || gone}
-				title={resumeTitle}
-				onclick={onResume}
-			>
-				<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg>
-				<span class="btn-label stays">{t('transport.resume')}</span>
-			</button>
-		{:else}
-			<button
-				class="btn pause"
-				disabled={!canPause || !stopArmed || gone}
-				title={pauseTitle}
-				onclick={onPause}
-			>
-				<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="7" y="5.5" width="3.5" height="13" rx="1"/><rect x="13.5" y="5.5" width="3.5" height="13" rx="1"/></svg>
-				<span class="btn-label stays">{t('transport.pause')}</span>
-			</button>
-		{/if}
-	<!-- Opens no dialog but the pre-flight in the right-hand panel. -->
-	<button
-		class="btn prepare"
-		disabled={!canStart || gone}
-		title={startTitle}
-		onclick={onStart}
-	>
-		<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg>
-		<!-- Two whole labels: on a narrow bar the short one, otherwise the long
-		     one. Gluing "job" onto "Start" made the button read "Startjob" the
-		     moment Svelte trimmed the leading space, and it is not a fragment a
-		     translator can do anything with. -->
-		<span class="btn-label stays lang">{t('transport.start')}</span>
-		<span class="btn-label stays short">{t('transport.start.short')}</span>
-	</button>
+	{#if paused}
+		<button
+			class="btn resume"
+			disabled={!canResume || gone}
+			title={resumeTitle}
+			onclick={onResume}
+		>
+			<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg>
+			<span class="btn-label stays">{t('transport.resume')}</span>
+		</button>
+	{:else}
+		<button
+			class="btn pause"
+			disabled={!canPause || !stopArmed || gone}
+			title={pauseTitle}
+			onclick={onPause}
+		>
+			<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="7" y="5.5" width="3.5" height="13" rx="1"/><rect x="13.5" y="5.5" width="3.5" height="13" rx="1"/></svg>
+			<span class="btn-label stays">{t('transport.pause')}</span>
+		</button>
+	{/if}
 	<LanguagePicker />
-	<button class="iconbtn" onclick={onToggleTheme} title={t('topbar.theme')} aria-label={t('topbar.theme')}>
-		<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
-	</button>
 </header>
 
 <style>
@@ -489,7 +418,7 @@
 	.topbar::-webkit-scrollbar { display: none; }
 	/* A button you can scroll away is not a button. So the bar must not hand out
 	   anything that does not fit in it: everything gets `flex: none`, and what cannot
-	   come along at 768 moves to the rail's menu (class `docs`). */
+	   come along at 768 moves to the rail's menu (the project, below 880). */
 	.topbar > :global(*) { flex: none; }
 
 	/* Narrow screen: buttons show only their icon. The title is in the tooltip and the
@@ -518,17 +447,7 @@
 		   carrying the emergency stop *and* the frame; that weighs more than a mark.
 		   *This* is the room the frame comes back out of. */
 		.topbar .brand { display: none; }
-		/* 44px: this is the route to the setup and at 38px was the only target in the
-		   bar that did not make the glove size. Tablet only: on the desktop it sits
-		   beside 37px buttons and would stick out. */
-		/* Shut: the chip says exactly what it said, it is only no longer a door. Not grey —
-	   the machine's state is the one thing that must stay readable while it burns. */
-	.machine.shut { cursor: default; }
-	.machine {
-			min-height: 44px;
-			padding: 0 var(--space-2);
-		}
-		/* A machine name can be arbitrarily long and at 768 pushed the start button off
+		/* A machine name can be arbitrarily long and at 768 pushed the stop button off
 		   the screen. Only the machine link: `a.machine`, not `.machine` — the material
 		   chip carries the same class and has a size of its own. */
 		a.machine .name {
@@ -541,6 +460,7 @@
 		   gets the room that is left. The icon gives up that room: the name of your
 		   material says more than a 16px plank. */
 		.material svg { display: none; }
+		.topbar .identity .name { max-width: 10ch; }
 	}
 	/* Below 850px the frame loses its word after all.
 	   Measured with the longest names this bar can get ("Thunder Nova 51 workshop" and
@@ -561,127 +481,98 @@
 		.topbar.gone .material { display: none; }
 	}
 	/* That is where the project button stops.
-	   It is the only button in this bar that is not a machine action, and the material
-	   is the only flexible thing beside it: measured, the material name shrank from 63px
-	   to 40px at 850 and to 7px at 768 once this button was there too — "M…", and that
-	   is no longer a chip. From 880 there is room for both (measured: 63px, no shrink).
-	   What you burn into weighs more (decision B1) than something you do at the start
-	   and end of a session. Below this width the project lives in the tool rail's menu,
-	   *with* its word — see `projectInRail` in +page.svelte. Above it, it is in the bar,
-	   and *that* is the improvement: the bound was at 1600, and there the user did not
-	   find it for two rounds. */
+	   The material is the only flexible thing beside it: measured, the material name
+	   shrank from 63px to 40px at 850 and to 7px at 768 once this button was there too —
+	   "M…", and that is no longer a chip. From 880 there is room for both (measured: 63px,
+	   no shrink). What you burn into weighs more (decision B1) than something you do at
+	   the start and end of a session. Below this width the project — Import and Export
+	   included — lives in the tool rail's menu, *with* its word: see `projectInRail` in
+	   +page.svelte. */
 	@media (max-width: 879px) {
-		.topbar .project-button { display: none; }
+		.topbar .project-button,
+		.topbar .scheiding { display: none; }
 	}
-	/* Below ~950px the file buttons disappear; the material stays, because it belongs
-	   with what is about to happen. Only tighter. */
 	/* Was 8ch across the whole tablet width, back when the brand still cost 120px. That
 	   brand is gone, and that room goes to the two chips that together decide every
 	   setting (decision B1): behind "Multiple…" you cannot see whether you are burning
-	   plywood or plywood with a film on it.
-	   Measured with "Thunder Nova 51 workshop" *and* "Birch plywood transparent
-	   18.5mm", the longest names this bar can get: at 850 and above it fits with 56px to
-	   spare, and at 768 the `flex: 0 1 auto` below catches the difference — the chip
-	   shrinks to 137px and the name to 64px, internal overflow 0, last button at 756 of
-	   768. An extra media query for the narrowest case was therefore unnecessary: the
-	   safety net *does* its work. */
+	   plywood or plywood with a film on it. At 768 the `flex: 0 1 auto` below catches
+	   the difference — the chip shrinks and the name truncates, and the bar does not
+	   overflow. */
 	.topbar.narrow .material .name { max-width: 10ch; }
-	/* Framing *stays* on screen on a tablet.
-	   It was on `display: none` below 950px here, with the argument that it also lives
-	   in the pre-flight. That argument does not hold for *this* device: the tablet is
-	   the screen that lies beside the machine, and framing is the last check you carry
-	   out *there* — with your hand on the workpiece, not from an office chair. An action
-	   you only do beside the machine belongs on the device that lies there, not in a
-	   panel that may be collapsed.
-	   The room comes from the brand (see the tablet rule above). */
 	/* Safety net for whatever else ends up in this bar: the machine controls are fixed
 	   (`flex: none` above), but as a last resort the material may shrink instead of
-	   pushing the start button off the screen. Measured at 768 with the longest names
-	   possible: the chip drops to 137px and the name to 64px — truncated but readable,
-	   and the bar does not overflow.
-	   I tried a 9rem floor here and took it out again: it did nothing, because in its
-	   coarse-pointer block tokens.css sets `min-width: 44px` on every button with a
-	   selector that beats this one. A rule that does nothing but promises something is
-	   worse than no rule. */
+	   pushing the stop button off the screen. */
 	.material { flex: 0 1 auto; min-width: 0; }
 	.material .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 	/* A truncated material name is a shame but readable through the tooltip; a
 	   truncated invitation ("Materia…") is incomprehensible. This selector has to beat
 	   the rule above, so the whole chain is in it. */
 	.topbar.narrow .material.empty .name { max-width: none; }
-	/* The project pair has become one button with a menu.
-	   Four file buttons *with* labels cost 560px and at 1440 did not fit beside machine,
-	   material and controls; the project pair then moved out to the rail menu. That was
-	   too far away — the user did not find them for two rounds. One "Project" button
-	   costs 106px, fits everywhere, and keeps the word on screen. Import and export stay
-	   separate buttons: *that* is what you do while working. */
-	.project-button .pijl { color: var(--text-2); margin-left: -2px; }
-	/* The unsaved dot rides beside the name, inside the button — not the `.dot` used
-	   for the machine's state, which is sized for a bare colour chip and would clip
-	   this glyph. */
+	.project-button .pijl { display: grid; color: var(--text-2); margin-left: -2px; }
+	.project-button .btn-label { max-width: 20ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	/* Unsaved is a state, so the dot is ink and not the accent (the One Teal Rule); the
+	   aria-label of the button says it in words. */
 	.unsaved-dot {
-		color: var(--accent);
-		font-size: 10px;
-		line-height: 1;
+		width: 8px;
+		height: 8px;
+		flex: none;
+		border-radius: var(--radius-dot);
+		background: var(--text-1);
 	}
-	/* Below ~950px there is no room left for file actions *beside* the machine
-	   controls. The machine wins; the files then live in the tool rail's menu, one tap
-	   away. */
-	.topbar.narrow .docs { display: none; }
 	/* Narrow bar: the short label, wide bar: the long one. Two whole labels, so a
 	   translation is never half a sentence. */
 	.btn-label.short { display: none; }
-	.topbar.narrow .btn.prepare .lang { display: none; }
-	.topbar.narrow .btn.prepare .short { display: inline; }
-	/* The project and the separate files are two kinds of action; a hairline says so
-	   without words. */
+	/* The document's things and the machine's verbs are two kinds of action; a hairline
+	   says so without words. */
 	.scheiding {
 		width: 1px;
 		align-self: stretch;
-		margin: 8px 4px;
+		margin: var(--space-3) var(--space-1);
 		background: var(--line);
 	}
 	.brand {
 		display: flex;
 		align-items: center;
 		gap: var(--space-2);
+		margin-right: var(--space-2);
 		font-weight: 600;
 		font-size: var(--text-md);
 		letter-spacing: -0.01em;
 	}
+	/*
+	 * The state chips are quiet: no fill and no border at rest, so they read as what
+	 * they are — the state of the machine and of the sheet — and not as two more
+	 * buttons beside the ones that move the head. They are still doors (the setup, the
+	 * material), so they answer the pointer with the shared veil.
+	 */
 	.machine {
 		white-space: nowrap;
 		display: flex;
 		align-items: center;
 		gap: var(--space-2);
-		padding: 8px var(--space-2);
+		min-height: max(40px, var(--target-min));
+		padding: var(--space-1) var(--space-2);
 		border-radius: var(--radius-field);
 		/* Invisible, but present: the empty material button gets a dashed border, and
 		   without this rule the bar jumps 2px as soon as you put a material in it. */
 		border: 1px solid transparent;
-		background: var(--surface-2);
+		background: transparent;
 		color: inherit;
 		text-decoration: none;
 		transition: background var(--transition);
 	}
-	/* --line is a border colour, tuned for surfaces that lie against each other; as a
-	   fill under text, --text-2 on it reaches 4.05 in light and 3.49
-	   in dark. --hover is een doorschijnende sluier en werkt op élk oppervlak.
-	   Gat D9, gemeld door de thema-agent. */
-	.machine:hover {
+	/* --hover is a translucent veil and works on every surface. Gap D9. */
+	.machine:hover:not(:disabled) {
 		background: var(--hover);
 	}
-	.muted {
-		color: var(--text-2);
-	}
+	/* Shut: the chip says exactly what it said, it is only no longer a door. Not grey —
+	   the machine's state is the one thing that must stay readable while it burns. */
+	.machine.shut { cursor: default; }
+	.machine.shut:hover { background: transparent; }
 	/* Nothing chosen yet is not an error, so no red and no exclamation mark. A dashed
 	   border says "something still belongs here" and nothing else; as soon as there is a
 	   material it becomes an ordinary chip. */
 	.material.empty {
-		background: transparent;
-		/* --line is tuned for surfaces that lie against each other; as a loose dashed
-		   border on the bar it disappears. The same secondary text colour,
-		   verdund, houdt hem visible zonder alarm te slaan. */
 		border: 1px dashed color-mix(in srgb, var(--text-2) 45%, transparent);
 		color: var(--text-2);
 	}
@@ -690,7 +581,7 @@
 	.material.empty .name { max-width: none; }
 	.material.empty:hover:not(:disabled) { color: var(--text-1); }
 	.material:disabled { cursor: not-allowed; }
-	.material svg { color: var(--text-2); flex: none; }
+	.material svg { color: var(--text-2); }
 	.material .name {
 		max-width: 14ch;
 		overflow: hidden;
@@ -700,18 +591,16 @@
 	/* The thickness is half the answer and must not drop away, but it does not have to
 	   weigh as much as the name. */
 	.thickness { color: var(--text-2); font-size: var(--text-xs); }
-	.toestand { display: block; font-size: var(--text-xs); white-space: nowrap; }
+	.toestand { display: block; font-size: var(--text-xs); color: var(--text-2); white-space: nowrap; }
 	.identity { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: var(--space-2); row-gap: 0; }
 	.identity .dot { grid-row: span 2; }
-	.identity .name { max-width: 18ch; overflow: hidden; text-overflow: ellipsis; }
-	.project-button .btn-label { max-width: 20ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	/* 28ch on a wide bar: at 1440 the name stood cut at 18ch with 385 px free beside it. */
+	.identity .name { max-width: 28ch; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
 	@media (min-width: 1200px) and (max-width: 1499px) {
-		.topbar .docs .btn-label { display: none; }
 		.topbar .material .name { max-width: 10ch; }
+		/* The invitation stays whole here too: at 1440 it read "Materiaal k…". */
+		.topbar .material.empty .name { max-width: none; }
 		.topbar .brand .woord { display: none; }
-	}
-	@media (max-width: 1199px) {
-		.topbar .identity .name { max-width: 10ch; }
 	}
 	/* Size only. The colour of a state is one rule for the whole app, in
 	   `tokens.css` under `.machinedot`. */
@@ -720,8 +609,6 @@
 		height: 8px;
 	}
 	.spacer { flex: 1; }
-	.btn.file { cursor: pointer; }
-	.btn.file input { display: none; }
 	/*
 	 * Stopping and pausing lie over an open window.
 	 *
@@ -741,20 +628,18 @@
 		position: relative;
 		z-index: var(--z-transport);
 	}
+	/* The strongest verb in the bar: full red with white ink, and the heaviest word. */
 	.btn.danger {
 		background: var(--danger-solid);
 		border-color: var(--danger-solid);
 		color: var(--on-color);
-		/* Stop and Start job are this bar's two opposing actions and sat 12px apart. The
-		   bar gap is 12, so this margin makes it 24 — the minimum from DESIGN-SYSTEM v2
-		   for targets with opposing consequences. */
-		margin-right: var(--space-3);
+		font-weight: 600;
+		/* Stop and Pause have opposing consequences — one saves your workpiece, the
+		   other throws it away. The bar gap is 8, so this margin makes it 24: the
+		   minimum from DESIGN-SYSTEM v2 for targets with opposing consequences. */
+		margin-right: var(--space-4);
 	}
 	.btn.danger:hover:not(:disabled) { background: var(--danger-solid); filter: brightness(1.06); }
-	/* Pause and stop have opposing consequences — one saves your workpiece, the other
-	   throws it away. So 24px here too, as in the status bar. */
-	.btn.resume,
-	.btn.pause { margin-right: var(--space-3); }
 	.btn.resume {
 		background: var(--accent);
 		border-color: var(--accent);
@@ -765,10 +650,9 @@
 	.btn.danger.sluimer {
 		background: var(--surface-1);
 		border-color: var(--danger-solid);
-		/* The word in ordinary text colour, the icon in red: --danger on --surface-1
-		   measures 5.32:1 in the light theme and 4.78:1 in the dark one, so the same word
-		   would not read the same in the two themes. The red border plus the little red
-		   square carry the meaning instead. */
+		/* The word in ordinary text colour, the icon in red: the word stays as readable
+		   as every other label in the bar (--danger on --surface-1 measures 5.32:1). The
+		   red border plus the little red square carry the meaning instead. */
 		color: var(--text-1);
 	}
 	.btn.danger.sluimer svg { color: var(--danger); }
@@ -782,28 +666,13 @@
 	   Not "red but faded": a faded emergency stop still reads as an emergency stop, and
 	   that is precisely the promise that cannot be kept here. So no more red, a dashed
 	   border — the same sign the empty material button carries for "nothing here yet" —
-	   and the word that says where the stop *is*. `opacity` stays away: the text has to
-	   be readable, because it is now the message. */
-	.btn.danger.dood {
+	   and the word that says where the stop *is*. Drained like every disabled button,
+	   never see-through: the text is now the message, and it has to be readable. */
+	.btn.danger.dood,
+	.btn.danger.dood:disabled {
 		background: transparent;
 		border: 1px dashed color-mix(in srgb, var(--text-2) 55%, transparent);
 		color: var(--text-2);
-		opacity: 1;
 	}
 	.btn.danger.dood svg { color: var(--text-2); }
-
-	/* This button *carries* its own explanation; the default fading makes it unreadable
-	   and that explanation is now the only thing the button still does. */
-	.btn.danger.dood:disabled { opacity: 1; }
-
-	.iconbtn {
-		display: grid;
-		place-items: center;
-		width: 32px;
-		height: 32px;
-		border-radius: var(--radius-field);
-		color: var(--text-2);
-		transition: background var(--transition);
-	}
-	.iconbtn:hover { background: var(--surface-2); color: var(--text-1); }
 </style>

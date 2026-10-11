@@ -9,6 +9,8 @@
 	import type { EditController } from '$lib/edits.svelte';
 	import type { TilingStore, Tile } from '$lib/tiling.svelte';
 	import LayerPalette from './LayerPalette.svelte';
+	import Icon from './Icon.svelte';
+	import Notice from './Notice.svelte';
 	import Menu from './Menu.svelte';
 	import type { Menu as MenuList } from '$lib/actions';
 	import {
@@ -2314,8 +2316,9 @@
 						>{label.number}</text>
 					{/each}
 
-					<!-- Selection contour: the kerf line. Statically dashed, and only animated
-					     while you drag — as DESIGN-SYSTEM.md prescribes. -->
+					<!-- Selection contour: a static dashed rectangle, also while you drag. It
+					     used to march while dragging, but the moving kerf line is the one
+					     motion that means "the laser is burning": job progress only. -->
 					{#if outline && frameBox}
 						<!-- While rotating the whole frame turns along as a preview; the real
 						     shape follows as soon as the engine has applied it. -->
@@ -2326,7 +2329,6 @@
 								: undefined}
 						>
 							<rect
-								class:kerf-anim={drag !== null}
 								x={frameBox.x}
 								y={frameBox.y}
 								width={frameBox.width}
@@ -2854,7 +2856,7 @@
 			</svg>
 		</button>
 		<span class="scheiding" aria-hidden="true"></span>
-		<button title={t('canvas.zoomOut.title')} aria-label={t('canvas.zoomOut')} onclick={() => zoomAt(1 / 1.25)}>−</button>
+		<button title={t('canvas.zoomOut.title')} aria-label={t('canvas.zoomOut')} onclick={() => zoomAt(1 / 1.25)}><Icon name="minus" /></button>
 		<!-- The percentage is now a *real* scale (100% = true size) and at the same time
 		     the way into all the zoom states. Before this there was a button here saying
 		     "100%" that did "fit the bed", and "to the selection" and a real 1:1 were only
@@ -2873,11 +2875,11 @@
 			}}
 		>
 			{procent}%
-			<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 15 6-6 6 6" /></svg>
+			<Icon name="chevron-up" />
 		</button>
 		<button class="fit" title={t('canvas.fit.title')} onclick={passend}>
 			<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8V4h4M17 4h4v4M21 16v4h-4M7 20H3v-4"/><rect x="8" y="8" width="8" height="8" rx="1"/></svg>{t('canvas.fit')}		</button>
-		<button title={t('canvas.zoomIn.title')} aria-label={t('canvas.zoomIn')} onclick={() => zoomAt(1.25)}>+</button>
+		<button title={t('canvas.zoomIn.title')} aria-label={t('canvas.zoomIn')} onclick={() => zoomAt(1.25)}><Icon name="plus" /></button>
 	</div>
 
 	{#if zoomMenu}
@@ -2964,11 +2966,11 @@
 			     mistake but a way of working — the message becomes the offer to burn in
 			     tiles, instead of the ordinary "falls outside the bed" line (which
 			     would go off on nearly every shape here anyway). -->
-			<span class="row aanbod">
-				<span class="sign" aria-hidden="true">!</span>
+			<Notice tone="info">
+				<span class="offer">
 				<span>{t('canvas.tooBig')}</span>
 				<button
-					class="btn subtle"
+					class="btn mini"
 					type="button"
 					disabled={tiling?.busy || !sheetId}
 					title={tiling?.busy ? t('reason.busy') : sheetId ? undefined : t('reason.noneYet')}
@@ -2976,23 +2978,18 @@
 				>
 					{t('canvas.burnInTiles')}
 				</button>
-			</span>
+				</span>
+			</Notice>
 		{:else if shapesOffBed}
-			<span class="row bededge">
-				<span class="sign" aria-hidden="true">!</span>
-				<span>{t('canvas.outsideBed', { n: shapesOffBed })}</span>
-			</span>
+			<Notice tone="danger">{t('canvas.outsideBed', { n: shapesOffBed })}</Notice>
 		{/if}
 		{#if offSheet}
-			<span class="row sheetedge">
-				<span class="sign" aria-hidden="true">!</span>
-				<span
-					>{t('canvas.outsideSheet', {
-						n: offSheet,
-						sheet: sheet ? sheet.name : t('canvas.theSheet')
-					})}</span
-				>
-			</span>
+			<Notice tone="warn"
+				>{t('canvas.outsideSheet', {
+					n: offSheet,
+					sheet: sheet ? sheet.name : t('canvas.theSheet')
+				})}</Notice
+			>
 		{/if}
 	</div>
 {/if}
@@ -3128,7 +3125,7 @@
 			linear-gradient(90deg, var(--line) 1px, transparent 1px),
 			linear-gradient(color-mix(in srgb, var(--line) 45%, transparent) 1px, transparent 1px),
 			linear-gradient(90deg, color-mix(in srgb, var(--line) 45%, transparent) 1px, transparent 1px);
-		box-shadow: var(--lift-1), 0 10px 24px rgb(16 20 26 / 0.10);
+		box-shadow: var(--lift-1), var(--lift-2);
 	}
 	.camera {
 		position: absolute;
@@ -3221,12 +3218,9 @@
 	/* A shape in a grid layer: that burns its area away, so we show the area. Half
 	   transparent, because you have to be able to see through it what lies underneath.
 
-	   The opacity differs per theme, and that is not taste but measurement. The same 38%
-	   gave a contrast of 2.96:1 on the light bed and only 1.68:1 on the dark one — the
-	   same fill that convinces in light is a suspicion in dark. At 62% dark comes to
-	   2.12:1. It cannot go much higher: on a dark bed even a fully opaque layer colour
-	   only reaches ~2.65:1, and the area must not become opaque. The contour carries the
-	   shape; the fill only says what happens to it. */
+	   38% is measurement, not taste: it gives a contrast of 2.96:1 on the bed, and the
+	   area must not become opaque. The contour carries the shape; the fill only says what
+	   happens to it. */
 	.area {
 		fill-opacity: 0.38;
 	}
@@ -3235,14 +3229,6 @@
 	   going into the machine. The same rule as for the line beside it. */
 	.area.gedempt {
 		fill-opacity: 0.14;
-	}
-
-	:global([data-theme='dark']) .area {
-		fill-opacity: 0.62;
-	}
-
-	:global([data-theme='dark']) .area.gedempt {
-		fill-opacity: 0.24;
 	}
 
 	/* The layer number beside the shape (C6). The same colour as the line, with a border
@@ -3285,47 +3271,15 @@
 		border-top: 1px solid var(--line);
 		background: var(--surface-1);
 	}
-	.outside-strip .row {
+	/* Each line is a Notice: the tone sets the colour and the icon together, so the
+	   colour is never the only signal — printed in black and white the icon still says
+	   which is which. The plate too big for the bed is not an error but an offer (task
+	   15), so it is the info tone with its button beside the sentence. */
+	.outside-strip .offer {
 		display: flex;
-		align-items: flex-start;
-		gap: var(--space-2);
-		padding-left: var(--space-2);
-		font-size: var(--text-xs);
-		line-height: 1.4;
-		color: var(--text-1);
-		border-left: 4px solid var(--danger-solid);
-	}
-	.outside-strip .row.sheetedge {
-		border-left-color: var(--warn-solid);
-	}
-	/* The sign is the second encoding *beside* the colour: printed in black and white it
-	   is still an exclamation mark in a circle. */
-	.outside-strip .sign {
-		flex: none;
-		width: 16px;
-		height: 16px;
-		margin-top: 1px;
-		display: grid;
-		place-items: center;
-		border-radius: var(--radius-dot);
-		font-weight: 700;
-		font-size: var(--text-xs);
-		color: var(--on-color);
-		background: var(--danger-solid);
-	}
-	.outside-strip .row.sheetedge .sign {
-		background: var(--warn-solid);
-		color: var(--void);
-	}
-	/* Task 15: this is not an error but an offer, so the accent instead of the danger or
-	   warning red, and a button with it instead of a sentence alone. */
-	.outside-strip .row.aanbod {
+		flex-wrap: wrap;
 		align-items: center;
-		border-left-color: var(--accent);
-	}
-	.outside-strip .row.aanbod .sign {
-		background: var(--accent);
-		color: var(--on-color);
+		gap: var(--space-2);
 	}
 	.head line {
 		stroke: var(--accent);
@@ -3466,7 +3420,7 @@
 		font-size: var(--text-xs);
 		line-height: 1.4;
 		color: var(--text-2);
-		border-top: 1px solid var(--line-1);
+		border-top: 1px solid var(--line);
 	}
 	.trail-hint {
 		display: flex;
@@ -3477,7 +3431,7 @@
 		font-size: var(--text-xs);
 		line-height: 1.4;
 		color: var(--text-2);
-		border-top: 1px solid var(--line-1);
+		border-top: 1px solid var(--line);
 	}
 	/* The little mark is the piece of line itself: that way you do not have to guess
 	   which line on the bed belongs to this sentence. */
@@ -3626,11 +3580,11 @@
 		stroke: var(--surface-1);
 	}
 	.crop-catch {
-		fill: rgb(0 0 0 / 0.18);
+		fill: color-mix(in srgb, var(--void) 18%, transparent);
 		cursor: crosshair;
 	}
 	.band {
-		fill: color-mix(in srgb, var(--accent) 12%, transparent);
+		fill: var(--accent-tint);
 		stroke: var(--accent);
 		stroke-width: 1;
 		stroke-dasharray: 4 3;
@@ -3652,12 +3606,15 @@
 	.zoom .fit {
 		display: flex;
 		align-items: center;
-		gap: 4px;
+		gap: var(--space-1);
 		width: auto;
 		padding: 0 var(--space-3);
 		font-size: var(--text-xs);
 	}
 	.zoom button {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
 		min-width: 28px;
 		height: 28px;
 		border-radius: var(--radius-field);
@@ -3669,7 +3626,7 @@
 	}
 	.zoom .snap.on {
 		color: var(--accent);
-		background: color-mix(in srgb, var(--accent) 12%, transparent);
+		background: var(--accent-tint);
 	}
 	.zoom .scheiding {
 		width: 1px;
@@ -3678,8 +3635,9 @@
 		background: var(--line);
 	}
 	.zoom .val {
-		font-size: 11px;
-		padding: 0 8px;
+		gap: var(--space-1);
+		font-size: var(--text-xs);
+		padding: 0 var(--space-2);
 		color: var(--text-1);
 	}
 	/* The global :focus-visible rule from tokens.css draws a 2 px outline with an offset.
@@ -3694,12 +3652,14 @@
 	}
 	/* Keyboard focus does stay visible: without a mouse you have to be able to see which
 	   element you are about to select. */
+	/* The full accent at 2 screen pixels: the 30% wash it had was 1.6:1 on the bed, a
+	   focus you could not find. This is the accent's own 5.8:1. */
 	.hit:focus-visible {
-		stroke: color-mix(in srgb, var(--accent) 30%, transparent);
-		stroke-width: 4;
+		stroke: var(--accent);
+		stroke-width: 2px;
+		vector-effect: non-scaling-stroke;
 	}
-	/* The kerf line as selection contour: statically dashed, animation only while
-	   dragging — that comes in the next block. */
+	/* The selection contour: a static dashed rectangle. */
 	.selection rect {
 		fill: none;
 		stroke: var(--accent);
@@ -3745,9 +3705,8 @@
 		cursor: grabbing;
 	}
 	/* `rect.grab` and not `.grab`: `.selection rect` above is more specific and otherwise
-	   won, which gave the drag surface the same dashed accent line as the contour. Two
-	   sets of dashes over each other, and while dragging only the contour animates — then
-	   they run out of phase and the border closes up into a thick bar. */
+	   won, which gave the drag surface the same dashed accent line as the contour: two
+	   sets of dashes over each other, which out of phase close up into a thick bar. */
 	.selection rect.grab {
 		fill: transparent;
 		stroke: none;

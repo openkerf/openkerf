@@ -111,7 +111,8 @@ test('the layer row is opened by its name, and the chip is only the colour', () 
 	assert.ok(source.includes('class="foldline layer-open"'), 'the layer name is not the opener');
 	const opener = /<button\s+class="foldline layer-open"[\s\S]*?>/.exec(source)?.[0] ?? '';
 	assert.ok(opener.includes('aria-expanded'), 'the name opener does not say whether it is open');
-	const chip = /<button\s+class="chip mono"[\s\S]*?>/.exec(source)?.[0] ?? '';
+	// The layer's swatch: `layer-swatch`, since `.chip` became the shared on/off pill.
+	const chip = /<button\s+class="layer-swatch mono"[\s\S]*?>/.exec(source)?.[0] ?? '';
 	assert.ok(chip.includes('colourOpen'), 'the chip still opens the settings instead of the colours');
 });
 

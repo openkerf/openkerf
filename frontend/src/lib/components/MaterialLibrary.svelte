@@ -4,6 +4,10 @@
 	import NumberField from './NumberField.svelte';
 	import Menu from './Menu.svelte';
 	import StarterOffer from './StarterOffer.svelte';
+	import EmptyState from './EmptyState.svelte';
+	import Icon from './Icon.svelte';
+	import Notice from './Notice.svelte';
+	import Why from './Why.svelte';
 	import type { Menu as MenuList } from '$lib/actions';
 	import {
 		OPERATION_LAYER,
@@ -875,34 +879,18 @@
 </script>
 
 {#snippet sourceIcon(kind: string)}
-	<svg
-		class="ico"
-		width="13"
-		height="13"
-		viewBox="0 0 24 24"
-		fill="none"
-		stroke="currentColor"
-		stroke-width="2.2"
-		stroke-linecap="round"
-		stroke-linejoin="round"
-		aria-hidden="true"
-	>
-		{#if kind === 'check'}
-			<circle cx="12" cy="12" r="9" stroke-width="1.9" />
-			<path d="M8 12.4l2.6 2.6L16 9.6" />
-		{:else if kind === 'alert'}
-			<path d="M12 4.5L21 19.5H3z" stroke-width="1.9" stroke-linejoin="round" />
-			<path d="M12 10v4" />
-			<path d="M12 17h.01" />
-		{:else if kind === 'down'}
-			<path d="M12 4v11" />
-			<path d="M7.5 10.5L12 15l4.5-4.5" />
-			<path d="M5 19h14" />
-		{:else}
-			<path d="M4 20l4-1 10-10-3-3L5 16z" stroke-width="1.9" />
-			<path d="M15 6l3 3" />
-		{/if}
-	</svg>
+	{#if kind === 'check'}
+		<Icon name="ok" />
+	{:else if kind === 'alert'}
+		<Icon name="warn" />
+	{:else if kind === 'down'}
+		<Icon name="arrow-down" />
+	{:else}
+		<!-- A pencil: entered by hand. Only here, so it stays inline on the shared stroke. -->
+		<svg class="icon-svg" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"
+			><path d="M4 20l4-1 10-10-3-3L5 16z" /><path d="M15 6l3 3" /></svg
+		>
+	{/if}
 {/snippet}
 
 {#snippet addMaterial(label: string, big: boolean)}
@@ -936,22 +924,22 @@
 			/>
 			<div class="addbuttons">
 				<button
-					class="mini quiet"
+					class="btn ghost mini"
 					onclick={() => {
 						adding = false;
 						newMaterial = '';
 					}}>{t('common.cancel')}</button
 				>
 				<button
-					class={big ? 'btn primary' : 'mini'}
+					class={big ? 'btn primary' : 'btn primary mini'}
 					disabled={library.busy || !newMaterial.trim()} title={library.busy ? t('reason.busy') : t('reason.needsName')}
 					onclick={createMaterial}>{t('common.save')}</button
 				>
 			</div>
 		</div>
 	{:else}
-		<button class={big ? 'btn primary' : 'mini add'} onclick={() => (adding = true)}>
-			{label}
+		<button class={big ? 'btn primary' : 'btn ghost mini add'} onclick={() => (adding = true)}>
+			<Icon name="plus" />{label}
 		</button>
 	{/if}
 {/snippet}
@@ -961,7 +949,7 @@
 	{@const past = !canEdit || pastBij(preset, chosenOperation)}
 	{@const off = herkomst === preset.id || editing === preset.id}
 	<article
-		class="preset {source.tone}"
+		class="preset"
 		class:open={off}
 		role="presentation"
 		oncontextmenu={(e) => canEdit && opendMenu(e, preset)}
@@ -993,14 +981,14 @@
 						     rows amber the screen reads as ten mistakes instead of as one
 						     mismatch you chose yourself. -->
 						<span
-							class="mismatch"
+							class="badge warn mismatch"
 							title={t('library.mismatch.title', {
 								operation: operationLabel(preset.operation).toLowerCase(),
 								n: layerNumber,
 								layerKind: chosenOperation?.label.toLowerCase()
 							})}
 						>
-							<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 8v5" /><path d="M12 17h.01" /><path d="M10.3 3.9 2.4 18a1.8 1.8 0 0 0 1.6 2.7h16a1.8 1.8 0 0 0 1.6-2.7L13.7 3.9a1.8 1.8 0 0 0-3.4 0Z" /></svg>
+							<Icon name="warn" />
 						{t('library.mismatch.tag')}
 					</span>
 				{/if}
@@ -1010,7 +998,7 @@
 				<span title={t('library.speed')}>{preset.speed_mm_s}<small>mm/s</small></span>
 				<span title={t('library.power')}>{preset.power_percent}<small>%</small></span>
 				{#if preset.passes > 1}<span title={t('library.passes')}
-						>{preset.passes}<small>×</small></span
+						>{preset.passes}<small>&times;</small></span
 					>{/if}
 				{#if preset.interval_mm && preset.operation === 'graveren-raster'}
 					<span title={t('library.interval')}>{preset.interval_mm}<small>mm</small></span>
@@ -1020,7 +1008,7 @@
 			<!-- The source as one badge, with the full explanation in the tooltip and in
 			     the provenance. The paragraph that spelled this out on every card was
 			     useful on one card and noise on thirteen. -->
-			<span class="badge {source.tone}" title="{source.means}{source.advice ? ' ' + source.advice : ''}">
+			<span class="badge source {source.tone}" title="{source.means}{source.advice ? ' ' + source.advice : ''}">
 				{@render sourceIcon(source.icon)}
 				{source.text}
 			</span>
@@ -1048,7 +1036,7 @@
 				     used to be four buttons on every row — apply, provenance, edit, remove
 				     — and then the button you want 95 % of the time is one of four. -->
 				<button
-					class="doe"
+					class="btn primary mini doe"
 					disabled={library.busy || !chosenOperation}
 					title={chosenOperation
 						? past
@@ -1063,13 +1051,13 @@
 					{t('library.menu.apply')}
 				</button>
 				<button
-					class="meer"
+					class="btn ghost icon meer"
 					aria-label={t('library.more.aria')}
 					aria-haspopup="menu"
 					title={t('library.more.title')}
 					onclick={(e) => opendMenu(e, preset)}
 				>
-					<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.7" /><circle cx="12" cy="12" r="1.7" /><circle cx="12" cy="19" r="1.7" /></svg>
+					<Icon name="more" />
 				</button>
 			{/if}
 		</div>
@@ -1086,10 +1074,12 @@
 					})}
 					{#if preset.source === 'testraster'}{t('library.drop.measured')}{/if}
 				</span>
-				<button class="mini" onclick={() => (weghalen = null)}>{t('library.drop.keep')}</button>
-				<button class="mini danger" onclick={() => library.removePreset(preset.id)}>
-					{t('library.drop.confirm')}
-				</button>
+				<div class="ask-actions">
+					<button class="btn mini" onclick={() => (weghalen = null)}>{t('library.drop.keep')}</button>
+					<button class="btn mini danger" onclick={() => library.removePreset(preset.id)}>
+						{t('library.drop.confirm')}
+					</button>
+				</div>
 			</div>
 		{/if}
 
@@ -1107,7 +1097,7 @@
 					{/if}
 				</p>
 				{#if report.tier !== 'measured'}
-					<p class="fine">{shareWhy(report)}</p>
+					<p class="help">{shareWhy(report)}</p>
 				{/if}
 
 				{#if report.tier_reason === 'noOutcome'}
@@ -1115,7 +1105,7 @@
 					     rather than assumed, and kept on the setting, so the next offer of
 					     the same row does not ask again. -->
 					<div class="uitkomst">
-						<label class="veld">
+						<label class="field-label">
 							<span>{t('library.share.charring')}</span>
 							<select bind:value={outcome.charring}>
 								<option value="">{t('library.share.charring.pick')}</option>
@@ -1124,7 +1114,7 @@
 								{/each}
 							</select>
 						</label>
-						<label class="veld">
+						<label class="field-label">
 							<span>{t('library.share.cutThrough')}</span>
 							<select bind:value={outcome.cutThrough}>
 								<option value="">{t('library.share.cutThrough.unsure')}</option>
@@ -1139,19 +1129,19 @@
 							min={0}
 							bind:value={outcome.kerf}
 						/>
-						<p class="fine wide">{t('library.share.outcome.why')}</p>
+						<p class="help wide">{t('library.share.outcome.why')}</p>
 					</div>
 				{/if}
 
 				{#if report.by && !changingHandle}
-					<p class="fine">
+					<p class="help">
 						{t('library.share.by', { by: report.by })}
-						<button class="mini quiet" onclick={() => (changingHandle = true)}>
+						<button class="link" onclick={() => (changingHandle = true)}>
 							{t('library.share.handle.change')}
 						</button>
 					</p>
 				{:else}
-					<label class="veld">
+					<label class="field-label">
 						<span>{t('library.share.handle')}</span>
 						<input
 							type="text"
@@ -1161,22 +1151,22 @@
 					</label>
 					<!-- Not bookkeeping: the catalogue is CC BY 4.0, so this is the credit
 					     somebody downstream has to be able to give. -->
-					<p class="fine">{t('library.share.handle.why')}</p>
+					<Why>{t('library.share.handle.why')}</Why>
 				{/if}
 
-				<div class="knoppen">
-					<button class="mini quiet" onclick={() => (sharing = null)}>
+				<div class="ask-actions">
+					<button class="btn ghost mini" onclick={() => (sharing = null)}>
 						{t('library.share.close')}
 					</button>
 					<button
-						class="mini"
+						class="btn primary mini"
 						disabled={library.busy || !handleDraft.trim()} title={library.busy ? t('reason.busy') : t('reason.needsName')}
 						onclick={() => offer(preset)}
 					>
 						{t('library.share.open')}
 					</button>
 				</div>
-				<p class="fine">{t('library.share.open.why')}</p>
+				<p class="help">{t('library.share.open.why')}</p>
 			</div>
 		{/if}
 
@@ -1265,7 +1255,7 @@
 									column: preset.grid_cell.column + 1
 								})}
 								{#if preset.grid_aligned === false}
-									<span class="benadering">{t('library.caption.approximate')}</span>
+									<span class="help warn benadering">{t('library.caption.approximate')}</span>
 								{/if}
 							{:else}
 								{t('library.caption.grid')}
@@ -1274,7 +1264,7 @@
 					{:else if preset.grid_id}
 						<p class="below">{t('library.caption.noPhoto')}</p>
 						{#if canEdit}
-							<label class="mini file">
+							<label class="btn mini file">
 								{busyPhoto === preset.grid_id ? t('common.busy') : t('library.addPhoto')}
 								<input
 									type="file"
@@ -1301,13 +1291,13 @@
 							{/if}
 						</p>
 						{#if canEdit}
-							<button class="mini" onclick={() => onMakeGrid?.(preset.material_id)}>
+							<button class="btn mini" onclick={() => onMakeGrid?.(preset.material_id)}>
 								{t('library.makeGrid')}
 							</button>
 						{/if}
 					{/if}
 					{#if canEdit}
-						<button class="mini" onclick={() => share(preset)}>{t('library.menu.share')}</button>
+						<button class="btn ghost mini" onclick={() => share(preset)}>{t('library.menu.share')}</button>
 					{/if}
 				</div>
 				{#if canEdit && preset.import_batch}
@@ -1317,10 +1307,10 @@
 					     again. It takes the settings of that batch and the materials the batch
 					     created that nothing else uses — the rest stays. -->
 					<div class="batch">
-						<button class="mini danger" disabled={library.busy} title={library.busy ? t('reason.busy') : undefined} onclick={() => undoImport(preset.import_batch ?? '')}>
+						<button class="btn mini danger" disabled={library.busy} title={library.busy ? t('reason.busy') : undefined} onclick={() => undoImport(preset.import_batch ?? '')}>
 							{t('library.batch.undo')}
 						</button>
-						<span class="fine">{t('library.batch.undo.why')}</span>
+						<span class="help">{t('library.batch.undo.why')}</span>
 					</div>
 				{/if}
 			</div>
@@ -1372,7 +1362,7 @@
 					value={String(preset.thickness_mm ?? '')}
 					onchange={(v) => saveEdit(preset, { thickness_mm: Number(v) })}
 				/>
-				<label class="wide"
+				<label class="field-label wide"
 					><span>{t('library.note')}</span>
 					<input
 						type="text"
@@ -1381,7 +1371,7 @@
 						onchange={(e) => saveEdit(preset, { note: e.currentTarget.value })}
 					/>
 				</label>
-				<label class="wide"
+				<label class="field-label wide"
 					><span>{t('library.machineProfile')}</span>
 					<select
 						value={preset.machine_name ?? ''}
@@ -1408,26 +1398,27 @@
 	{@const s = preview.merge}
 	<section class="wissel" bind:this={wisselEl}>
 		<header class="wisselkop">
-			<h2>{t('import.title')}</h2>
+			<h2 class="title">{t('import.title')}</h2>
 			<p class="source">
 				<span class="mono">{fileName}</span>
 				{#if preview.exported_at}
-					<span class="scheiding">·</span>
+					<span aria-hidden="true">·</span>
 					{t('import.exportedAt', { when: i18n.ago(preview.exported_at) })}
 				{/if}
 			</p>
 			<ul class="contents">
-				<li>{count(preview.contains.materials, 'materials')}</li>
-				<li>{count(preview.contains.presets, 'presets')}</li>
-				<li>{count(preview.contains.machines, 'machines')}</li>
-				<li>{count(preview.contains.test_grids, 'testGrids')}</li>
-				<li class:missing={preview.contains.photos === 0}>
+				<li class="badge">{count(preview.contains.materials, 'materials')}</li>
+				<li class="badge">{count(preview.contains.presets, 'presets')}</li>
+				<li class="badge">{count(preview.contains.machines, 'machines')}</li>
+				<li class="badge">{count(preview.contains.test_grids, 'testGrids')}</li>
+				<!-- Zero photos is not a detail: then the evidence does not come along. -->
+				<li class="badge" class:warn={preview.contains.photos === 0}>
 					{count(preview.contains.photos, 'photos')}
 				</li>
 			</ul>
 			<!-- What it will lie next to. Without this "6 settings" are six loose
 			     numbers; beside it, it is a ratio. -->
-			<p class="now">
+			<p class="help now">
 				{t('import.yoursNow', {
 					materials: count(preview.current.materials, 'materials'),
 					presets: count(preview.current.presets, 'presets'),
@@ -1442,12 +1433,12 @@
 			<label class="choice" class:on={mode === 'merge'}>
 				<input type="radio" name="importmode" value="merge" bind:group={mode} />
 				<span class="titelklein">{t('import.merge')}</span>
-				<span class="hint">{t('import.merge.explain')}</span>
+				<span class="help">{t('import.merge.explain')}</span>
 			</label>
 			<label class="choice danger" class:on={mode === 'replace'}>
 				<input type="radio" name="importmode" value="replace" bind:group={mode} />
 				<span class="titelklein">{t('import.replace')}</span>
-				<span class="hint">{t('import.replace.explain')}</span>
+				<span class="help">{t('import.replace.explain')}</span>
 			</label>
 		</div>
 
@@ -1456,7 +1447,7 @@
 				{#if s.materials.new.length}
 					<li class="erbij">
 						<strong>{t('import.newMaterials', { n: s.materials.new.length })}</strong>
-						<span class="fine">{s.materials.new.join(', ')}</span>
+						<span class="help">{s.materials.new.join(', ')}</span>
 					</li>
 				{/if}
 				{#if s.materials.existing.length}
@@ -1477,13 +1468,13 @@
 				{#if s.test_grids.new}
 					<li class="erbij">
 						<strong>{t('import.addedGrids', { n: s.test_grids.new })}</strong>
-						<span class="fine">{t('import.withPhotos')}</span>
+						<span class="help">{t('import.withPhotos')}</span>
 					</li>
 				{/if}
 				{#if s.machines.new.length}
 					<li class="erbij">
 						<strong>{t('import.addedMachines', { n: s.machines.new.length })}</strong>
-						<span class="fine">{s.machines.new.join(', ')}</span>
+						<span class="help">{s.machines.new.join(', ')}</span>
 					</li>
 				{/if}
 				{#if !s.materials.new.length && !s.presets.new && !s.test_grids.new && !s.presets.conflicts.length}
@@ -1495,9 +1486,9 @@
 				<!-- The trap from M5: "birch plywood" and "plywood, birch" are one board.
 				     Merging them ourselves would be a guess with someone else's numbers on
 				     your material; pointing it out is something the user may do. -->
-				<div class="block">
+				<div class="block card inset">
 					<h3>{t('import.sameBoard')}</h3>
-					<p class="fine">{t('import.sameBoard.body')}</p>
+					<p class="help">{t('import.sameBoard.body')}</p>
 					{#each voorstellen as pair (pair.name)}
 						<label class="samenvoeg">
 							<input
@@ -1507,7 +1498,9 @@
 							/>
 							<span>
 								{t('import.mergeWith', { name: pair.name, match: pair.match })}
-								<span class="fine">— {pair.why}</span>
+								<!-- On a line of its own: the reason is the server's sentence, and
+								     glued behind a dash it read as half of this one. -->
+								<span class="help block-line">{pair.why}</span>
 							</span>
 						</label>
 					{/each}
@@ -1515,9 +1508,9 @@
 			{/if}
 
 			{#if s.presets.conflicts.length}
-				<div class="block clash">
+				<div class="block card inset clash">
 					<h3>{t('import.conflicts', { n: s.presets.conflicts.length })}</h3>
-					<p class="fine">{t('import.conflicts.body')}</p>
+					<p class="help">{t('import.conflicts.body')}</p>
 					<div class="wins">
 						<label class="bereik">
 							<input type="radio" name="clash" value="mine" bind:group={clashWinner} />
@@ -1538,14 +1531,22 @@
 								</span>
 								<span class="pair">
 									<span class="side" class:wins={clashWinner === 'mine'}>
-										<span class="k">{t('import.mine')}</span>
+										<span class="label-section k"
+											>{t('import.mine')}{#if clashWinner === 'mine'}<span class="won"
+													><Icon name="check" /></span
+												>{/if}</span
+										>
 										<span class="mono"
 											>{clash.mine.speed_mm_s} mm/s · {clash.mine.power_percent}%</span
 										>
 									</span>
 									<span class="pijl" aria-hidden="true">→</span>
 									<span class="side" class:wins={clashWinner === 'file'}>
-										<span class="k">{t('import.theirs')}</span>
+										<span class="label-section k"
+											>{t('import.theirs')}{#if clashWinner === 'file'}<span class="won"
+													><Icon name="check" /></span
+												>{/if}</span
+										>
 										<span class="mono"
 											>{clash.theirs.speed_mm_s} mm/s · {clash.theirs.power_percent}%</span
 										>
@@ -1566,7 +1567,7 @@
 				</div>
 			{/if}
 		{:else}
-			<div class="block erase">
+			<div class="block card inset erase">
 				<h3>{t('import.wipe.title')}</h3>
 				<p>
 					{t('import.wipe.body', {
@@ -1578,9 +1579,9 @@
 				<!-- The advice has to be actionable here. Otherwise it says "make a backup
 				     first" on a screen you have to leave in order to make one, and then
 				     nobody does it. -->
-				<p class="fine">
+				<p class="help">
 					{t('import.wipe.backup')}
-					<button class="mini" onclick={() => library.exportBundle()}>
+					<button class="btn mini" onclick={() => library.exportBundle()}>
 						{t('import.wipe.export')}
 					</button>
 				</p>
@@ -1592,12 +1593,17 @@
 		{/if}
 
 		{#if library.error}
-			<p class="error" role="alert">{library.error}</p>
+			<div class="failure"><Notice tone="danger" live>{library.error}</Notice></div>
 		{/if}
 
-		<div class="actions">
+		<!-- The shared ask row: the way out first, the answer last. Replacing wipes the
+		     library, so then the answer is the danger button rather than the primary. The
+		     library sits inside a dialog it does not own, so the row is its own. -->
+		<div class="actions ask-actions">
+			<button class="btn" onclick={() => (preview = null)}>{t('common.cancel')}</button>
 			<button
-				class="btn primary"
+				class="btn"
+				class:primary={mode !== 'replace'}
 				class:danger={mode === 'replace'}
 				disabled={library.busy || (mode === 'replace' && !wipeConfirmed)}
 				title={library.busy ? t('reason.busy') : wipeConfirmed ? undefined : t('import.wipe.confirm')}
@@ -1605,14 +1611,13 @@
 			>
 				{mode === 'replace' ? t('import.doReplace') : t('import.merge')}
 			</button>
-			<button class="btn" onclick={() => (preview = null)}>{t('common.cancel')}</button>
 		</div>
 	</section>
 {:else}
 
 {#if ready}
 	<!-- What actually happened, in the same words as the preview. -->
-	<div class="ready" role="status" bind:this={readyEl}>
+	<div class="ready" bind:this={readyEl}><Notice tone="ok" live>
 		<strong>
 			{ready.mode === 'replace' ? t('import.done.replaced') : t('import.done.merged')}
 		</strong>
@@ -1624,10 +1629,10 @@
 				: ''} · {count(ready.test_grids, 'testGrids')}.
 		</span>
 		{#if hidden && library.activeMachine}
-			<span class="fine">{t('import.done.hidden', { machine: library.activeMachine.name })}</span>
+			<span class="help">{t('import.done.hidden', { machine: library.activeMachine.name })}</span>
 		{/if}
-		<button class="mini" onclick={() => (ready = null)}>{t('common.close')}</button>
-	</div>
+		<button class="btn ghost mini close" onclick={() => (ready = null)}>{t('common.close')}</button>
+	</Notice></div>
 {/if}
 
 {#if canEdit && library.activeMachine && library.coverage && library.coverage.unattached > 0}
@@ -1636,30 +1641,30 @@
 	     them to this one says they were measured here, and only the reader knows whether
 	     that is true — so this is a count and a button, never a step that runs by
 	     itself. -->
-	<div class="strays">
+	<div class="strays"><Notice tone="warn">
 		<p>
 			{t('library.strays', { n: library.coverage.unattached })}
 			{#if library.coverage.unattached_grids}
 				{t('library.strays.grids', { n: library.coverage.unattached_grids })}
 			{/if}
 		</p>
-		<p class="fine">{t('library.strays.why', { machine: library.activeMachine.name })}</p>
-		<button class="mini" disabled={library.busy} title={library.busy ? t('reason.busy') : undefined} onclick={() => library.adoptStrays()}>
+		<p class="help">{t('library.strays.why', { machine: library.activeMachine.name })}</p>
+		<button class="btn mini close" disabled={library.busy} title={library.busy ? t('reason.busy') : undefined} onclick={() => library.adoptStrays()}>
 			{t('library.strays.adopt', { machine: library.activeMachine.name })}
 		</button>
-	</div>
+	</Notice></div>
 {/if}
 
 {#if undone}
 	<!-- What taking an import back actually took. One press made it and one press undid
 	     it, and neither of the two is silent. -->
-	<div class="ready" role="status">
+	<div class="ready"><Notice tone="ok" live>
 		<span>{t('library.batch.undone', { n: undone.presets })}</span>
 		{#if undone.kept_materials.length}
-			<span class="fine">{t('library.batch.kept', { n: undone.kept_materials.length })}</span>
+			<span class="help">{t('library.batch.kept', { n: undone.kept_materials.length })}</span>
 		{/if}
-		<button class="mini" onclick={() => (undone = null)}>{t('common.close')}</button>
-	</div>
+		<button class="btn ghost mini close" onclick={() => (undone = null)}>{t('common.close')}</button>
+	</Notice></div>
 {/if}
 
 <!-- Filters over an empty collection are furniture: three controls with nothing
@@ -1702,7 +1707,7 @@
 			/>
 			<span
 				>{t('library.onlyMaterial', { material: sheetMaterialName })}
-				<span class="why">{t('library.onlyMaterial.why')}</span></span
+				<span class="help block-line">{t('library.onlyMaterial.why')}</span></span
 			>
 		</label>
 	{/if}
@@ -1749,13 +1754,13 @@
 	{#if canEdit}
 		<details class="fold photo-disclosure">
 			<summary>{t('library.boardPhoto')}</summary>
-			<p class="fine">{t('library.readBoard.how')}</p>
+			<p class="help">{t('library.readBoard.how')}</p>
 			<button class="btn" onclick={() => onReadBoard?.()}>{t('library.readBoard')}</button>
 		</details>
 	{/if}
-	<details class="uitwissel fold">
+	<details class="fold">
 	<summary>{t('library.exchange')}</summary>
-	<p class="fine">{t('library.exchange.body')}</p>
+	<p class="help">{t('library.exchange.body')}</p>
 	<div class="uitknoppen">
 		<button
 			class="btn"
@@ -1789,14 +1794,14 @@
      you had not asked yet. -->
 {#if canEdit && layers.length === 0 && library.materials.length > 0}
 	<!-- Say once why "Apply" cannot work, not on every card again. -->
-	<p class="notice">{t('library.noLayer')}</p>
+	<div class="nolayer"><Notice tone="info">{t('library.noLayer')}</Notice></div>
 {/if}
 
 {#if shareError}
-	<p class="error" role="alert">{shareError}</p>
+	<div class="failure"><Notice tone="danger" live>{shareError}</Notice></div>
 {/if}
 {#if library.error}
-	<p class="error" role="alert">{library.error}</p>
+	<div class="failure"><Notice tone="danger" live>{library.error}</Notice></div>
 {/if}
 
 {#if library.materials.length === 0}
@@ -1805,8 +1810,8 @@
 	     sees here, so it takes the shape of an invitation: what this is, why it is
 	     worth it, and the two ways in. -->
 	<div class="welcome">
-		<h2>{t('library.welcome.title')}</h2>
-		<p>{t('library.welcome.body')}</p>
+	<EmptyState title={t('library.welcome.title')} text={t('library.welcome.body')}>
+		{#snippet action()}
 		<div class="wegen">
 			{#if canEdit}
 				{@render addMaterial(t('library.welcome.first'), true)}
@@ -1819,18 +1824,23 @@
 				     place in the interface that still treated the catalogue as somewhere you
 				     go. With no machine active neither surface renders, and then the sentence
 				     would point at nothing. -->
-				<p class="fine">{t('library.welcome.presetariat')}</p>
+				<p class="help">{t('library.welcome.presetariat')}</p>
 			{/if}
 		</div>
+		{/snippet}
+	</EmptyState>
 	</div>
 {:else if groepen.length === 0}
 	<!-- Nothing found is not a dead end as long as you can throw the search away
 	     without having to look for the field. -->
-	<div class="welcome narrow">
-		<h2>{t('library.nothingFound', { query })}</h2>
-		<p>{t('library.nothingFound.body', { materials: count(library.materials.length, 'materials') })}</p>
-		<button class="btn" onclick={() => (query = '')}>{t('library.clearSearch')}</button>
-	</div>
+	<EmptyState
+		title={t('library.nothingFound', { query })}
+		text={t('library.nothingFound.body', { materials: count(library.materials.length, 'materials') })}
+	>
+		{#snippet action()}
+			<button class="btn" onclick={() => (query = '')}>{t('library.clearSearch')}</button>
+		{/snippet}
+	</EmptyState>
 {:else}
 	<!--
 		Two panes instead of one long column.
@@ -1850,8 +1860,8 @@
 				{#if recent.length}
 					<li>
 						<button
-							class="matrij"
-							class:on={materialId === null && !query.trim()}
+							class="listrow matrij"
+							aria-current={materialId === null && !query.trim() ? 'true' : undefined}
 							onclick={() => {
 								materialId = null;
 								query = '';
@@ -1865,8 +1875,8 @@
 				{#each groepen as group (group.materialId)}
 					<li class="matregel">
 						<button
-							class="matrij"
-							class:on={materialId === group.materialId}
+							class="listrow matrij"
+							aria-current={materialId === group.materialId ? 'true' : undefined}
 							onclick={() => (materialId = group.materialId)}
 							oncontextmenu={(e) => openMaterialMenu(e, group)}
 						>
@@ -1874,7 +1884,7 @@
 							{#if group.materialId === sheetMaterialId}
 								<!-- What is in the machine is the reason you are here; that belongs in
 								     the list and not only in a filter checkbox. -->
-								<span class="ligt" title={t('library.onSheet.title')}>{t('library.onSheet')}</span>
+								<span class="badge ligt" title={t('library.onSheet.title')}>{t('library.onSheet')}</span>
 							{/if}
 							<span class="mataantal mono">{group.presets.length}</span>
 						</button>
@@ -1886,13 +1896,13 @@
 							     all. Beside the button, not inside it: a button in a button is not a
 							     button. -->
 							<button
-								class="meer"
+								class="btn ghost icon meer"
 								aria-label={t('library.material.more.aria', { material: group.name })}
 								aria-haspopup="menu"
 								title={t('library.more.title')}
 								onclick={(e) => openMaterialMenu(e, group)}
 							>
-								<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.7" /><circle cx="12" cy="12" r="1.7" /><circle cx="12" cy="19" r="1.7" /></svg>
+								<Icon name="more" />
 							</button>
 						{/if}
 					</li>
@@ -1908,11 +1918,11 @@
 		<div class="settings">
 			{#if materialId === null}
 				{#if recent.length}
-					<h2 class="head">{t('library.recent')}</h2>
+					<h2 class="label-section head">{t('library.recent')}</h2>
 					{#each recent as preset (preset.id)}
 						{@render card(preset, true)}
 					{/each}
-					<p class="fine">{t('library.pickMaterial')}</p>
+					<p class="help pick">{t('library.pickMaterial')}</p>
 				{:else}
 					{#each groepen as group (group.materialId)}
 						{#each group.presets as preset (preset.id)}
@@ -1924,9 +1934,9 @@
 				{@const group = groepen.find((g) => g.materialId === materialId)}
 				{#if group}
 					<div class="materiaalkop">
-						<h2 class="head">{group.name}</h2>
+						<h2 class="label-section head">{group.name}</h2>
 						{#if canEdit && zichtbarePresets.length > 0}
-							<button class="mini" onclick={() => onMakeGrid?.(group.materialId)}>
+							<button class="btn ghost mini" onclick={() => onMakeGrid?.(group.materialId)}>
 								{t('library.makeGrid')}
 							</button>
 						{/if}
@@ -1939,7 +1949,7 @@
 						     hold two names for one board. -->
 						<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 						<div
-							class="vraag"
+							class="vraag card inset"
 							role="group"
 							bind:this={askEl}
 							onkeydown={(e) => {
@@ -1952,7 +1962,7 @@
 								closeQuestion();
 							}}
 						>
-							<label class="veld">
+							<label class="field-label">
 								<span>{t('library.material.name')}</span>
 								<input
 									type="text"
@@ -1960,7 +1970,7 @@
 									onkeydown={(e) => e.key === 'Enter' && saveRename()}
 								/>
 							</label>
-							<label class="veld">
+							<label class="field-label">
 								<span>{t('library.material.synonyms')}</span>
 								<input
 									type="text"
@@ -1968,13 +1978,13 @@
 									placeholder={t('library.material.synonyms.placeholder')}
 								/>
 							</label>
-							<p class="fine">{t('library.material.synonyms.why')}</p>
-							<div class="knoppen">
-								<button class="mini quiet" onclick={() => (renaming = null)}>
+							<p class="help">{t('library.material.synonyms.why')}</p>
+							<div class="ask-actions">
+								<button class="btn" onclick={() => (renaming = null)}>
 									{t('common.cancel')}
 								</button>
 								<button
-									class="mini"
+									class="btn primary"
 									disabled={library.busy || !renameTo.trim()} title={library.busy ? t('reason.busy') : t('reason.needsName')}
 									onclick={saveRename}>{t('common.save')}</button
 								>
@@ -1989,7 +1999,7 @@
 						     on the right board. -->
 						<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 						<div
-							class="vraag"
+							class="vraag card inset"
 							role="group"
 							bind:this={askEl}
 							onkeydown={(e) => {
@@ -2000,7 +2010,7 @@
 							}}
 						>
 							<p>{t('library.material.merge.body', { material: group.name })}</p>
-							<label class="veld">
+							<label class="field-label">
 								<span>{t('library.material.merge.pick')}</span>
 								<select bind:value={mergeInto}>
 									<option value={null}>{t('library.material.merge.choose')}</option>
@@ -2009,12 +2019,12 @@
 									{/each}
 								</select>
 							</label>
-							<div class="knoppen">
-								<button class="mini quiet" onclick={() => (merging = null)}>
+							<div class="ask-actions">
+								<button class="btn" onclick={() => (merging = null)}>
 									{t('common.cancel')}
 								</button>
 								<button
-									class="mini"
+									class="btn primary"
 									disabled={library.busy || mergeInto === null}
 									title={library.busy ? t('reason.busy') : t('reason.needsMaterial')}
 									onclick={doMerge}>{t('library.material.merge.confirm')}</button
@@ -2032,8 +2042,8 @@
 						     button says that it takes all of it. -->
 						<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 						<div
-							class="vraag weg"
-							role="alert"
+							class="vraag card inset"
+							role="group"
 							bind:this={askEl}
 							onkeydown={(e) => {
 								if (e.key !== 'Escape') return;
@@ -2043,29 +2053,31 @@
 						>
 							{#if !usage}
 								<p>{t('common.busy')}</p>
-							{:else if wouldGoWith(usage).length}
-								<p>
-									{t('library.material.remove.carries', {
-										material: group.name,
-										what: i18n.list(wouldGoWith(usage))
-									})}
-								</p>
 							{:else}
-								<p>{t('library.material.remove.empty', { material: group.name })}</p>
+								<Notice tone="danger" live>
+									{#if wouldGoWith(usage).length}
+										{t('library.material.remove.carries', {
+											material: group.name,
+											what: i18n.list(wouldGoWith(usage))
+										})}
+									{:else}
+										{t('library.material.remove.empty', { material: group.name })}
+									{/if}
+								</Notice>
 							{/if}
 							{#if usage?.sheets}
-								<p class="fine">{t('library.material.remove.sheet', { n: usage.sheets })}</p>
+								<p class="help">{t('library.material.remove.sheet', { n: usage.sheets })}</p>
 							{/if}
-							<div class="knoppen">
+							<div class="ask-actions">
 								<button
-									class="mini quiet"
+									class="btn"
 									onclick={() => {
 										removing = null;
 										usage = null;
 									}}>{t('library.material.remove.keep')}</button
 								>
 								<button
-									class="mini danger"
+									class="btn danger"
 									disabled={library.busy || !usage}
 									title={library.busy ? t('reason.busy') : t('reason.notLoaded')}
 									onclick={doRemove}
@@ -2083,11 +2095,11 @@
 						     tick off. As a filter and not as a heading, because you sometimes want
 						     the neighbouring thickness in view. -->
 						<div class="thicknesses" role="group" aria-label={t('library.thickness')}>
-							<button class="chip" class:on={thickness === null} onclick={() => (thickness = null)}>
+							<button class="chip" aria-pressed={thickness === null} onclick={() => (thickness = null)}>
 								{t('library.allThicknesses')}
 							</button>
 							{#each thicknesses as d (d)}
-								<button class="chip" class:on={thickness === d} onclick={() => (thickness = d)}>
+								<button class="chip" aria-pressed={thickness === d} onclick={() => (thickness = d)}>
 									{d === null ? t('library.noThickness') : `${d} mm`}
 								</button>
 							{/each}
@@ -2095,18 +2107,21 @@
 					{/if}
 
 					{#if zichtbarePresets.length === 0}
-						<p class="empty">
-							{#if group.presets.length === 0}
-								{t('library.noPresets', { material: group.name })}
-							{:else}
-								{t('library.noneForThickness', { thickness: thickness })}
+						<!-- The empty state's shape — what is missing, and the one thing that
+						     fills it — without its title face: the sentence is two sentences
+						     long, and set at title weight it shouted over the pane. -->
+						<div class="empty">
+							<p class="help">
+								{group.presets.length === 0
+									? t('library.noPresets', { material: group.name })
+									: t('library.noneForThickness', { thickness: thickness })}
+							</p>
+							{#if canEdit}
+								<button class="btn primary" onclick={() => onMakeGrid?.(group.materialId)}>
+									{t('library.makeGrid')}
+								</button>
 							{/if}
-						</p>
-						{#if canEdit}
-							<button class="btn primary" onclick={() => onMakeGrid?.(group.materialId)}>
-								{t('library.makeGrid')}
-							</button>
-						{/if}
+						</div>
 					{:else}
 						{#each zichtbarePresets as preset (preset.id)}
 							{@render card(preset, false)}
@@ -2117,12 +2132,14 @@
 					     to be no `{:else}` here at all, so the pane was simply blank: no list, no
 					     reason, and the search field far above with a term in it. -->
 					{@const chosen = library.materials.find((m) => m.id === materialId)}
-					<p class="empty">
-						{chosen
-							? t('library.filteredOut', { material: chosen.name, query })
-							: t('library.pickMaterial')}
-					</p>
-					<button class="btn" onclick={() => (query = '')}>{t('library.clearSearch')}</button>
+					<div class="empty">
+						<p class="help">
+							{chosen
+								? t('library.filteredOut', { material: chosen.name, query })
+								: t('library.pickMaterial')}
+						</p>
+						<button class="btn" onclick={() => (query = '')}>{t('library.clearSearch')}</button>
+					</div>
 				{/if}
 			{/if}
 		</div>
@@ -2133,7 +2150,7 @@
 	<details class="fold vouw">
 		<summary>{t('library.manual')}</summary>
 		<div class="grid">
-			<label class="wide">
+			<label class="field-label wide">
 				<span>{t('library.material')}</span>
 				<select bind:value={draft.material_id}>
 					<option value={null}
@@ -2146,7 +2163,7 @@
 					{/each}
 				</select>
 			</label>
-			<label>
+			<label class="field-label">
 				<span>{t('library.operation')}</span>
 				<select bind:value={draft.operation}>
 					{#each operationChoices() as op (op.value)}
@@ -2177,7 +2194,7 @@
 				bind:value={draft.power_percent}
 			/>
 		</div>
-		<p class="fine">{t('library.manual.note')}</p>
+		<p class="help manual-note">{t('library.manual.note')}</p>
 		<button
 			class="btn"
 			disabled={library.busy ||
@@ -2197,7 +2214,7 @@
 
 	<details class="fold vouw">
 		<summary>{t('library.profiles', { n: library.machines.length })}</summary>
-		<p class="fine">{t('library.profiles.why')}</p>
+		<Why>{t('library.profiles.why')}</Why>
 		{#if library.machines.length}
 			<ul class="profiles">
 				{#each library.machines as machine (machine.id)}
@@ -2214,11 +2231,11 @@
 								     library let go of when its slot went to another laser — and its
 								     way out is a merge, not a wait. -->
 								{#if machine.orphaned_because === 'no-device'}
-									<span class="mark" title={t('library.profile.noDevice.title')}>
+									<span class="badge" title={t('library.profile.noDevice.title')}>
 										{t('library.profile.noDevice')}
 									</span>
 								{:else}
-									<span class="mark" title={t('library.profile.deviceGone.title')}>
+									<span class="badge" title={t('library.profile.deviceGone.title')}>
 										{t('library.profile.deviceGone')}
 									</span>
 								{/if}
@@ -2228,10 +2245,10 @@
 								     with settings or grids is evidence, a profile without is clutter.
 								     Only naming what is there — "0 settings" next to a profile that
 								     does carry a test grid is a half truth. -->
-								<span class="fine">{evidence(machine)}</span>
+								<span class="help">{evidence(machine)}</span>
 							{:else if canEdit && !active}
 								<button
-									class="mini"
+									class="btn ghost mini"
 									disabled={library.busy} title={library.busy ? t('reason.busy') : undefined}
 									onclick={() => library.removeMachineProfile(machine.id)}
 									>{t('library.profile.tidy')}</button
@@ -2244,7 +2261,7 @@
 								     device-bound one with three settings and no wattage, and they are
 								     one machine. -->
 								<button
-									class="mini"
+									class="btn mini"
 									disabled={library.busy}
 									title={t('library.profile.mergeInto.why', {
 										machine: library.activeMachine.name
@@ -2267,10 +2284,10 @@
 							     through the same route. There is deliberately no form here that
 							     *creates* a profile: that form was the only thing in the app that
 							     could make a profile with a wattage and no machine behind it. -->
-							<fieldset class="laser">
+							<fieldset class="laser card inset">
 								<legend>{t('setup.laser')}</legend>
 								<div class="paar">
-									<label class="veld">
+									<label class="field-label">
 										<span>{t('setup.laser.kind')}</span>
 										<select
 											value={machine.laser_type || 'unknown'}
@@ -2309,7 +2326,7 @@
 											saveMachine(machine.id, { lens_mm: v === '' ? null : Number(v) })}
 									/>
 								</div>
-								<p class="fine">{t('setup.laser.watt.why')}</p>
+								<Why>{t('setup.laser.watt.why')}</Why>
 							</fieldset>
 						{/if}
 					</li>
@@ -2329,11 +2346,29 @@
 {/if}
 
 <style>
-	.library-tools { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-6); padding: var(--space-3) 0; border-bottom: 1px solid var(--line); margin-bottom: var(--space-3); }
-	.library-tools details[open] { flex-basis: 100%; }
-	.library-tools details[open] > summary { margin-bottom: var(--space-3); }
-	.library-tools .uitwissel { margin: 0; padding: 0; border: 0; }
-	.library-tools .fine { margin: 0 0 var(--space-2); }
+	/*
+	 * The three occasional tools — starting points, reading a board photo, and
+	 * exchanging the library — as folds stacked one under the other, not side by side.
+	 *
+	 * Side by side they read as tabs that were not tabs: three summaries on one line, and
+	 * opening one dropped its content under the row with the other two summaries still
+	 * standing beside an empty space. Real tabs would not fit either: each of these is
+	 * visited now and then — once per machine, once per board photo, once per new
+	 * computer — and tabs keep one panel open all the time, which would push the material
+	 * list, the thing you open this window for every time, further down. Stacked folds
+	 * cost one quiet line each while shut, open at the full width of the window, and
+	 * can be open together when that helps.
+	 */
+	.library-tools {
+		display: grid;
+		gap: var(--space-1);
+		padding: var(--space-2) 0 var(--space-3);
+		border-bottom: 1px solid var(--line);
+		margin-bottom: var(--space-3);
+	}
+	.library-tools details[open] > summary { margin-bottom: var(--space-2); }
+	.library-tools details > :not(summary) { margin-left: var(--space-4); }
+	.library-tools .help { margin-bottom: var(--space-2); }
 
 	/* Search has to stay reachable while you scroll through twenty materials; the
 	   window itself is the scroll container, so this sticks to its top. */
@@ -2381,63 +2416,16 @@
 		font-size: var(--text-xs);
 		color: var(--text-2);
 	}
-	/* *Why* this filter is on, in the toggle itself: otherwise it looks like a
-	   preference somebody once switched on. */
-	.why { color: var(--text-2); }
-	.head {
-		font-size: var(--text-xs);
-		font-weight: 600;
-		text-transform: uppercase;
-		letter-spacing: 0.06em;
-		color: var(--text-2);
-		margin: var(--space-4) 0 var(--space-2);
-	}
-	.empty { color: var(--text-2); margin: 0 0 var(--space-2); }
-	/* An empty state may take up room: here it *is* the screen, not a footnote
-	   under it. */
-	.welcome {
-		padding: var(--space-6) 0 var(--space-4);
-		max-width: 46ch;
-	}
-	.welcome.narrow { padding: var(--space-5) 0; }
-	.welcome h2 {
-		font-size: var(--text-md);
-		font-weight: 600;
-		margin: 0 0 var(--space-2);
-		color: var(--text-1);
-	}
-	.welcome p { margin: 0 0 var(--space-3); color: var(--text-2); }
+	/* A reason that is a sentence of its own goes on a line of its own: glued behind a
+	   dash it read as the second half of the label. */
+	.block-line { display: block; }
+	.head { margin: var(--space-4) 0 var(--space-2); }
+	.pick { margin-top: var(--space-2); }
+	/* An empty library: the empty state *is* the screen here, not a footnote under it. */
+	.welcome { padding: var(--space-2) 0; }
 	.wegen { display: grid; justify-items: start; gap: var(--space-3); }
-	.wegen .fine { margin: 0; max-width: 42ch; }
-	.fine { color: var(--text-2); font-size: var(--text-xs); margin: 0 0 var(--space-2); }
-	.mini {
-		font-size: var(--text-xs);
-		color: var(--accent);
-		padding: 4px var(--space-1h);
-		border-radius: var(--radius-field);
-	}
-	.mini:hover { background: var(--surface-2); }
-	.mini.quiet { color: var(--text-2); }
-	.mini.danger { color: var(--danger); font-weight: 600; }
-	.row { display: flex; gap: var(--space-2); margin: var(--space-2) 0; }
-	.row input { flex: 1; min-width: 0; }
-	input,
-	select {
-		font: inherit;
-		padding: 8px 8px;
-		border: 1px solid var(--line);
-		border-radius: var(--radius-field);
-		background: var(--surface-2);
-		color: var(--text-1);
-	}
-
-	/* Material as image — but once per material. The same wood band ten times over is
-	   wallpaper; one band above the group is identity. */
-	/* Grain: two layers of stripes at a slight angle, on a warm ground. */
-	/* Acrylic: smooth, with one diagonal highlight. */
-	/* Leer: onregelmatige korrel off gestapelde radiale vlekken. */
-	/* Cardboard: corrugated profile, seen from the side. */
-	/* Metal: brushed, with a running highlight. */
+	.empty { display: grid; justify-items: start; gap: var(--space-3); padding: var(--space-2) 0; }
+	.empty .help { font-size: var(--text-sm); }
 
 	/* ── The diptych ─────────────────────────────────────────────────────────
 	   On the left what you have, on the right what belongs with it. The left column is
@@ -2457,32 +2445,19 @@
 		flex-direction: column;
 		gap: 1px;
 	}
+	/* The row is a `.listrow`; here only its two columns: the name (with the sheet
+	   badge under it) and the count. */
 	.matrij {
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) auto;
-		align-items: center;
-		gap: var(--space-2);
-		width: 100%;
-		padding: 7px var(--space-2);
-		border: none;
-		border-radius: var(--radius-field);
-		background: none;
-		color: var(--text-1);
-		text-align: left;
-		font: inherit;
-		font-size: var(--text-sm);
-	}
-	.matrij:hover { background: var(--surface-2); }
-	.matrij.on {
-		background: color-mix(in srgb, var(--accent) 12%, transparent);
-		color: var(--accent);
-		font-weight: 500;
+		padding-inline: var(--space-2);
 	}
 	.matname { grid-column: 1; min-width: 0; overflow-wrap: break-word; }
 	.matrij .mataantal { grid-column: 2; grid-row: 1 / span 2; }
 	.matrij .ligt { grid-column: 1; justify-self: start; }
-	/* The row and its ⋯ side by side: the menu button is a sibling of the row button and
-	   not a child, because a button inside a button is not a button. */
+	.mataantal { font-size: var(--text-xs); color: var(--text-2); }
+	/* The row and its menu side by side: the menu button is a sibling of the row button
+	   and not a child, because a button inside a button is not a button. */
 	.matregel { display: flex; align-items: center; gap: 2px; }
 	.matregel .matrij { flex: 1; min-width: 0; }
 	/* The field for a new material where the button that summons it stands. */
@@ -2496,27 +2471,21 @@
 		justify-content: flex-end;
 		gap: var(--space-2);
 	}
-	.mini.add { align-self: start; margin-top: var(--space-2); }
+	.materials :global(.add) { margin-top: var(--space-2); }
 	/* A question about one material, in the pane that carries that material's name. The
 	   left-hand row is 232 px wide, so it cannot stand there, and a window over a window
-	   would hide the list the answer changes. */
+	   would hide the list the answer changes. It is answered with bordered buttons in
+	   the shared ask row, because the heaviest of the three takes settings and their
+	   photographs with it. */
 	.vraag {
 		display: grid;
 		gap: var(--space-2);
 		margin: 0 0 var(--space-3);
-		padding: var(--space-3);
-		border: 1px solid var(--line);
-		border-left: 3px solid var(--accent);
-		border-radius: var(--radius-card);
-		background: var(--surface-2);
 		font-size: var(--text-sm);
 	}
-	.vraag.weg { border-left-color: var(--danger); }
 	.vraag p { margin: 0; }
-	/* One field on a line keeps the width of half a line (v4, form rule 5), and its
-	   label stands above it (rule 3). */
-	.veld { display: grid; gap: 4px; max-width: 32ch; }
-	.veld > span { font-size: var(--text-xs); color: var(--text-2); }
+	/* One field on a line keeps the width of half a line (v4, form rule 5). */
+	.vraag .field-label { max-width: 32ch; }
 	/* A pair is one statement about one thing and stays on one line (rule 2). */
 	.paar {
 		display: grid;
@@ -2524,55 +2493,11 @@
 		gap: var(--space-3);
 		align-items: end;
 	}
-	.paar .veld { max-width: none; }
-	/* Buttons at the foot, the one that acts on the right (rule 6). */
-	.knoppen {
-		display: flex;
-		flex-wrap: wrap;
-		justify-content: flex-end;
-		gap: var(--space-2);
-	}
-	/* A question is answered with buttons, not with words.
-	   `.mini` is the borderless style of a row action — Apply, Make a test grid — and
-	   these three blocks borrowed it, so the last step before four settings and their
-	   photographs are gone read as two grey words in a corner. Every other question in
-	   the app (the sheet question in setup, the offer card above) answers with a bordered
-	   button, and this is a heavier question than either. */
-	.vraag .knoppen button {
-		min-height: 32px;
-		padding: 6px 12px;
-		border: 1px solid var(--line);
-		background: var(--surface-1);
-	}
-	.vraag .knoppen button:hover {
-		background: var(--surface-2);
-	}
-	.vraag .knoppen button.danger {
-		border-color: color-mix(in srgb, var(--danger) 45%, transparent);
-		background: color-mix(in srgb, var(--danger) 8%, transparent);
-	}
-	/* With a glove on, 32 px is too little, and this window is on the tablet too. */
-	@media (max-width: 1199px), (pointer: coarse) {
-		.vraag .knoppen button {
-			min-height: 44px;
-		}
-	}
-	/* Settings that hang off no machine: a count, a reason and one button. */
-	/* A door, so it reads as somewhere to go and not as a notice about something. */
-
-	.strays {
-		display: grid;
-		justify-items: start;
-		gap: var(--space-1h);
-		margin: 0 0 var(--space-4);
-		padding: var(--space-3) var(--space-4);
-		border: 1px solid var(--line);
-		border-left: 3px solid var(--warn);
-		border-radius: var(--radius-card);
-		background: var(--surface-2);
-		font-size: var(--text-sm);
-	}
-	.strays p { margin: 0; }
+	.strays,
+	.ready,
+	.failure,
+	.nolayer { margin: 0 0 var(--space-3); }
+	.close { justify-self: start; }
 	/* The import a setting came in on spans both columns of the provenance, under them. */
 	.batch {
 		grid-column: 1 / -1;
@@ -2583,7 +2508,7 @@
 		padding-top: var(--space-2);
 		border-top: 1px dashed var(--line);
 	}
-	.batch .fine { margin: 0; flex: 1; min-width: 14em; }
+	.batch .help { flex: 1; min-width: 14em; }
 	/* A profile is a row plus, for the machine you are on, the two fields that describe
 	   it. So the row itself is a line of its own inside the item. */
 	.profielrij {
@@ -2597,27 +2522,9 @@
 		display: grid;
 		gap: var(--space-2);
 		margin: var(--space-2) 0 0;
-		padding: var(--space-3);
-		border: 1px solid var(--line);
-		border-radius: var(--radius-field);
-		background: var(--surface-1);
 	}
-	.laser legend { padding: 0 4px; font-size: var(--text-xs); color: var(--text-2); }
-	.laser .fine { margin: 0; max-width: 68ch; }
+	.laser legend { padding: 0; font-size: var(--text-xs); color: var(--text-2); }
 	.halve { max-width: calc(50% - var(--space-2)); }
-	.mataantal { flex: none; font-size: var(--text-xs); color: var(--text-2); }
-	.matrij.on .mataantal { color: inherit; }
-	/* What is in the machine: one word, not a second colour. */
-	.ligt {
-		flex: none;
-		font-size: 10px;
-		letter-spacing: 0.03em;
-		padding: 1px 5px;
-		border-radius: var(--radius-dot);
-		border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--line));
-		color: var(--accent);
-		white-space: nowrap;
-	}
 	.materiaalkop {
 		display: flex;
 		align-items: baseline;
@@ -2631,49 +2538,21 @@
 		gap: var(--space-1h);
 		margin-bottom: var(--space-3);
 	}
-	.chip {
-		padding: 3px 10px;
-		border: 1px solid var(--line);
-		border-radius: 999px;
-		background: var(--surface-1);
-		color: var(--text-2);
-		font: inherit;
-		font-size: var(--text-xs);
-	}
-	.chip:hover { background: var(--surface-2); color: var(--text-1); }
-	.chip.on {
-		border-color: var(--accent);
-		background: color-mix(in srgb, var(--accent) 12%, transparent);
-		color: var(--accent);
-		font-weight: 500;
-	}
 
-	/* ── Eén instelling = één row ──────────────────────────────────────── */
+	/* ── One setting, one row ─────────────────────────────────────────────
+	   The source used to be a coloured stripe down the left of the row as well. The
+	   badge on the same line already says it, in a word and an icon, so the stripe was
+	   the same fact a second time — in colour alone. */
 	.preset {
-		position: relative;
 		border: 1px solid var(--line);
 		border-radius: var(--radius-field);
 		background: var(--surface-1);
-		margin-top: 4px;
-		padding: 0 var(--space-2) 0 calc(var(--space-2) + 4px);
+		margin-top: var(--space-1);
+		padding: 0 var(--space-2) 0 var(--space-3);
 	}
 	.preset:first-of-type { margin-top: 0; }
-	/* The source is in the border too: while scrolling you see on the left which
-	   settings are measured and which are guessed. */
-	.preset::before {
-		content: '';
-		position: absolute;
-		left: 0;
-		top: -1px;
-		bottom: -1px;
-		width: 4px;
-		border-radius: var(--radius-field) 0 0 var(--radius-field);
-		background: var(--line);
-	}
-	.preset.ok::before { background: var(--ok); }
-	.preset.warn::before { background: var(--warn-solid); }
 	.preset.open {
-		border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+		border-color: var(--accent-edge);
 		box-shadow: var(--lift-1);
 	}
 
@@ -2682,6 +2561,7 @@
 		align-items: center;
 		gap: var(--space-3);
 		min-height: 40px;
+		margin: var(--space-2) 0;
 	}
 	.wat { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: var(--space-2); }
 	/* The thickness in a column of its own with a fixed width: that is what the eye
@@ -2699,50 +2579,25 @@
 		overflow-wrap: break-word;
 		font-size: var(--text-sm);
 	}
-
 	.operation .mat { font-weight: 500; }
 	.values {
 		flex: none;
 		display: flex;
 		gap: var(--space-3);
 		font-size: var(--text-sm);
-		font-variant-numeric: tabular-nums;
 	}
 	.values span { min-width: 4.2em; text-align: right; }
 	.values small { color: var(--text-2); margin-left: 1px; }
 
-	.badge {
-		flex: none;
-		display: inline-flex;
-		align-items: center;
-		gap: 3px;
-		/* A floor and not a fixed width: the four badges line up under each other in
-		   every language that fits, and the one that does not fit grows instead of
-		   spilling over its neighbour. Measured in Dutch: "Geverifieerd" needed 3 px
-		   more than 7.6em and "Geëxtrapoleerd" is two letters longer again, and
-		   `white-space: nowrap` with a hard width puts those letters on the row beside
-		   it. Alignment is worth a fixed width; a word that reads wrong is not. */
-		min-width: 7.6em;
-		font-size: var(--text-xs);
-		font-weight: 600;
-		padding: 1px 6px;
-		border-radius: var(--radius-dot);
-		border: 1px solid var(--line);
-		background: var(--surface-2);
-		color: var(--text-2);
-		white-space: nowrap;
-	}
-	.badge.ok {
-		background: color-mix(in srgb, var(--ok) 14%, transparent);
-		border-color: color-mix(in srgb, var(--ok) 40%, transparent);
-		color: var(--ok);
-	}
-	.badge.warn {
-		background: color-mix(in srgb, var(--warn) 16%, transparent);
-		border-color: color-mix(in srgb, var(--warn) 45%, transparent);
-		color: var(--warn);
-	}
-	.ico { flex: none; }
+	/* A floor and not a fixed width: the four source badges line up under each other in
+	   every language that fits, and the one that does not fit grows instead of spilling
+	   over its neighbour. Measured in Dutch: "Geverifieerd" needed 3 px more than 7.6em
+	   and "Geëxtrapoleerd" is two letters longer again. */
+	.badge.source { flex: none; min-width: 7.6em; }
+	/* A setting for a different kind of operation may be applied, but not without you
+	   knowing. One badge beside the operation, with the whole explanation in the
+	   tooltip. */
+	.mismatch { flex: none; align-self: center; }
 
 	.bewijs,
 	.geenfoto {
@@ -2758,81 +2613,36 @@
 		background: var(--surface-2);
 	}
 	.bewijs img { width: 100%; height: 100%; object-fit: cover; display: block; }
-
-	.doe {
-		flex: none;
-		display: inline-flex;
-		align-items: center;
-		gap: 4px;
-		padding: 5px 12px;
-		border: 1px solid var(--accent);
-		border-radius: var(--radius-field);
-		background: var(--accent);
-		color: var(--accent-ink);
-		font: inherit;
-		font-size: var(--text-xs);
-		font-weight: 500;
-	}
-	.doe:disabled { opacity: 0.4; cursor: not-allowed; }
-	/* A setting for a different kind of operation may be applied, but not without you
-	   knowing. One sign beside the operation, with the whole explanation in the
-	   tooltip. */
-	.mismatch {
-		display: inline-flex;
-		align-items: center;
-		gap: 2px;
-		margin-left: 4px;
-		font-size: 10px;
-		font-weight: 600;
-		letter-spacing: 0.02em;
-		color: var(--warn);
-		white-space: nowrap;
-	}
-	.meer {
-		flex: none;
-		display: grid;
-		place-items: center;
-		width: 26px;
-		height: 26px;
-		border: none;
-		border-radius: var(--radius-field);
-		background: none;
-		color: var(--text-2);
-	}
-	.meer:hover { background: var(--surface-2); color: var(--text-1); }
+	.doe, .meer { flex: none; }
 
 	.zekerweg {
 		display: flex;
 		align-items: center;
 		gap: var(--space-2);
 		flex-wrap: wrap;
-		padding: var(--space-2) 0 var(--space-2);
+		padding: var(--space-2) 0;
 		border-top: 1px solid var(--line);
 		font-size: var(--text-xs);
 	}
 	.zekerweg span { flex: 1; min-width: 12em; }
 
-	.stretch { flex: 1; min-width: var(--space-6); }
-	.zeker { font-size: var(--text-xs); color: var(--text-2); }
-
 	/* The share panel. Same shape as the two panels above it: under the row, a dashed
 	   rule to say it belongs to it, and the same field and button idiom as the material
 	   verbs so that nothing here has to be learned twice. */
 	.delen {
+		display: grid;
+		gap: var(--space-2);
 		margin-top: var(--space-2);
-		padding-top: var(--space-2);
+		padding: var(--space-2) 0;
 		border-top: 1px dashed var(--line);
 	}
-	.delen .kop { margin: 0 0 var(--space-1); font-size: var(--text-xs); font-weight: 600; }
-	.delen .fine { margin: var(--space-1) 0; }
-	.delen .veld { display: grid; gap: 4px; font-size: var(--text-xs); color: var(--text-2); }
-	.delen .veld input,
-	.delen .veld select { width: 100%; }
+	.delen .kop { margin: 0; font-size: var(--text-xs); font-weight: 600; }
+	.delen input,
+	.delen select { width: 100%; }
 	.uitkomst {
 		display: grid;
 		grid-template-columns: 1fr 1fr;
 		gap: var(--space-2);
-		margin: var(--space-2) 0;
 	}
 	.uitkomst .wide { grid-column: 1 / -1; }
 
@@ -2841,7 +2651,7 @@
 		grid-template-columns: 1fr auto;
 		gap: var(--space-3);
 		margin-top: var(--space-2);
-		padding-top: var(--space-2);
+		padding: var(--space-2) 0;
 		border-top: 1px dashed var(--line);
 	}
 	.herkomst dl {
@@ -2856,11 +2666,11 @@
 	/* Without a stored alignment the server falls back on the whole image; on a skewed
 	   photo with a lot of margin the outline is then half a cell out. Saying so is
 	   better than a marker that looks exact and is not. */
-	.benadering { display: block; margin-top: 2px; color: var(--warn); }
+	.benadering { display: block; margin-top: 2px; }
 	.bewijsvak {
 		display: grid;
 		justify-items: start;
-		gap: 4px;
+		gap: var(--space-1);
 		max-width: 180px;
 	}
 	.bewijsvak img {
@@ -2878,11 +2688,10 @@
 		grid-template-columns: 1fr 1fr;
 		gap: var(--space-2);
 		margin-top: var(--space-2);
-		padding-top: var(--space-2);
+		padding: var(--space-2) 0;
 		border-top: 1px dashed var(--line);
 	}
-	.edit label { display: grid; gap: 4px; font-size: var(--text-xs); color: var(--text-2); }
-	.edit label.wide { grid-column: 1 / -1; }
+	.edit .wide { grid-column: 1 / -1; }
 	.edit input,
 	.edit select { width: 100%; }
 
@@ -2891,20 +2700,15 @@
 		padding-top: var(--space-3);
 		border-top: 1px solid var(--line);
 	}
-	/* A sixth face for a fold, found by `tests/one-fold.test.ts` when it walked the
-	   sources: uppercase, 600, --text-2, no marker at all. The line is the shared fold
-	   in tokens.css now; this only keeps the air under it. */
-	.vouw > summary {
-		margin-bottom: var(--space-2);
-	}
+	.vouw > summary { margin-bottom: var(--space-2); }
 	.profiles { list-style: none; margin: var(--space-2) 0; padding: 0; }
 	/* A block and no longer a flex row: the machine you are working on carries the two
 	   fields that describe it underneath its own line. */
 	.profiles li {
-		padding: 8px 8px;
+		padding: var(--space-2);
 		border: 1px solid var(--line);
 		border-radius: var(--radius-field);
-		margin-bottom: 4px;
+		margin-bottom: var(--space-1);
 		font-size: var(--text-xs);
 	}
 	/* The name pushes the rest to the right; that way the power and the badge line up,
@@ -2913,68 +2717,23 @@
 	/* Orphaned is not an error but is worth knowing: muted, not red. */
 	.profiles li.orphan { border-style: dashed; }
 	.profiles li.orphan .profielnaam { color: var(--text-2); }
-	.profiles .mark {
-		flex: none;
-		padding: 2px 8px;
-		border-radius: var(--radius-pill, 999px);
-		background: var(--surface-2);
-		color: var(--text-2);
-		white-space: nowrap;
-	}
 	.grid {
 		display: grid;
 		grid-template-columns: 1fr 1fr;
 		gap: var(--space-2);
 		margin-bottom: var(--space-2);
 	}
-	.grid label { display: grid; gap: 4px; font-size: var(--text-xs); color: var(--text-2); }
-	.grid label.wide { grid-column: 1 / -1; }
+	.grid .wide { grid-column: 1 / -1; }
 	.grid input,
 	.grid select { width: 100%; }
-	.hint {
-		font-weight: 400;
-		text-transform: none;
-		letter-spacing: 0;
-	}
-	.notice {
-		margin: var(--space-2) 0 0;
-		padding: var(--space-2);
-		border-radius: var(--radius-field);
-		border: 1px solid var(--line);
-		background: var(--surface-2);
-		color: var(--text-2);
-		font-size: var(--text-xs);
-	}
-	.error {
-		margin: var(--space-2) 0;
-		padding: var(--space-2);
-		border-radius: var(--radius-field);
-		background: color-mix(in srgb, var(--danger) 14%, transparent);
-		font-size: var(--text-xs);
-	}
+	.manual-note { margin-bottom: var(--space-2); }
 
-	/* ------------------------------------------- uitwisselen (besluit B7) */
-
-	.uitwissel {
-		margin-top: var(--space-4);
-		padding-top: var(--space-3);
-		border-top: 1px solid var(--line);
-	}
-	.uitwissel .fine { max-width: 52ch; }
 	.uitknoppen { display: flex; gap: var(--space-2); flex-wrap: wrap; }
 
 	/* The preview is a screen of its own, not a strip below the list: this is where
 	   the decision falls, so it gets the room and the reading width for it. */
 	.wisselkop { margin-bottom: var(--space-4); }
-	.wisselkop h2 {
-		font-size: var(--text-lg);
-		font-weight: 600;
-		letter-spacing: -0.01em;
-		margin: 0;
-		color: var(--text-1);
-	}
-	.source { margin: 4px 0 var(--space-3); font-size: var(--text-xs); color: var(--text-2); }
-	.scheiding { opacity: 0.5; }
+	.source { margin: var(--space-1) 0 var(--space-3); font-size: var(--text-xs); color: var(--text-2); }
 	.contents {
 		display: flex;
 		flex-wrap: wrap;
@@ -2983,23 +2742,15 @@
 		margin: 0;
 		padding: 0;
 	}
-	.contents li {
-		font-size: var(--text-xs);
-		padding: var(--space-1) var(--space-3);
-		border-radius: var(--radius-dot);
-		border: 1px solid var(--line);
-		background: var(--surface-2);
-		color: var(--text-2);
-	}
-	/* Zero photos is not a detail: then the evidence does not come along. */
-	.contents li.missing { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, transparent); }
-	.now { margin: var(--space-2) 0 0; font-size: var(--text-xs); color: var(--text-2); }
+	.now { margin-top: var(--space-2); }
 
 	.keuzes {
 		display: grid;
 		grid-template-columns: 1fr 1fr;
 		gap: var(--space-2);
 	}
+	/* The two answers as cards you pick, with the consequence in each. Chosen is the
+	   tint and the edge every chosen thing has; replacing is chosen in red. */
 	.choice {
 		display: grid;
 		grid-template-columns: auto 1fr;
@@ -3011,16 +2762,13 @@
 		border-radius: var(--radius-card);
 		background: var(--surface-1);
 		cursor: pointer;
+		transition: background var(--transition), border-color var(--transition);
 	}
 	.choice input { grid-area: radio; margin: 2px 0 0; }
 	.choice .titelklein { grid-area: title; font-weight: 600; }
-	.choice .hint { grid-area: hint; font-size: var(--text-xs); color: var(--text-2); }
-	.choice.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
-	.choice.danger.on {
-		border-color: var(--danger);
-		box-shadow: inset 0 0 0 1px var(--danger);
-		background: color-mix(in srgb, var(--danger) 8%, transparent);
-	}
+	.choice .help { grid-area: hint; }
+	.choice.on { border-color: var(--accent-edge); background: var(--accent-tint); }
+	.choice.danger.on { border-color: var(--danger-edge); background: var(--danger-tint); }
 
 	.gevolg {
 		list-style: none;
@@ -3048,26 +2796,20 @@
 	.gevolg li.erbij::before { content: '+'; color: var(--ok); }
 	.gevolg li.zelfde::before { content: '='; color: var(--text-2); }
 	.gevolg li.zelfde { color: var(--text-2); }
-	.gevolg .fine { margin: 0; }
 
 	.block {
+		display: grid;
+		gap: var(--space-1);
 		margin-top: var(--space-3);
-		padding: var(--space-3);
-		border: 1px solid var(--line);
-		border-radius: var(--radius-card);
-		background: var(--surface-2);
 	}
 	.block h3 {
-		margin: 0 0 4px;
+		margin: 0;
 		font-size: var(--text-sm);
 		font-weight: 600;
 	}
-	.block.clash { border-color: color-mix(in srgb, var(--warn) 45%, transparent); }
-	.block.erase {
-		border-color: color-mix(in srgb, var(--danger) 50%, transparent);
-		background: color-mix(in srgb, var(--danger) 9%, transparent);
-	}
-	.block.erase p { margin: 0 0 var(--space-2); }
+	.block.clash { border-color: var(--warn-edge); }
+	.block.erase { border-color: var(--danger-edge); background: var(--danger-tint); }
+	.block.erase p { margin: 0 0 var(--space-1); }
 	/* At touch widths a checkbox is 44px tall (design system), so aligning to the top
 	   puts the glyph a line below its own label. Centring keeps it beside the text on
 	   every device. */
@@ -3076,19 +2818,19 @@
 		grid-template-columns: auto 1fr;
 		align-items: center;
 		gap: var(--space-2);
-		margin-top: var(--space-2);
+		margin-top: var(--space-1);
 		font-size: var(--text-xs);
 		cursor: pointer;
 	}
-	.wins { display: flex; gap: var(--space-4); margin: var(--space-2) 0; }
-	.botsingen { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+	.wins { display: flex; gap: var(--space-4); margin: var(--space-1) 0; }
+	.botsingen { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-1); }
 	/* Comparing two values only works when they are in a column. Every row therefore
 	   shares the same grid: what, mine, the file's. */
 	.botsingen li {
 		display: grid;
 		grid-template-columns: 1fr auto auto;
 		align-items: start;
-		gap: 4px var(--space-3);
+		gap: var(--space-1) var(--space-3);
 		padding: var(--space-2);
 		border-radius: var(--radius-field);
 		border: 1px solid var(--line);
@@ -3106,47 +2848,18 @@
 		color: var(--text-2);
 	}
 	/* Which side wins can be read off without re-reading the choice above: the winning
-	   side is bold and marked, the other stays readable — they are both numbers you
-	   want to be able to see. */
+	   side is bold and carries the check, the other stays readable — they are both
+	   numbers you want to be able to see. */
 	.side.wins { color: var(--text-1); font-weight: 600; }
-	.side.wins .k::after {
-		content: ' ✓';
-		color: var(--ok);
-	}
-	.side .k {
-		font-size: var(--text-xs);
-		color: var(--text-2);
-		font-weight: 400;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-	}
+	.k { display: inline-flex; align-items: center; gap: 2px; }
+	.won { display: inline-flex; color: var(--ok); }
 	.pijl { display: none; }
 
 	.actions {
-		display: flex;
-		gap: var(--space-2);
 		margin-top: var(--space-4);
 		padding-top: var(--space-3);
 		border-top: 1px solid var(--line);
 	}
-	.btn.danger {
-		background: var(--danger);
-		border-color: var(--danger);
-		color: var(--on-color);
-	}
-	.ready {
-		display: flex;
-		align-items: baseline;
-		flex-wrap: wrap;
-		gap: var(--space-2);
-		margin-bottom: var(--space-3);
-		padding: var(--space-2) var(--space-3);
-		border-radius: var(--radius-field);
-		border: 1px solid color-mix(in srgb, var(--ok) 45%, transparent);
-		background: color-mix(in srgb, var(--ok) 12%, transparent);
-		font-size: var(--text-xs);
-	}
-	.ready .mini { margin-left: auto; }
 
 	@media (max-width: 640px) {
 		.keuzes { grid-template-columns: 1fr; }

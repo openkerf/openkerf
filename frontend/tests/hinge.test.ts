@@ -38,7 +38,8 @@ async function openHinge() {
 	await page.getByTitle(/Generators/).first().click();
 	// Exact: the rail's own tooltip names the hinge too ("Generators — repeats,
 	// boxes, codes and a living hinge"), so a loose match finds two buttons.
-	await page.getByRole('button', { name: 'Living hinge', exact: true }).click();
+	// The forms are a tablist now (role="tab", like the right-hand panel's tabs).
+	await page.getByRole('tab', { name: 'Living hinge', exact: true }).click();
 	await page.waitForTimeout(600);
 }
 
@@ -91,9 +92,11 @@ test('the window says how many slits it will cut, and how wide the bridge is', a
 		`the size line says ${JSON.stringify(lines)}`
 	);
 
-	// Beside the fields, where the eye is while you type the number.
+	// Under the fields, in "Bending direction and bridges": the desktop review (V22) put the
+	// explanation on demand, and the handbook says it is there. Still a live sentence about
+	// the numbers just typed, so it is read whether the fold is open or not.
 	const beside = await page.evaluate(
-		() => document.querySelector('.formulier .bridgeline')?.textContent ?? ''
+		() => document.querySelector('.formulier details.fit-help')?.textContent ?? ''
 	);
 	assert.match(beside, /3\.0 mm of material stays behind, and between two rows 2\.0 mm/);
 	assert.match(beside, /twists, and what breaks/);

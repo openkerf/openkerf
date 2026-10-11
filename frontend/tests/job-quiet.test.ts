@@ -92,13 +92,13 @@ test('the keys are on the buttons they work, not in a paragraph under them', () 
 	// `screen.noHover` a title has no route at all, and the part of this sentence that
 	// only it can carry — the keys stop working outside this window — is the part you
 	// discover at the wrong moment. On a desk it stays off the screen.
-	const paragraph = /\{#if screen\.noHover\}\s*<p class="toetsen">/.test(source);
+	const paragraph = /\{#if screen\.noHover\}\s*<p class="toetsen[^"]*">/.test(source);
 	assert.ok(
 		paragraph,
 		'the key advice is a tooltip at every width, and a touch screen cannot open one'
 	);
 	assert.equal(
-		/class="toetsen"/.test(source.replace(/\{#if screen\.noHover\}[\s\S]{0,120}?\{\/if\}/g, '')),
+		/class="toetsen/.test(source.replace(/\{#if screen\.noHover\}[\s\S]{0,120}?\{\/if\}/g, '')),
 		false,
 		'the paragraph of key advice stands under the transport buttons at every width'
 	);
@@ -205,11 +205,11 @@ async function offValues(width: number) {
 	await page.click('.panel .tab:has-text("Job")');
 	await page.locator('.machinevouw > summary').click();
 		for (const summary of await page.locator('.machinevouw details.origin > summary').all()) await summary.click();
-		await page.waitForSelector('.origin p.hint[title]', { timeout: 20000 });
+		await page.waitForSelector('.origin p.help[title]', { timeout: 20000 });
 	await page.waitForTimeout(500);
 	return page.evaluate(() =>
 		[...document.querySelectorAll('.origin')].map((block) => {
-			const value = block.querySelector('p.hint[title]') as HTMLElement | null;
+			const value = block.querySelector('p.help[title]') as HTMLElement | null;
 			return {
 				value: value ? (value.textContent ?? '').trim() : null,
 				decoration: value ? getComputedStyle(value).textDecorationLine : null,

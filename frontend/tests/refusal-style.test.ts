@@ -4,7 +4,7 @@
  * Run: `node --test frontend/tests/refusal-style.test.ts`
  *
  * The stencil window said its refusal in a paragraph with `class="notice failure"`,
- * and neither class existed in its style block. Measured in light and dark: the
+ * and neither class existed in its style block. Measured: the
  * sentence came out at `rgb(27, 31, 36)` — exactly the colour of the explanation above
  * it. So the one line saying that this cannot be done read as an ordinary line of
  * text. Its neighbours, Clipart and Generators, colour theirs with `--danger`.

@@ -2,7 +2,7 @@
 	/**
 	 * What gets burned, right before you press start (decision B8).
 	 *
-	 * The canvas is not next to it on tablet and phone, and on the desktop you
+	 * The canvas may not be next to it on a tablet, and on the desktop you
 	 * stop looking at it just before starting anyway. This is the last moment at
 	 * which a wrong layer, a forgotten shape or something hanging over the edge of
 	 * the sheet still costs nothing.
@@ -14,6 +14,7 @@
 	import { burnVerdict, type BurnVerdict, type Design } from '$lib/design.svelte';
 	import { i18n, t } from '$lib/i18n/index.svelte';
 	import Dialog from './Dialog.svelte';
+	import Notice from './Notice.svelte';
 
 	/** The drawing at full size, in a window of its own. */
 	let large = $state(false);
@@ -25,8 +26,8 @@
 	/**
 	 * What the server reports about the limits (gap C2).
 	 *
-	 * The measurement comes from `/api/job/layers`, the same one the canvas and
-	 * the phone use. Redoing it here would mean two places could come to disagree
+	 * The measurement comes from `/api/job/layers`, the same one the canvas
+	 * uses. Redoing it here would mean two places could come to disagree
 	 * about whether something still just fits — and then neither can be trusted.
 	 */
 	type BoundsReport = {
@@ -241,10 +242,9 @@
 	/**
 	 * Outside the sheet is hatched, not coloured differently.
 	 *
-	 * Measured: `--bed` and `--surface-2` are exactly the same colour in the dark
-	 * theme (1.00:1) and 1.14:1 in the light one. No existing token gets past
-	 * 1.23:1 against `--bed`, so with a flat colour "there is no material here" is
-	 * simply invisible in the dark. Hatching is also the common language for it in
+	 * Measured: `--bed` and `--surface-2` stand at 1.14:1. No existing token gets
+	 * past 1.23:1 against `--bed`, so with a flat colour "there is no material
+	 * here" is all but invisible. Hatching is also the common language for it in
 	 * CAM software, and it works for colour blindness.
 	 */
 	const hatchId = `ok-hatch-${ownId}`;
@@ -376,7 +376,7 @@
 		</p>
 
 		<!-- What the image says, in words. A red line you overlook is not a
-		     warning; and whoever is standing in the sun with a phone is the first
+		     warning; and whoever is standing in the sun with a tablet is the first
 		     to lose colour differences. -->
 		<!-- Outside the bed comes first and is red; outside the sheet below it and
 		     amber. That is not a matter of taste but the order in which it goes
@@ -385,9 +385,9 @@
 		     stop. Two equally red cards in a row (as it was) make those two
 		     equally bad, and then neither carries any weight. -->
 		{#if offBedCount}
-			<p class="notice offbed" role="alert">
+			<Notice tone="danger" live>
 				<strong>{t('preview.outsideBed.title')}</strong>
-				{t('preview.outsideBed.body', {
+				<span>{t('preview.outsideBed.body', {
 					n: offBedCount,
 					reach: bounds?.bed
 						? t('preview.reach', {
@@ -395,30 +395,30 @@
 								height: size(bounds.bed.height_mm)
 							})
 						: ''
-				})}
-			</p>
+				})}</span>
+			</Notice>
 		{/if}
 		{#if offSheetCount}
-			<p class="notice offsheet">
+			<Notice tone="warn">
 				{t('preview.outsideSheet', {
 					n: offSheetCount,
 					sheet: sheet ? sheet.name : t('preview.sheetFallback')
 				})}
-			</p>
+			</Notice>
 		{/if}
 		{#if looseCount}
-			<p class="notice silent">{t('preview.silent', { n: looseCount })}</p>
+			<p class="help silent">{t('preview.silent', { n: looseCount })}</p>
 		{/if}
 		<!-- The other silence, in its own words and with the layer named: what you do
 		     about it is switch that layer back on, not give the shape a layer. -->
 		{#if offCount}
-			<p class="notice silent">
+			<p class="help silent">
 				{t('preview.silentOff', { n: offCount, layers: offLayerNames })}
 			</p>
 		{/if}
 	</div>
 
-	<Dialog title={t('preview.whatBurns')} bind:open={large} width="960px">
+	<Dialog title={t('preview.whatBurns')} bind:open={large} size="l">
 		<div class="large">
 			{@render drawing('large')}
 			<p class="sizes">
@@ -437,6 +437,8 @@
 
 <style>
 	.pf-beeld {
+		display: grid;
+		gap: var(--space-2);
 		margin: 0 0 var(--space-3);
 	}
 	/* The button is the drawing itself; it must not look like a button, but it
@@ -450,9 +452,9 @@
 		border-radius: var(--radius-field);
 		cursor: zoom-in;
 	}
-	.enlarge:focus-visible {
-		outline: 2px solid var(--accent);
-		outline-offset: 2px;
+	.large {
+		display: grid;
+		gap: var(--space-2);
 	}
 	.large :global(svg) {
 		max-height: 66vh;
@@ -468,17 +470,15 @@
 		background: var(--surface-2);
 	}
 	/* Fine enough to stay background, strong enough to still read as hatching on a
-	   221 px view. On `--line` it managed 1.41:1 (light) and 1.44:1 (dark) against
-	   the sheet — measured, and that is too little. */
+	   221 px view. On `--line` it managed 1.41:1 against the sheet — measured, and that is too little. */
 	.hatch {
 		stroke: color-mix(in srgb, var(--text-2) 45%, transparent);
 		stroke-width: 1;
 		vector-effect: non-scaling-stroke;
 	}
 	/* The edge of the sheet is where your material stops; that is a boundary, not
-	   a divider. `--line` got 1.41:1 (light) / 1.44:1 (dark) there, well under the
-	   3:1 WCAG 1.4.11 asks of a graphical object; `--text-2` gets 6.00:1 and
-	   5.65:1. */
+	   a divider. `--line` got 1.41:1 there, well under the 3:1 WCAG 1.4.11 asks of
+	   a graphical object; `--text-2` gets 6.00:1. */
 	.sheet {
 		fill: var(--bed);
 		stroke: var(--text-2);
@@ -536,34 +536,12 @@
 		align-items: baseline;
 		justify-content: space-between;
 		gap: var(--space-1) var(--space-3);
-		margin-top: var(--space-1h);
+		margin: 0;
 		font-size: var(--text-xs);
 		color: var(--text-2);
 	}
 	.sizes .mono {
 		font-family: var(--font-mono);
 		font-variant-numeric: tabular-nums;
-	}
-	.notice {
-		margin-top: var(--space-2);
-		font-size: var(--text-xs);
-		line-height: 1.45;
-	}
-	.notice.offsheet,
-	.notice.offbed {
-		color: var(--text-1);
-		padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
-		border-radius: 0 var(--radius-field) var(--radius-field) 0;
-	}
-	.notice.offbed {
-		border-left: 4px solid var(--danger-solid);
-		background: color-mix(in srgb, var(--danger) 18%, transparent);
-	}
-	.notice.offsheet {
-		border-left: 4px solid var(--warn-solid);
-		background: color-mix(in srgb, var(--warn) 18%, transparent);
-	}
-	.notice.silent {
-		color: var(--text-2);
 	}
 </style>

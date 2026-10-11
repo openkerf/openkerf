@@ -58,14 +58,14 @@ The tool rail on the left opens the window **Material library**. Materials are t
 on the left, with the number of presets behind each name; the presets for the material
 you pick are on the right, thin to thick, and within a thickness the measured ones first.
 
-Search and preset filters are first. Under them, **Find starting points**, **Read a test-board photo**, and the library exchange fold open the secondary tasks when needed. Starting points keeps the machine description, catalogue provenance and import undo controls; it fetches suggestions only when you request them.
+Search and preset filters are first. Under them, **Find starting points**, **Read a test-board photo** and the library exchange are three folds stacked one under the other, each one quiet line until you open it. They are folds and not tabs because each is visited now and then — once per machine, once per board photo, once per new computer — and tabs would keep one panel open all the time, pushing the material list down. Starting points keeps the machine description, catalogue provenance and import undo controls; it fetches suggestions only when you request them.
 
 ![The Material library window. Across the top the quiet door into the shared catalogue and the strip "Read a burned board from a photograph"; under them a search field, the tick box "Only KH-5030" and an Apply to dropdown reading "Layer 1 · Outline". On the left the materials, each with the number of presets beside its name; an on-sheet badge sits below the name — Acrylaat (geëxtrudeerd) 3, Berkentriplex 5, MDF 2, and several at 0. On the right the preset rows for those materials with their thickness, operation, speed, power and a badge each: green Verified, grey Manual, amber Extrapolated, amber Imported. The engrave rows carry a small amber "other kind", because the layer they would land on cuts.](images/14-library.png)
 
 Two checkboxes narrow the list, and both are starting points rather than walls:
 **Presets for {machine}** shows the presets of the laser that is switched on now, and
-**Presets for {material}** — with the reason **— from this sheet** beside it — jumps to the
-material lying in the machine. The material of the current sheet is also marked in the
+**Presets for {material}** — with the reason *That is the material of this sheet.* under
+it — jumps to the material lying in the machine. The material of the current sheet is also marked in the
 list on the left with the tag **on the sheet**.
 
 The first row of the material list is **Recently used**: what you burned yesterday is at
@@ -102,7 +102,8 @@ tooltip spells the meaning out, and where there is risk it adds what to do about
 | **Imported** | From someone else's machine | Another laser, another result — treat this as a starting value. |
 
 The badge is not just a colour: each kind has its own icon and its own word, so a row
-does not lose its warning while you scroll.
+does not lose its warning while you scroll. It is the only place the source is shown —
+there is no coloured stripe down the side of the row as well.
 
 ## Applying a preset to a layer
 
@@ -135,7 +136,7 @@ Without a valid token the editing actions are off as well, tooltip **Requires a 
 
 ## Provenance and evidence
 
-The three-dot button at the end of a row — or a right-click on the row — opens its menu:
+The **⋯** button at the end of a row — or a right-click on the row — opens its menu:
 **Apply to layer {n}**, **Provenance and evidence**, **Adjust the values**, **Make a
 test grid for {material}**, **Share with Presetariat** and **Remove preset**.
 
@@ -320,6 +321,8 @@ The button is **Attach these to {machine}**.
 A preset is only reusable if you know which laser made it. That is why the machine
 stands apart from the preset, in the panel **Machine profiles ({n})**:
 
+Behind the **Why?** fold at the top of the panel:
+
 > A preset is only reusable when you know which machine it was made on — which is why the profile stands apart from the preset.
 
 Each profile shows its name, its wattage where known, and what hangs off it in presets
@@ -388,7 +391,7 @@ under **Same board, different name?**:
 > These materials from the file look like something you already have. Merging puts their presets with the material you already know; leave it and you get two.
 
 Each proposal is a tick box — **Merge {name} with {match}** — with the reason why they
-look alike. Ticking one recomputes the tallies above, so the numbers keep up with your
+look alike on a line of its own under it. Ticking one recomputes the tallies above, so the numbers keep up with your
 choices.
 
 ### When two presets clash
@@ -477,7 +480,7 @@ away. It will not be offered again for this machine.*
 Without the kind of laser and the tube power nothing can be matched, so the card asks. The
 heading is **How powerful is this laser?** when the kind is already filled in from the model
 you picked in the wizard, and **What kind of laser is this?** when it is not. The reason is
-underneath:
+behind the **Why?** fold above the fields:
 
 > Without these two OpenKerf cannot tell which presets would suit this laser: a CO2 preset on a diode is not a starting point, and the same percentage on twice the power chars and burns through.
 
@@ -616,7 +619,7 @@ pre-filled proposal in a new tab, so you can read what you are about to share be
 anybody else does.*
 
 **Your handle, once.** Every entry in the catalogue names who offered it, and the panel
-asks for that the first time:
+asks for that the first time, with the reason behind its **Why?** fold:
 
 > The catalogue is shared under CC BY 4.0, so every entry names who offered it — that is the credit anybody reusing it has to be able to give. It is asked once and kept on this computer.
 

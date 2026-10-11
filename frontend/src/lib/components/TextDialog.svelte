@@ -2,6 +2,7 @@
 	import { t } from '$lib/i18n/index.svelte';
 	import Dialog from './Dialog.svelte';
 	import FontPicker from './FontPicker.svelte';
+	import NumberField from './NumberField.svelte';
 
 	let {
 		open = $bindable(),
@@ -62,8 +63,8 @@
 	}
 </script>
 
-<Dialog title={initial ? t('ux.text.editTitle') : t('text.title')} bind:open width="480px">
-	<label class="field">
+<Dialog title={initial ? t('ux.text.editTitle') : t('text.title')} bind:open size="s">
+	<label class="field field-label">
 		<span>{t('text.label')}</span>
 		<!-- svelte-ignore a11y_autofocus -->
 		<input
@@ -77,18 +78,14 @@
 		/>
 	</label>
 
-	<div class="row">
-		<label class="field">
-			<span>{t('text.height')}</span>
-			<input class="mono" type="number" step="0.5" min="0.5" bind:value={size} />
-		</label>
-		<label class="field">
-			<span>{t('text.tracking')}</span>
-			<input class="mono" type="number" step="0.05" min="0.1" bind:value={spacing} />
-		</label>
+	<!-- The same stepper as every other number in the app; the unit is already in the
+	     height's label, which is where the roomy form puts it. -->
+	<div class="row field">
+		<NumberField label={t('text.height')} bind:value={size} step={0.5} min={0.5} />
+		<NumberField label={t('text.tracking')} bind:value={spacing} step={0.05} min={0.1} />
 	</div>
 
-	<label class="field">
+	<label class="field field-label">
 		<span>{t('text.alignment')}</span>
 		<select bind:value={align}>
 			<option value="start">{t('text.left')}</option>
@@ -109,25 +106,11 @@
 
 <style>
 	.field {
-		display: grid;
-		gap: 2px;
 		margin-bottom: var(--space-3);
-		font-size: var(--text-xs);
-		color: var(--text-2);
 	}
 	.row {
 		display: grid;
 		grid-template-columns: 1fr 1fr;
 		gap: var(--space-3);
-	}
-	input,
-	select {
-		font: inherit;
-		width: 100%;
-		padding: 8px 8px;
-		border: 1px solid var(--line);
-		border-radius: var(--radius-field);
-		background: var(--surface-2);
-		color: var(--text-1);
 	}
 </style>

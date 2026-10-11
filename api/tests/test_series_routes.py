@@ -286,7 +286,7 @@ def test_a_series_appears_in_the_status_payload(client):
     """
     One snapshot, the same everywhere.
 
-    Top bar, canvas, context panel and phone view all read the live socket. Fails on a
+    Top bar, canvas and context panel all read the live socket. Fails on a
     series that is only readable from its own route, which is precisely how the tile
     run once went missing on the WebSocket while `/api/status` already had it.
     """

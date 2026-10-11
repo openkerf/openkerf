@@ -10,6 +10,7 @@
 	 */
 
 	import { t } from '$lib/i18n/index.svelte';
+	import Notice from './Notice.svelte';
 
 	type Font = { file: string; name: string };
 
@@ -124,7 +125,7 @@
 	);
 </script>
 
-<label class="field">
+<label class="field field-label">
 	<span>
 		{current
 			? t('font.label.current', { n: fonts.length, current })
@@ -136,20 +137,18 @@
 {@html `<style>${faces}</style>`}
 <div class="fonts" role="listbox" aria-label={t('font.listAria')}>
 	<button
-		class="font"
+		class="listrow font"
 		role="option"
 		aria-selected={font === ''}
-		class:picked={font === ''}
 		onclick={() => pick(null)}
 	>
 		<span class="name">{t('font.default')}</span>
 	</button>
 	{#each shown.slice(0, 60) as item (item.file)}
 		<button
-			class="font"
+			class="listrow font"
 			role="option"
 			aria-selected={font === item.file}
-			class:picked={font === item.file}
 			onclick={() => pick(item)}
 		>
 			<!--
@@ -166,7 +165,7 @@
 		</button>
 	{/each}
 	{#if shown.length > 60}
-		<p class="note">{t('font.more', { n: shown.length - 60 })}</p>
+		<p class="help">{t('font.more', { n: shown.length - 60 })}</p>
 	{/if}
 </div>
 
@@ -175,17 +174,17 @@
 		{importing ? t('font.import.close') : t('font.import.open')}
 	</button>
 	{#if importing}
-		<p class="note">{t('font.import.why')}</p>
+		<p class="help">{t('font.import.why')}</p>
 		<input
 			type="search"
 			bind:value={importFilter}
 			placeholder={t('font.import.search', { n: importable.length })}
 		/>
-		{#if importError}<p class="err">{importError}</p>{/if}
+		{#if importError}<Notice tone="danger" live>{importError}</Notice>{/if}
 		<div class="fonts">
 			{#each shownImportable as item (item.file)}
 				<button
-					class="font"
+					class="listrow font"
 					disabled={busy !== null}
 					title={busy === null ? undefined : t('reason.busy')}
 					onclick={() => bring(item)}
@@ -193,7 +192,7 @@
 					{busy === item.file ? t('common.busy') : item.name}
 				</button>
 			{:else}
-				<span class="note">{t('font.import.nothing')}</span>
+				<span class="help">{t('font.import.nothing')}</span>
 			{/each}
 		</div>
 	{/if}
@@ -201,20 +200,7 @@
 
 <style>
 	.field {
-		display: grid;
-		gap: 2px;
 		margin-bottom: var(--space-3);
-		font-size: var(--text-xs);
-		color: var(--text-2);
-	}
-	input {
-		font: inherit;
-		width: 100%;
-		padding: 8px 8px;
-		border: 1px solid var(--line);
-		border-radius: var(--radius-field);
-		background: var(--surface-2);
-		color: var(--text-1);
 	}
 	.fonts {
 		display: flex;
@@ -226,19 +212,12 @@
 		border: 1px solid var(--line);
 		border-radius: var(--radius-field);
 	}
+	/* The shared list row; this only says that its name and its sample stand apart. */
 	.font {
-		display: flex;
 		align-items: baseline;
 		justify-content: space-between;
 		gap: var(--space-3);
-		width: 100%;
-		min-height: 36px;
-		padding: 4px var(--space-2);
-		border: 1px solid transparent;
-		border-radius: var(--radius-field);
-		background: transparent;
-		color: var(--text-1);
-		text-align: left;
+		padding-inline: var(--space-2);
 	}
 	/* Emphatically the interface typeface: the name is the key by which you find a
 	   typeface again and therefore has to stay readable. */
@@ -262,18 +241,9 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 	}
-	.font:hover { background: var(--surface-2); }
-	.font.picked {
-		border-color: var(--accent);
-		background: color-mix(in srgb, var(--accent) 10%, transparent);
-	}
-	.import { margin-top: var(--space-3); display: grid; gap: 6px; }
-	.link {
+	.import { margin-top: var(--space-3); display: grid; gap: var(--space-1h); }
+	.import .link {
 		justify-self: start;
 		font-size: var(--text-xs);
-		color: var(--accent);
-		text-decoration: underline;
 	}
-	.note { margin: 0; font-size: var(--text-xs); color: var(--text-2); line-height: 1.5; }
-	.err { margin: 0; font-size: var(--text-xs); color: var(--danger); }
 </style>

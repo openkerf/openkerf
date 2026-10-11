@@ -322,6 +322,11 @@ export type Handlers = {
 	saveProjectAs: () => void;
 	downloadProject: () => void;
 	uploadProject: () => void;
+	/** Bring a file into the current sheet (SVG, DXF, RD, G-code, an image): it adds to
+	 *  the work, unlike Upload…, which replaces it. */
+	importFile: () => void;
+	/** Download the current sheet as SVG. */
+	exportSheet: () => void;
 };
 
 const K = (id: string) => keyLabel(KEYS[id]);
@@ -411,6 +416,8 @@ export function bridgesRefusal(
  * beside the laser has the data volume, the tablet in front of it has no file system
  * worth the name. Download and Upload are the way to another device, and stand below
  * a separator for that reason. Downloading only reads, so it is never off for a token.
+ * Import… and Export close the list: they work on the sheet in hand, not on the whole
+ * project, and the page puts a separator before them as well.
  */
 export function projectActions(ctx: Context, h: Handlers): Action[] {
 	const off = mayWrite(ctx);
@@ -420,7 +427,12 @@ export function projectActions(ctx: Context, h: Handlers): Action[] {
 		{ id: 'project.save', label: t('topbar.project.save'), icon: 'save', key: K('save'), off, run: h.saveProject },
 		{ id: 'project.saveAs', label: t('topbar.project.saveAs'), icon: 'save', key: K('saveAs'), off, run: h.saveProjectAs },
 		{ id: 'project.download', label: t('topbar.project.download'), icon: 'download', explain: t('topbar.project.hint'), run: h.downloadProject },
-		{ id: 'project.upload', label: t('topbar.project.upload'), icon: 'upload', off, run: h.uploadProject }
+		{ id: 'project.upload', label: t('topbar.project.upload'), icon: 'upload', off, run: h.uploadProject },
+		// What you do with the sheet in hand rather than with the whole project. They
+		// were two buttons of their own in the top bar; the bar is for the machine now,
+		// and these stand below the project rows, after a separator of their own.
+		{ id: 'sheet.import', label: t('topbar.import'), icon: 'upload', explain: t('topbar.import.title'), off, run: h.importFile },
+		{ id: 'sheet.export', label: t('topbar.export'), icon: 'download', explain: t('topbar.export.title'), run: h.exportSheet }
 	];
 }
 

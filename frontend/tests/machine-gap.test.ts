@@ -54,3 +54,31 @@ test('driver-confirmed pause remains a job state even when disconnected', () => 
     assert.equal(api.jobPhase(d, job, false), 'paused');
   }
 });
+
+/**
+ * A finished job and the machine chip agree.
+ *
+ * The engine leaves a finished job in the queue at progress 0.998 (CLAUDE.md, "A job
+ * never reaches 100%"). `isStalled` read that as started-but-standing-still, so the top
+ * bar said "Paused" beside a job card saying "Done 100%" — and without that, a job in the
+ * queue would have made the chip say "Busy". Both now read `isFinished`.
+ */
+test('a finished job that lingers in the queue reads as done and ready, not paused', () => {
+  const done = { running: false, progress: 0.998, elapsed_seconds: 151 } as Job;
+  const d = device({ spooler: { present: true, idle: false, queue_length: 1, jobs: [done] } });
+  assert.equal(api.isFinished(done), true);
+  assert.equal(api.isStalled(done), false);
+  assert.equal(api.jobPhase(d, done, false), 'done');
+  assert.equal(api.machineState(d, true), 'ready');
+  // A job standing still half-way is still a pause.
+  const half = { running: false, progress: 0.42, elapsed_seconds: 60 } as Job;
+  assert.equal(api.isStalled(half), true);
+});
+
+test('progress is live only while the controller is connected', () => {
+  assert.equal(api.progressIsLive(device(), true), true);
+  assert.equal(api.progressIsLive(device({ connection: { state: 'unknown', detail: null } }), true), false);
+  assert.equal(api.progressIsLive(device(), false), false);
+  // A driver that never reports its link is not a lost link.
+  assert.equal(api.progressIsLive(device({ connection: undefined }), true), true);
+});

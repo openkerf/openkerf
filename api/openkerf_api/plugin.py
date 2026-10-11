@@ -23,6 +23,12 @@ def plugin(kernel, lifecycle=None):
 
         register_rasterizer(kernel)
 
+        # A Ruida job's first layer would otherwise run at the driver's default 10 mm/s
+        # after its own block says something else; see `ruida_speed`.
+        from .ruida_speed import install as repair_ruida_speed
+
+        repair_ruida_speed()
+
         # Bridges have to survive a save and an open, and without these two lines they do
         # not. `core/svg_io.py:897` only `literal_eval`s an `mk*` attribute that is in this
         # registry; MeerK40t registers both of them in `main.py:258` — its own entry point,

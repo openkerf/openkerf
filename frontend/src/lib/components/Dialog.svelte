@@ -5,6 +5,7 @@
 
 <script lang="ts">
 	import { t } from '$lib/i18n/index.svelte';
+	import Icon from './Icon.svelte';
 	/**
 	 * An overlay dialog for libraries and tools.
 	 *
@@ -15,13 +16,18 @@
 	let {
 		title,
 		open = $bindable(),
-		width = '560px',
+		size = 'm',
 		children,
 		footer
 	}: {
 		title: string;
 		open: boolean;
-		width?: string;
+		/**
+		 * How wide, by what the window holds: `s` a question, `m` a form, `l` a
+		 * workspace, `xl` a workshop such as the library. Fourteen pixel widths came down
+		 * to these four (`--dialog-*` in tokens.css).
+		 */
+		size?: 's' | 'm' | 'l' | 'xl';
 		children: import('svelte').Snippet;
 		/**
 		 * The buttons that answer the question, if there are any.
@@ -120,7 +126,7 @@
 		<!-- svelte-ignore a11y_no_noninteractive_element_to_interactive_role -->
 		<section
 			class="panel"
-			style="width: min({width}, calc(100vw - 2 * var(--space-6)))"
+			style="width: min(var(--dialog-{size}), calc(100vw - 2 * var(--space-6)))"
 			role="dialog"
 			aria-modal="true"
 			aria-label={title}
@@ -136,8 +142,13 @@
 			}}
 		>
 			<header>
-				<h2>{title}</h2>
-				<button class="close" aria-label={t('common.close')} onclick={() => (open = false)}>×</button>
+				<h2 class="title">{title}</h2>
+				<button
+					class="btn ghost icon close"
+					aria-label={t('common.close')}
+					title={t('common.close')}
+					onclick={() => (open = false)}><Icon name="close" /></button
+				>
 			</header>
 			<div class="body">
 				{@render children()}
@@ -186,22 +197,11 @@
 		padding: var(--space-3) var(--space-4);
 		border-bottom: 1px solid var(--line);
 	}
-	h2 {
-		margin: 0;
-		font-size: var(--text-md);
-		font-weight: 600;
-		letter-spacing: -0.01em;
-	}
 	.close {
-		font-size: var(--text-lg);
-		line-height: 1;
 		color: var(--text-2);
-		width: 28px;
-		height: 28px;
-		border-radius: var(--radius-field);
+		margin-right: calc(-1 * var(--space-2));
 	}
 	.close:hover {
-		background: var(--surface-2);
 		color: var(--text-1);
 	}
 	.body {

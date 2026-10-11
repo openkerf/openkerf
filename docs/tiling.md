@@ -71,8 +71,8 @@ larger, or move a shape away from the seam."
 Once the run is going, the panel on the right, under **Job**, leads it. It shows one
 step at a time, because that is how you carry it out.
 
-At the top: **Tile 1 of 2**, a row of tile numbers with a tick behind the ones that are
-done, and a line you should read once:
+At the top: **Tile 1 of 2**, a row of tile numbers with a green tick behind the ones that
+are done and the one you are on underlined, and a line you should read once:
 
 > The zero point you set does not apply now: the marks decide where the burning happens.
 

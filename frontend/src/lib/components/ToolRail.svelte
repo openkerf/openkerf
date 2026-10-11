@@ -10,9 +10,8 @@
 		| 'point'
 		| 'text';
 
-	import { saveFile } from '$lib/saving';
 	import { t } from '$lib/i18n/index.svelte';
-	import ArrangeIcon from './ArrangeIcon.svelte';
+	import Menu from './Menu.svelte';
 	import type { Action, Menu as MenuList } from '$lib/actions';
 
 	let {
@@ -26,7 +25,6 @@
 		onOpenGrid,
 		onOpenLibrary,
 		onPlaceImage,
-		onOpenFile,
 		onOpenGenerators,
 		onOpenClipart,
 		onOpenSeries
@@ -38,24 +36,22 @@
 		writeOff?: string;
 		/** Tablet: the rail carries the tablet tasks, the rest lives in the menu. */
 		compact?: boolean;
-		/** Narrow tablet: the file buttons do not fit in the top bar and live here
-		 *  instead. Above this width they are only there — two places for the same
-		 *  button is worse than one place further away. */
+		/** Tablet: Import… and Export get a File group in the More menu as well, because
+		 *  the empty bed's tablet sentence sends you to More for them. */
 		files?: boolean;
-		/** Below 850px the project button no longer fits in the top bar beside the
-		 *  material; then the project lives here, *with* its word. Above that it is
-		 *  in the bar and does not belong here — two places for the same action only
-		 *  raises the question which one is the real one. */
+		/** Below 880px the project button no longer fits in the top bar beside the
+		 *  material; then the whole project menu lives here, *with* its words. Above
+		 *  that it is in the bar and does not belong here — two places for the same
+		 *  action only raises the question which one is the real one. */
 		projectInRail?: boolean;
-		/** The same six rows the top bar's project menu shows — New, Open…, Save,
-		 *  Save as…, Download, Upload… — read from `$lib/actions`' `projectActions`
-		 *  so a narrow screen reaches the server the same way the bar does, and not
-		 *  through a second, hand-built copy of the same six verbs. */
+		/** The rows the top bar's project menu shows — New, Open…, Save, Save as…,
+		 *  Download, Upload…, Import…, Export — read from `$lib/actions`'
+		 *  `projectActions` so a narrow screen reaches the server the same way the bar
+		 *  does, and not through a second, hand-built copy of the same verbs. */
 		projectMenu?: MenuList;
 		onOpenGrid?: () => void;
 		onOpenLibrary?: () => void;
 		onPlaceImage?: (file: File) => void;
-		onOpenFile?: (file: File) => void;
 		onOpenGenerators?: () => void;
 		onOpenClipart?: () => void;
 		onOpenSeries?: () => void;
@@ -130,216 +126,186 @@
 		nodes: t('rail.tool.nodes.short'),
 		pen: t('rail.tool.pen.short')
 	});
-	let moreOpen = $state(false);
 
-	/**
-	 * Saving through `saveFile`, not through a bare `<a download>`: `design.svg` is
-	 * a read, so nothing here needs to know afterwards — unlike the project rows
-	 * below, which come from `projectMenu` and carry their own reload.
-	 */
-	async function save(event: MouseEvent, url: string, name: string) {
-		event.preventDefault();
-		moreOpen = false;
-		await saveFile(url, name);
+	/** Why this mode cannot be chosen now, or nothing. One rule for the rail and its menu. */
+	function toolOff(item: { id: Tool; label: string }): string | undefined {
+		if (item.id === 'select') return undefined;
+		if (!canEdit) return t('rail.needsToken', { label: item.label });
+		if (MAKES.includes(item.id) && writeOff) return writeOff;
+		return undefined;
 	}
+	/** Why a window that writes cannot be opened now. */
+	let launchOff = $derived(!canEdit ? t('reason.needsToken') : writeOff);
+
+	/** The one hidden file field behind "Place image", on the rail and in its menu. */
+	let imageInput = $state<HTMLInputElement | null>(null);
 
 	let visible = $derived(compact ? TOOLS.filter((t) => CORE.includes(t.id)) : TOOLS);
 	let hidden = $derived(compact ? TOOLS.filter((t) => !CORE.includes(t.id)) : []);
+
+	/**
+	 * The More menu is the app's one menu (`Menu.svelte`): the same rows, the same arrow
+	 * keys, Escape, and a tap outside to close it. It used to be a hand-built copy that
+	 * looked like it and walked like nothing — Tab was the only way through it.
+	 */
+	let more = $state<{ x: number; y: number } | null>(null);
 	$effect(() => {
-		if (!compact) moreOpen = false;
+		if (!compact) more = null;
 	});
-	function pick(id: Tool) {
-		tool = id;
-		moreOpen = false;
+
+	let moreMenu = $derived.by<MenuList>(() => {
+		const groups: MenuList = [
+			{
+				title: t('rail.group.tools'),
+				items: hidden.map((item) => ({
+					id: `tool-${item.id}`,
+					label: SHORT[item.id] ?? item.label,
+					explain: item.label,
+					on: tool === item.id,
+					off: toolOff(item),
+					run: () => (tool = item.id)
+				}))
+			},
+			{
+				title: t('rail.group.add'),
+				items: [
+					{
+						id: 'place-image',
+						label: t('rail.placeImage'),
+						off: canEdit ? undefined : t('reason.needsToken'),
+						run: () => imageInput?.click()
+					},
+					{ id: 'generators', label: t('rail.generators.short'), explain: t('rail.generators'), off: launchOff, run: () => onOpenGenerators?.() },
+					{ id: 'clipart', label: t('rail.clipart.short'), explain: t('rail.clipart'), off: launchOff, run: () => onOpenClipart?.() },
+					// Series has to be here as well, and not only in the wide rail: on a
+					// tablet the canvas menu is the only other door to it, and there is no
+					// long press on the canvas — so without this row the window has no door
+					// at all on a touch screen, while all four of its neighbours have one.
+					{ id: 'series', label: t('rail.series.short'), explain: t('rail.series'), off: launchOff, run: () => onOpenSeries?.() }
+				]
+			}
+		];
+		// Below 880px the whole project menu; between that and 1200 only the two rows
+		// that work on the sheet, because the project button in the bar has the rest.
+		const fileRows = projectInRail
+			? projectMenu.flatMap((group) => group.items)
+			: projectRows.filter((row) => row.id === 'sheet.import' || row.id === 'sheet.export');
+		if (files && fileRows.length) groups.push({ title: t('rail.group.file'), items: fileRows });
+		return groups;
+	});
+
+	function openMore(button: HTMLElement) {
+		if (more) {
+			more = null;
+			return;
+		}
+		const box = button.getBoundingClientRect();
+		// Beside the rail, its bottom edge level with the button: the menu sits next to
+		// the finger that opened it and does not cover the sheet bar above.
+		more = { x: box.right + 8, y: box.bottom };
 	}
 </script>
 
-<svelte:window
-	onkeydown={(e) => {
-		if (e.key === 'Escape' && moreOpen) moreOpen = false;
-	}}
-/>
-
 <nav class="rail" class:compact aria-label={t('rail.aria')}>
-	{#each visible as item (item.id)}
-		<button
-			class="tool"
-			aria-pressed={tool === item.id}
-			title={item.id === 'select'
-				? item.label
-				: !canEdit
-					? t('rail.needsToken', { label: item.label })
-					: MAKES.includes(item.id) && writeOff
-						? `${item.label} — ${writeOff}`
-						: item.label}
-			disabled={item.id !== 'select' &&
-				(!canEdit || (MAKES.includes(item.id) && Boolean(writeOff)))}
-			onclick={() => (tool = item.id)}
-		>
-			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-				<path d={item.path} />
-			</svg>
-			{#if compact}<span class="name">{SHORT[item.id] ?? item.label}</span>{/if}
-		</button>
-	{/each}
-
-	{#if compact}
-		<!-- The two tablet tasks from DESIGN-SYSTEM are here directly, not in the
-		     menu: on the tablet beside the machine *this* is the work. -->
-		<hr />
-		<button class="tool" title={writeOff ? `${t('library.title')} — ${writeOff}` : t('library.title')} disabled={Boolean(writeOff)} onclick={() => { moreOpen = false; onOpenLibrary?.(); }}>
-			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d={ICON.boeken} /></svg>
-			<span class="name">{t('rail.library.short')}</span>
-		</button>
-		<button class="tool" title={writeOff ? `${t('testgrid.title')} — ${writeOff}` : t('testgrid.title')} disabled={!canEdit || Boolean(writeOff)} onclick={() => { moreOpen = false; onOpenGrid?.(); }}>
-			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d={ICON.grid} /></svg>
-			<span class="name">{t('testgrid.title')}</span>
-		</button>
-		<hr />
-		<button
-			class="tool"
-			class:on={moreOpen}
-			aria-expanded={moreOpen}
-			aria-haspopup="menu"
-			title={t('rail.more')}
-			onclick={() => (moreOpen = !moreOpen)}
-		>
-			<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>
-			<span class="name">{t('rail.more')}</span>
-		</button>
-	{/if}
-
-	{#if compact && moreOpen}
-		<!-- A column of ten nameless glyphs is a guessing game with gloves on. Here
-		     the words are beside them, and the menu opens *next to* the rail rather
-		     than over it. -->
-		<!-- On a touch screen there is no Escape key: tapping outside the menu has to
-		     close it, otherwise you are stuck with it until you find "More" again. -->
-		<div
-			class="cover"
-			role="presentation"
-			onclick={() => (moreOpen = false)}
-		></div>
-		<div class="menu" role="menu" tabindex="-1">
-			<p class="head">{t('rail.group.tools')}</p>
-			{#each hidden as item (item.id)}
-				<button class="row" role="menuitemradio" title={item.label} aria-checked={tool === item.id} disabled={!canEdit} onclick={() => pick(item.id)}>
-					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d={item.path} /></svg>
-					<span>{SHORT[item.id] ?? item.label}</span>
-				</button>
-			{/each}
-
-			<p class="head">{t('rail.group.add')}</p>
-			<label class="row" class:off={!canEdit}>
-				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="1"/><path d="M3.5 16l4.5-4 3.5 3 4-5 5 6"/></svg>
-				<span>{t('rail.placeImage')}</span>
-				<input type="file" aria-label={t('rail.placeImage')} accept=".png,.jpg,.jpeg,.gif,.bmp,.webp" disabled={!canEdit}
-					onchange={(e) => { const i = e.currentTarget as HTMLInputElement; const f = i.files?.[0]; i.value = ''; moreOpen = false; if (f) onPlaceImage?.(f); }} />
-			</label>
-			<button class="row" role="menuitem" title={writeOff} disabled={!canEdit || Boolean(writeOff)} onclick={() => { moreOpen = false; onOpenGenerators?.(); }}>
-				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 4v10l-7 4-7-4V7z"/><path d="M12 3v18M5 7l7 4 7-4"/></svg>
-				<span>{t('rail.generators.short')}</span>
+	<!-- The modes: what the next click on the bed does. One of them is always chosen. -->
+	<div class="group modes" role="group" aria-label={t('rail.group.tools')}>
+		{#each visible as item (item.id)}
+			{@const off = toolOff(item)}
+			<button
+				class="tool"
+				aria-pressed={tool === item.id}
+				title={!off ? item.label : off === writeOff ? `${item.label} — ${off}` : off}
+				disabled={Boolean(off)}
+				onclick={() => (tool = item.id)}
+			>
+				<svg class="icon-svg" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+					<path d={item.path} />
+				</svg>
+				{#if compact}<span class="name">{SHORT[item.id] ?? item.label}</span>{/if}
 			</button>
-			<button class="row" role="menuitem" title={writeOff} disabled={!canEdit || Boolean(writeOff)} onclick={() => { moreOpen = false; onOpenClipart?.(); }}>
-				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/><path d="M8 10.5h5M10.5 8v5"/></svg>
-				<span>{t('rail.clipart.short')}</span>
-			</button>
-			<!-- Series has to be here as well, and not only in the wide rail: on a tablet
-			     the canvas menu is the only other door to it, and there is no long press
-			     on the canvas — so without this row the window has no door at all on a
-			     touch screen, while all four of its neighbours have one. -->
-			<button class="row" role="menuitem" title={writeOff} disabled={!canEdit || Boolean(writeOff)} onclick={() => { moreOpen = false; onOpenSeries?.(); }}>
-				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M7.5 3.5h13v6h-13z"/><path d="M3.5 11.5h13v9h-13z"/><path d="M6.5 16h7"/></svg>
-				<span>{t('rail.series.short')}</span>
-			</button>
-			<!-- The shared catalogue had a row here, under ADD, and it does not belong in
-			     either: browsing somebody else's speeds and powers adds nothing to the
-			     drawing, and it is consulted once per machine rather than once per design.
-			     It now stands where the settings it is about live — at the top of the
-			     material library, and on a tablet that is one of the visible buttons on
-			     the rail rather than a row in here. -->
+		{/each}
+	</div>
 
-			{#if files}
-				<p class="head">{t('rail.group.file')}</p>
-				<label class="row">
-					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h6l2 2h10v10H3z"/><path d="M12 17v-5m0 0-2 2m2-2 2 2"/></svg>
-					<span>{t('rail.importHere')}</span>
-					<input type="file" aria-label={t('topbar.import.aria')} accept=".svg,.dxf,.rd,.egv,.gcode,.nc,.lbrn,.lbrn2,.ezd,.xcs,.png,.jpg,.jpeg,.gif,.bmp"
-						onchange={(e) => { const i = e.currentTarget as HTMLInputElement; const f = i.files?.[0]; i.value = ''; moreOpen = false; if (f) onOpenFile?.(f); }} />
-				</label>
-				{#if projectInRail}
-					<!-- Only below 850px: above that "Project" is in the top bar. The same
-					     six rows as the top bar's project menu — New, Open…, Save, Save
-					     as…, Download, Upload… — read from `projectMenu` so a narrow
-					     screen reaches the server the same way the bar does. -->
-					{#each projectRows as row (row.id)}
-						<button
-							class="row"
-							role="menuitem"
-							type="button"
-							title={row.off || row.explain}
-							disabled={Boolean(row.off)}
-							onclick={() => { moreOpen = false; row.run(); }}
-						>
-							{#if row.icon}<ArrangeIcon name={row.icon} size={18} />{/if}
-							<span>{row.label}</span>
-						</button>
-					{/each}
-				{/if}
-				<a class="row" role="menuitem" href="/api/design/export.svg" download="design.svg" onclick={(e) => save(e, '/api/design/export.svg', 'design.svg')}>
-					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h11l3 3v13H5z"/><path d="M12 9v6m0 0-2.5-2.5M12 15l2.5-2.5"/></svg>
-					<span>{t('rail.sheetAsSvg')}</span>
-				</a>
-			{/if}
-		</div>
-	{/if}
-
-	{#if !compact}
-		<!-- Placing an image adds to the design; "Open" *replaces* it. -->
-		<label class="tool file" class:off={!canEdit} title={t('rail.placeImage')}>
-			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="1"/><path d="M3.5 16l4.5-4 3.5 3 4-5 5 6"/></svg>
-			<input
-				type="file"
-				aria-label={t('rail.placeImage')}
-				accept=".png,.jpg,.jpeg,.gif,.bmp,.webp"
-				disabled={!canEdit}
-				onchange={(e) => {
-					const input = e.currentTarget as HTMLInputElement;
-					const file = input.files?.[0];
-					input.value = '';
-					if (file) onPlaceImage?.(file);
-				}}
-			/>
-		</label>
-
+	<!-- The windows: places you open, not modes you are in. Below a rule and at the foot
+	     of the rail, so the column reads as two kinds of thing and not as fifteen of one.
+	     On a tablet the two tasks beside the machine are here directly; the rest of the
+	     modes, the adders and the files are behind More. -->
+	<div class="group windows" role="group" aria-label={t('rail.group.windows')}>
 		<hr />
-		<!-- Tools start on the left; a tool that can only be found on the right is
-		     found by nobody. -->
-		<button class="tool" title={writeOff ? `${t('rail.generators')} — ${writeOff}` : t('rail.generators')} disabled={!canEdit || Boolean(writeOff)} onclick={() => onOpenGenerators?.()}>
-			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 4v10l-7 4-7-4V7z"/><path d="M12 3v18M5 7l7 4 7-4"/></svg>
-		</button>
-		<button class="tool" title={writeOff ? `${t('rail.clipart')} — ${writeOff}` : t('rail.clipart')} disabled={!canEdit || Boolean(writeOff)} onclick={() => onOpenClipart?.()}>
-			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/><path d="M8 10.5h5M10.5 8v5"/></svg>
-		</button>
-		<!-- One design burned once per row of a list: a workspace you search and
-		     compare in, so a window of its own — like the four beside it. No shortcut:
-		     none of those four has one either, and keys are scarce. -->
-		<button class="tool" title={writeOff ? `${t('rail.series')} — ${writeOff}` : t('rail.series')} disabled={!canEdit || Boolean(writeOff)} onclick={() => onOpenSeries?.()}>
-			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M7.5 3.5h13v6h-13z"/><path d="M3.5 11.5h13v9h-13z"/><path d="M6.5 16h7"/></svg>
-		</button>
-		<button class="tool" title={writeOff ? `${t('testgrid.title')} — ${writeOff}` : t('testgrid.title')} disabled={!canEdit || Boolean(writeOff)} onclick={() => onOpenGrid?.()}>
-			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d={ICON.grid} /></svg>
-		</button>
-		<!-- The shared catalogue used to have a button of its own here, the fifteenth on
-		     this rail and the same size and weight as Rectangle. A rail is where the
-		     modes live — what the next click on the bed does — plus the workspaces you
-		     design in; a catalogue you consult once per machine is neither. It is now a
-		     card at the top of the material library, one button along. -->
-		<button class="tool" title={writeOff ? `${t('library.title')} — ${writeOff}` : t('library.title')} disabled={Boolean(writeOff)} onclick={() => onOpenLibrary?.()}>
-			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d={ICON.boeken} /></svg>
-		</button>
-	{/if}
+		{#if compact}
+			<button class="tool" title={writeOff ? `${t('library.title')} — ${writeOff}` : t('library.title')} disabled={Boolean(writeOff)} onclick={() => onOpenLibrary?.()}>
+				<svg class="icon-svg" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d={ICON.boeken} /></svg>
+				<span class="name">{t('rail.library.short')}</span>
+			</button>
+			<button class="tool" title={launchOff ? `${t('testgrid.title')} — ${launchOff}` : t('testgrid.title')} disabled={Boolean(launchOff)} onclick={() => onOpenGrid?.()}>
+				<svg class="icon-svg" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d={ICON.grid} /></svg>
+				<span class="name">{t('testgrid.title')}</span>
+			</button>
+			<hr />
+			<button
+				class="tool"
+				class:on={more !== null}
+				aria-expanded={more !== null}
+				aria-haspopup="menu"
+				title={t('rail.more')}
+				onclick={(e) => openMore(e.currentTarget as HTMLElement)}
+			>
+				<svg class="icon-svg" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6" fill="currentColor" /><circle cx="12" cy="12" r="1.6" fill="currentColor" /><circle cx="19" cy="12" r="1.6" fill="currentColor" /></svg>
+				<span class="name">{t('rail.more')}</span>
+			</button>
+		{:else}
+			<!-- Placing an image adds to the design; "Open" *replaces* it. -->
+			<button class="tool" title={canEdit ? t('rail.placeImage') : t('rail.needsToken', { label: t('rail.placeImage') })} disabled={!canEdit} onclick={() => imageInput?.click()}>
+				<svg class="icon-svg" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="1"/><path d="M3.5 16l4.5-4 3.5 3 4-5 5 6"/></svg>
+			</button>
+			<!-- Tools start on the left; a tool that can only be found on the right is
+			     found by nobody. -->
+			<button class="tool" title={launchOff ? `${t('rail.generators')} — ${launchOff}` : t('rail.generators')} disabled={Boolean(launchOff)} onclick={() => onOpenGenerators?.()}>
+				<svg class="icon-svg" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 4v10l-7 4-7-4V7z"/><path d="M12 3v18M5 7l7 4 7-4"/></svg>
+			</button>
+			<button class="tool" title={launchOff ? `${t('rail.clipart')} — ${launchOff}` : t('rail.clipart')} disabled={Boolean(launchOff)} onclick={() => onOpenClipart?.()}>
+				<svg class="icon-svg" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/><path d="M8 10.5h5M10.5 8v5"/></svg>
+			</button>
+			<!-- One design burned once per row of a list: a workspace you search and
+			     compare in, so a window of its own — like the four beside it. No shortcut:
+			     none of those four has one either, and keys are scarce. -->
+			<button class="tool" title={launchOff ? `${t('rail.series')} — ${launchOff}` : t('rail.series')} disabled={Boolean(launchOff)} onclick={() => onOpenSeries?.()}>
+				<svg class="icon-svg" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 3.5h13v6h-13z"/><path d="M3.5 11.5h13v9h-13z"/><path d="M6.5 16h7"/></svg>
+			</button>
+			<button class="tool" title={launchOff ? `${t('testgrid.title')} — ${launchOff}` : t('testgrid.title')} disabled={Boolean(launchOff)} onclick={() => onOpenGrid?.()}>
+				<svg class="icon-svg" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d={ICON.grid} /></svg>
+			</button>
+			<!-- The shared catalogue used to have a button of its own here, the fifteenth on
+			     this rail and the same size and weight as Rectangle. A rail is where the
+			     modes live — what the next click on the bed does — plus the workspaces you
+			     design in; a catalogue you consult once per machine is neither. It is now a
+			     card at the top of the material library, one button along. -->
+			<button class="tool" title={writeOff ? `${t('library.title')} — ${writeOff}` : t('library.title')} disabled={Boolean(writeOff)} onclick={() => onOpenLibrary?.()}>
+				<svg class="icon-svg" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d={ICON.boeken} /></svg>
+			</button>
+		{/if}
+	</div>
+
+	<input
+		bind:this={imageInput}
+		class="hidden-file"
+		type="file"
+		tabindex="-1"
+		aria-label={t('rail.placeImage')}
+		accept=".png,.jpg,.jpeg,.gif,.bmp,.webp"
+		disabled={!canEdit}
+		onchange={(e) => {
+			const input = e.currentTarget as HTMLInputElement;
+			const file = input.files?.[0];
+			input.value = '';
+			if (file) onPlaceImage?.(file);
+		}}
+	/>
 </nav>
+
+{#if more}
+	<Menu menu={moreMenu} x={more.x} y={more.y} upward onClose={() => (more = null)} />
+{/if}
 
 <style>
 	.rail {
@@ -348,18 +314,29 @@
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		gap: var(--space-1);
 		padding: var(--space-2) 0;
 		background: var(--surface-1);
 		border-right: 1px solid var(--line);
 		position: relative;
 	}
+	.group {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: var(--space-1);
+	}
+	/* The windows stand at the foot of the rail, so the free room falls between the two
+	   kinds and not inside either. */
+	.windows {
+		margin-top: auto;
+		padding-top: var(--space-2);
+	}
 	/* With a glove on you do not hit the middle. 4px between two 44px targets makes
 	   the neighbour as likely as the target; DESIGN-SYSTEM demands 12. Tablet only:
-	   on the desktop there are thirteen of them in the same column. */
+	   on the desktop there are fifteen of them in the same column. */
 	/* The width itself lives in tokens.css (--rail-width, 84px below 1200): the
 	   camera bar in +page.svelte reckons with it too. */
-	.rail.compact {
+	.rail.compact .group {
 		gap: var(--space-3);
 	}
 	.rail.compact .tool {
@@ -367,7 +344,7 @@
 		gap: 2px;
 		width: 76px;
 		height: auto;
-		min-height: 52px;
+		min-height: max(52px, var(--target-min));
 		padding: var(--space-1h) 2px;
 	}
 	.name {
@@ -389,37 +366,35 @@
 		background: var(--surface-2);
 		color: var(--text-1);
 	}
+	/* Drained, not faded: the icon is mixed toward the panel instead of made
+	   see-through (3:1 is not asked of a disabled control), the reason is in the
+	   tooltip, and the label under it on a tablet stays readable in --text-2. */
 	.tool:disabled {
-		opacity: 0.35;
+		color: color-mix(in srgb, var(--text-2) 45%, var(--surface-1));
 		cursor: not-allowed;
+	}
+	.tool:disabled .name {
+		color: var(--text-2);
 	}
 	.tool[aria-pressed='true'],
 	.tool.on {
-		background: color-mix(in srgb, var(--accent) 12%, transparent);
+		background: var(--accent-tint);
 		color: var(--accent);
 	}
 	/* The icon may be accent — that is a graphical element and 1.4.11 asks 3:1
 	   there, which it makes. The label may not: accent on a 12% accent tint comes
-	   out at 3.76:1 in the light theme and 13px text asks 4.5. The active state stays
-	   doubly encoded through the tint, the icon and aria-pressed. Reported by the
-	   dark surface (c2-pixels). */
+	   out at 3.76:1 and 13px text asks 4.5. The active state stays doubly encoded
+	   through the tint, the icon and aria-pressed (c2-pixels). */
 	.tool[aria-pressed='true'] .name,
 	.tool.on .name {
 		color: var(--text-1);
 	}
-	.tool.file input {
+	.hidden-file {
 		position: absolute;
 		width: 0;
 		height: 0;
 		opacity: 0;
-	}
-	.tool.file {
-		position: relative;
-		cursor: pointer;
-	}
-	.tool.file.off {
-		opacity: 0.35;
-		cursor: not-allowed;
+		pointer-events: none;
 	}
 	.rail.compact hr {
 		width: 56px;
@@ -429,82 +404,5 @@
 		border: none;
 		border-top: 1px solid var(--line);
 		margin: 0;
-	}
-
-	/* The menu starts below the rail button that opened it, so it does not cover the
-	   sheet bar above it, and it scrolls when it does not fit. */
-	.cover {
-		position: fixed;
-		inset: 0;
-		z-index: 19;
-	}
-	.menu {
-		position: absolute;
-		left: calc(var(--rail-width) + var(--space-2));
-		/* Built up from the bottom, because "More" is the lowest rail button: that way
-		   the menu sits beside the finger that opened it, and does not cover the sheet
-		   bar above it. */
-		bottom: var(--space-2);
-		width: 260px;
-		max-height: calc(100vh - var(--topbar-height) - var(--statusbar-height) - 64px);
-		overflow-y: auto;
-		padding: var(--space-2);
-		background: var(--surface-1);
-		border: 1px solid var(--line);
-		border-radius: var(--radius-card);
-		box-shadow: var(--shadow-float);
-		z-index: 20;
-	}
-	.head {
-		margin: var(--space-2) 0 var(--space-1);
-		padding: 0 var(--space-2);
-		font-size: var(--text-xs);
-		font-weight: 600;
-		letter-spacing: 0.06em;
-		text-transform: uppercase;
-		color: var(--text-2);
-	}
-	.head:first-child {
-		margin-top: 0;
-	}
-	.row {
-		display: flex;
-		align-items: center;
-		gap: var(--space-3);
-		width: 100%;
-		min-height: 44px;
-		padding: 0 var(--space-2);
-		border-radius: var(--radius-field);
-		color: var(--text-1);
-		text-align: left;
-		text-decoration: none;
-		cursor: pointer;
-		transition: background var(--transition);
-	}
-	.row svg {
-		flex: none;
-		color: var(--text-2);
-	}
-	.row:hover:not(:disabled),
-	.row:focus-visible {
-		background: var(--surface-2);
-	}
-	.row:disabled,
-	.row.off {
-		opacity: 0.35;
-		cursor: not-allowed;
-	}
-	.row[aria-checked='true'] {
-		background: color-mix(in srgb, var(--accent) 12%, transparent);
-		color: var(--text-1);
-	}
-	.row[aria-checked='true'] svg {
-		color: var(--accent);
-	}
-	.row input[type='file'] {
-		position: absolute;
-		width: 0;
-		height: 0;
-		opacity: 0;
 	}
 </style>

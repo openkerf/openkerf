@@ -9,8 +9,8 @@
  * Why it exists. The estimate used to stand in a labelled row of its own with the word
  * "calculating…" beside it; when the row went, the state went with it and the only sign
  * left was the number on the start button at `opacity: 0.5`. Measured on the running
- * build at 1440 x 900, white on the teal button: 2.64 : 1 in light and 2.75 : 1 in dark,
- * against 4.69 : 1 and 5.98 : 1 for the same number at rest — the one number on the
+ * build at 1440 x 900, white on the teal button: 2.64 : 1, against 4.69 : 1 for the same
+ * number at rest — the one number on the
  * button, dimmed below the contrast the rest of the panel holds, carrying a state that
  * was said nowhere else and reached no screen reader at all.
  */
@@ -92,19 +92,13 @@ async function post(path: string, body?: unknown) {
 type State = { cls: string; opacity: string; colour: string; bg: string; busy: string | null; text: string };
 
 /** Every state the start button passed through while a new shape forced a re-estimate. */
-async function whileEstimating(theme: 'light' | 'dark') {
+async function whileEstimating() {
 	const browser: Browser = await chromium.launch();
 	try {
 		await post('/api/project/new');
 		await post('/api/design/operations', { type: 'cut', label: 'Outline', speed: 12, power_percent: 65 });
 		await post('/api/design/elements', { type: 'rect', x_mm: 15, y_mm: 15, width_mm: 120, height_mm: 80 });
-		const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, colorScheme: theme });
-		if (theme === 'dark')
-			await page.addInitScript(() => {
-				const set = () => document.documentElement?.setAttribute('data-theme', 'dark');
-				set();
-				document.addEventListener('DOMContentLoaded', set);
-			});
+		const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, colorScheme: 'light' });
 		await page.goto(BASE, { waitUntil: 'domcontentloaded' });
 		await page.click('.panel .tab:has-text("Job")');
 		// The estimate is the engine building the whole cut plan; before it lands there is
@@ -159,35 +153,34 @@ async function whileEstimating(theme: 'light' | 'dark') {
 	}
 }
 
-for (const theme of ['light', 'dark'] as const)
-	test(`the estimate keeps its contrast while it is worked out (${theme})`, async (t) => {
-		const up = await fetch(BASE, { signal: AbortSignal.timeout(2000) }).then(
-			() => true,
-			() => false
+test('the estimate keeps its contrast while it is worked out', async (t) => {
+	const up = await fetch(BASE, { signal: AbortSignal.timeout(2000) }).then(
+		() => true,
+		() => false
+	);
+	if (!up) return noServer(t, BASE);
+	const states = await whileEstimating();
+	const busy = states.filter((s) => s.busy === 'true');
+	const rest = states.filter((s) => s.busy !== 'true');
+	assert.ok(busy.length > 0, 'the button never said it was busy while the estimate was redone');
+	assert.ok(rest.length > 0, 'the button never came to rest');
+	const seen = (s: State) => {
+		const fg = rgb(s.colour);
+		const bg = rgb(s.bg);
+		const o = Number(s.opacity);
+		return contrast(
+			fg.map((v, i) => v * o + bg[i] * (1 - o)),
+			bg
 		);
-		if (!up) return noServer(t, BASE);
-		const states = await whileEstimating(theme);
-		const busy = states.filter((s) => s.busy === 'true');
-		const rest = states.filter((s) => s.busy !== 'true');
-		assert.ok(busy.length > 0, 'the button never said it was busy while the estimate was redone');
-		assert.ok(rest.length > 0, 'the button never came to rest');
-		const seen = (s: State) => {
-			const fg = rgb(s.colour);
-			const bg = rgb(s.bg);
-			const o = Number(s.opacity);
-			return contrast(
-				fg.map((v, i) => v * o + bg[i] * (1 - o)),
-				bg
-			);
-		};
-		const lowestBusy = Math.min(...busy.map(seen));
-		const restingContrast = Math.min(...rest.map(seen));
-		assert.ok(
-			lowestBusy >= restingContrast - 0.01,
-			`the number reads at ${lowestBusy.toFixed(2)} : 1 while busy, against ${restingContrast.toFixed(2)} : 1 at rest`
-		);
-		assert.ok(lowestBusy >= 4.5, `${lowestBusy.toFixed(2)} : 1 while busy`);
-	});
+	};
+	const lowestBusy = Math.min(...busy.map(seen));
+	const restingContrast = Math.min(...rest.map(seen));
+	assert.ok(
+		lowestBusy >= restingContrast - 0.01,
+		`the number reads at ${lowestBusy.toFixed(2)} : 1 while busy, against ${restingContrast.toFixed(2)} : 1 at rest`
+	);
+	assert.ok(lowestBusy >= 4.5, `${lowestBusy.toFixed(2)} : 1 while busy`);
+});
 
 /**
  * The very first estimate of a fresh design: there is no number on the button yet, so

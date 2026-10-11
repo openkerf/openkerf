@@ -309,7 +309,7 @@ test('nothing that measures the app can wave the offer away', () => {
 	// exclude it. A regression here is silent by nature: the measurement still passes,
 	// only quieter.
 	const card = readFileSync(join(here, '..', 'src', 'lib', 'components', 'StarterOffer.svelte'), 'utf8');
-	assert.match(card, /class="btn subtle away"/, 'the dismissal lost the class scripts avoid');
+	assert.match(card, /class="btn [^"]*\baway\b[^"]*"/, 'the dismissal lost the class scripts avoid');
 	for (const name of ['i-overflow.mjs', 'i-shots.mjs']) {
 		const script = readFileSync(join(here, '..', 'gauntlet', name), 'utf8');
 		if (!/Not now/.test(script)) continue;

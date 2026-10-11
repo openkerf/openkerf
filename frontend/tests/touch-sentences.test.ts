@@ -113,12 +113,12 @@ async function atWidth(width: number) {
 		await page.click('.panel .tab:has-text("Job")');
 		await page.locator('.machinevouw > summary').click();
 		for (const summary of await page.locator('.machinevouw details.origin > summary').all()) await summary.click();
-		await page.waitForSelector('.origin p.hint[title]', { timeout: 20000 });
+		await page.waitForSelector('.origin p.help[title]', { timeout: 20000 });
 		await page.waitForTimeout(500);
 		const off = await page.evaluate(() =>
 			[...document.querySelectorAll('.origin')].map((block) => ({
 				visible: (block as HTMLElement).innerText.replace(/\s+/g, ' '),
-				sentence: block.querySelector('p.hint[title]')?.getAttribute('title') ?? null
+				sentence: block.querySelector('p.help[title]')?.getAttribute('title') ?? null
 			}))
 		);
 		return { edit, off };

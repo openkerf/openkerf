@@ -19,9 +19,15 @@
  * value block was 43.9 px tall on the desktop and 65.7 px on the tablet, against 25.9 and
  * 44.8 px for the same three fields in the roomy row.
  *
+ * Since the unit moved into the field's well (the global field, with room kept behind the
+ * right-aligned number), "the number's right edge" is where the input's end padding
+ * begins, not its border: measured against the border, "mm/s" read as starting 39.4 px
+ * left of its number while it sat beside it, inside the well.
+ *
  * What is measured, per field and at both widths: the unit's box begins at or after the
- * number's right edge and starts above the number's bottom — beside it, on one line — and
- * the three fields together are no taller than one field's line.
+ * number's right edge, ends inside the well, and starts above the number's bottom — beside
+ * it, on one line — and
+ * the three fields together are no taller than one field: its word over its line.
  */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -98,13 +104,26 @@ for (const [width, height] of SIZES) {
 			const measured = await page.evaluate(() => {
 				const edit = document.querySelector('.layer-edit')!;
 				const fields = [...edit.querySelectorAll('.vals .val')].map((field) => {
-					const number = field.querySelector('input')!.getBoundingClientRect();
-					const unit = field.querySelector('span')!.getBoundingClientRect();
+					const input = field.querySelector('input')!;
+					const number = input.getBoundingClientRect();
+					// The number is right-aligned in the input and the unit stands in the
+					// same well behind it, so the number ends where the input's padding
+					// begins, not at the input's border.
+					const numberEnd =
+						number.right -
+						parseFloat(getComputedStyle(input).paddingRight) -
+						parseFloat(getComputedStyle(input).borderRightWidth);
+					// The unit is the field's `.suffix`; the first span is the word over it.
+					const unit = field.querySelector('.suffix')!.getBoundingClientRect();
 					return {
-						unit: (field.querySelector('span')!.textContent ?? '').trim(),
-						gapLeft: Math.round((unit.left - number.right) * 10) / 10,
+						unit: (field.querySelector('.suffix')!.textContent ?? '').trim(),
+						gapLeft: Math.round((unit.left - numberEnd) * 10) / 10,
+						outside: Math.round((unit.right - number.right) * 10) / 10,
 						dropBelow: Math.round((unit.top - number.bottom) * 10) / 10,
-						lineHeight: Math.round(number.height * 10) / 10
+						lineHeight: Math.round(number.height * 10) / 10,
+						// The word over the field ("Speed") belongs to the field's height.
+						wordHeight:
+							Math.round(field.firstElementChild!.getBoundingClientRect().height * 10) / 10
 					};
 				});
 				const block = edit.querySelector('.vals')!.getBoundingClientRect();
@@ -117,14 +136,18 @@ for (const [width, height] of SIZES) {
 					`"${field.unit}" starts ${-field.gapLeft} px left of its own number's right edge`
 				);
 				assert.ok(
+					field.outside <= 0,
+					`"${field.unit}" stands ${field.outside} px outside the well it belongs in`
+				);
+				assert.ok(
 					field.dropBelow < 0,
 					`"${field.unit}" sits ${field.dropBelow} px under its number instead of beside it`
 				);
 			}
-			const line = Math.max(...measured.fields.map((f) => f.lineHeight));
+			const line = Math.max(...measured.fields.map((f) => f.lineHeight + f.wordHeight));
 			assert.ok(
 				measured.blockHeight <= line + 8,
-				`the three fields are ${measured.blockHeight} px tall, over the ${line} px of one line`
+				`the three fields are ${measured.blockHeight} px tall, over the ${line} px of one field with its word`
 			);
 		} finally {
 			await context.close();

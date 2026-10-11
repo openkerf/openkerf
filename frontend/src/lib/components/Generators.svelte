@@ -8,6 +8,8 @@
 	import GeneratorPreview from './GeneratorPreview.svelte';
 	import NumberField from './NumberField.svelte';
 	import Segmented from './Segmented.svelte';
+	import Icon from './Icon.svelte';
+	import Notice from './Notice.svelte';
 
 	import type { Voorbeeld } from './GeneratorPreview.svelte';
 
@@ -186,6 +188,27 @@
 	// A tab that can do nothing on this machine is not shown greyed out but left out:
 	// the whole point of the board is that the head moves between the marks.
 	let tabs = $derived(TABS.filter((item) => item.id !== 'focus' || hasZAxis));
+
+	function chooseTab(id: Tab) {
+		tab = id;
+		error = null;
+	}
+
+	/** The arrows, Home and End move between the forms, as in the panel's own tabs. */
+	function tabKeys(event: KeyboardEvent) {
+		const at = tabs.findIndex((item) => item.id === tab);
+		const last = tabs.length - 1;
+		const to =
+			event.key === 'ArrowRight' ? (at + 1) % tabs.length
+			: event.key === 'ArrowLeft' ? (at - 1 + tabs.length) % tabs.length
+			: event.key === 'Home' ? 0
+			: event.key === 'End' ? last
+			: -1;
+		if (to < 0) return;
+		event.preventDefault();
+		chooseTab(tabs[to].id);
+		document.getElementById(`gentab-${tabs[to].id}`)?.focus();
+	}
 	// Switching machine can take the visible tab away under your feet.
 	$effect(() => {
 		if (!tabs.some((item) => item.id === tab)) tab = 'grid';
@@ -468,11 +491,22 @@
 	);
 </script>
 
-<Dialog title={t('gen.title')} bind:open width="940px">
-	<div class="tabs">
+<Dialog title={t('gen.title')} bind:open size="l">
+	<!-- A tablist like the right-hand panel's: one stop in the Tab order, the arrows move
+	     between the forms, and the chosen one wears the same solid accent rule. -->
+	<div class="tabs" role="tablist" aria-label={t('gen.title')}>
 		{#each tabs as item (item.id)}
-			<button class="tab" aria-pressed={tab === item.id} onclick={() => { tab = item.id; error = null; }}>
-				<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+			<button
+				class="tab"
+				role="tab"
+				id="gentab-{item.id}"
+				aria-selected={tab === item.id}
+				aria-controls="gen-tabpanel"
+				tabindex={tab === item.id ? 0 : -1}
+				onclick={() => chooseTab(item.id)}
+				onkeydown={tabKeys}
+			>
+				<svg class="icon-svg" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
 					<path d={item.icon} />
 				</svg>
 				{item.label}
@@ -481,19 +515,19 @@
 	</div>
 
 	{#if blocked}
-		<p class="hint">{t('gen.needsSelection')}</p>
+		<p class="help warn said">{t('gen.needsSelection')}</p>
 	{/if}
 	{#if error}
-		<p class="error" role="alert">{error}</p>
+		<div class="said"><Notice tone="danger" live>{error}</Notice></div>
 	{/if}
 	{#if notice}
-		<p class="notice">{notice}</p>
+		<div class="said"><Notice tone="info" live>{notice}</Notice></div>
 	{/if}
 
-	<div class="werkbank">
+	<div class="werkbank" role="tabpanel" id="gen-tabpanel" aria-labelledby="gentab-{tab}">
 	<div class="formulier">
 	{#if tab === 'grid'}
-		{#if !blocked}<p class="lead">{t('gen.grid.lead')}</p>{/if}
+		{#if !blocked}<p class="help lead">{t('gen.grid.lead')}</p>{/if}
 		<div class="fields">
 			<div class="pair">
 				<NumberField label={t('gen.columns')} step={1} min={1} bind:value={grid.columns} />
@@ -520,12 +554,12 @@
 			{#if !listAttached}
 				<!-- The same sentence the server answers with, so the reason before the
 				     press and the answer after it are one wording. -->
-				<p class="hint">{t('api.gen.noList')}</p>
+				<p class="help warn">{t('api.gen.noList')}</p>
 			{/if}
 			</details>
 		</div>
 	{:else if tab === 'radial'}
-		<p class="lead">{t('gen.radial.lead')}</p>
+		<p class="help lead">{t('gen.radial.lead')}</p>
 		<div class="fields">
 			<div class="pair">
 				<NumberField label={t('gen.count')} step={1} min={2} bind:value={radial.repeats} />
@@ -537,7 +571,7 @@
 			>
 		</div>
 	{:else if tab === 'polygon'}
-		<p class="lead">{t('gen.polygon.lead')}</p>
+		<p class="help lead">{t('gen.polygon.lead')}</p>
 		<div class="fields">
 			<div class="pair">
 				<NumberField label={t('gen.corners')} step={1} min={3} bind:value={polygon.corners} />
@@ -552,7 +586,7 @@
 			</div>
 		</div>
 	{:else if tab === 'box'}
-		<p class="lead">{t('gen.box.lead')}</p>
+		<p class="help lead">{t('gen.box.lead')}</p>
 		<div class="fields">
 			<!-- Width, depth and height are one measurement in three and so sit on one
 			     line; the thickness of the material is something else and sits below. -->
@@ -585,7 +619,7 @@
 			</fieldset>
 		</div>
 	{:else if tab === 'qrcode'}
-		<p class="lead">{t('gen.qr.lead')}</p>
+		<p class="help lead">{t('gen.qr.lead')}</p>
 		<div class="fields">
 			<label
 				><span>{t('gen.content')}</span><input
@@ -599,7 +633,7 @@
 			</div>
 		</div>
 	{:else if tab === 'barcode'}
-		<p class="lead">{t('gen.barcode.lead')}</p>
+		<p class="help lead">{t('gen.barcode.lead')}</p>
 		<div class="fields">
 			<label
 				><span>{t('gen.content')}</span><input
@@ -609,7 +643,7 @@
 				/></label
 			>
 			{#if ['ean13', 'ean8', 'upca'].includes(bar.kind)}
-				<p class="bridgeline">{t('gen.barcode.numeric', { type: bar.kind.toUpperCase() })}</p>
+				<p class="help">{t('gen.barcode.numeric', { type: bar.kind.toUpperCase() })}</p>
 			{/if}
 			<label>
 				<span>{t('gen.barcode.type')}</span>
@@ -625,8 +659,8 @@
 			</div>
 		</div>
 	{:else if tab === 'arctext'}
-		<p class="lead">{t('gen.arc.lead')}</p>
-		<p class="bridgeline result-note">{t('gen.arc.pathResult')}</p>
+		<p class="help lead">{t('gen.arc.lead')}</p>
+		<p class="help result-note">{t('gen.arc.pathResult')}</p>
 		<div class="fields">
 			<label
 				><span>{t('gen.text')}</span><input
@@ -660,14 +694,14 @@
 			<button class="letterregel" aria-expanded={fontOpen} onclick={() => (fontOpen = !fontOpen)}>
 				<span>{t('gen.font')}</span>
 				<strong>{arc.font ? arc.fontName || arc.font : t('gen.font.default')}</strong>
-				<span class="pijl" aria-hidden="true">{fontOpen ? '▴' : '▾'}</span>
+				<span class="pijl"><Icon name={fontOpen ? 'chevron-up' : 'chevron-down'} /></span>
 			</button>
 			{#if fontOpen}
 				<FontPicker bind:font={arc.font} bind:fontName={arc.fontName} sample={arc.text} />
 			{/if}
 		</div>
 	{:else if tab === 'focus'}
-		<p class="lead">{t('gen.focus.lead')}</p>
+		<p class="help lead">{t('gen.focus.lead')}</p>
 		<div class="fields">
 			<div class="three">
 				<NumberField
@@ -681,7 +715,7 @@
 			</div>
 			<!-- Which way is which. "+2" on the board says nothing by itself, and the sign
 			     convention is the same one the drop per pass uses — one rule, not two. -->
-			<p class="bridgeline">{t('gen.focus.direction')}</p>
+			<p class="help">{t('gen.focus.direction')}</p>
 			<div class="pair">
 				<NumberField label={t('gen.focus.mark')} unit="mm" step={1} bind:value={focus.mark_mm} />
 				<NumberField label={t('gen.focus.gap')} unit="mm" step={1} bind:value={focus.gap_mm} />
@@ -696,10 +730,10 @@
 		</div>
 		<details class="fit-help fold"><summary>{t('gen.focus.help')}</summary><p>{t('gen.focus.reading')}</p></details>
 	{:else}
-		<p class="lead">{t('gen.hinge.lead')}</p>
+		<p class="help lead">{t('gen.hinge.lead')}</p>
 		<div class="fields">
 			<div class="wide">
-				<span class="grouplabel">{t('gen.hinge.pattern')}</span>
+				<span class="field-label" aria-hidden="true">{t('gen.hinge.pattern')}</span>
 				<Segmented
 					label={t('gen.hinge.pattern')}
 					bind:value={hinge.pattern}
@@ -789,29 +823,37 @@
 		border-bottom: 1px solid var(--line);
 	}
 	/* Tabs, not pills: this is navigation between forms. With an icon above it you
-	   recognise the box without reading. */
+	   recognise the box without reading. Chosen is the panel tabs' face: the word in
+	   ink and a solid accent rule on the row's hairline. */
 	.tab {
+		position: relative;
 		display: grid;
 		justify-items: center;
 		gap: 2px;
+		min-height: var(--target-min);
 		font-size: var(--text-xs);
-		padding: var(--space-2) var(--space-3) var(--space-2);
-		border: 0;
-		border-bottom: 2px solid transparent;
-		border-radius: 0;
+		padding: var(--space-2) var(--space-3);
 		color: var(--text-2);
-		background: none;
+		transition: color var(--transition);
 	}
 	.tab:hover { color: var(--text-1); }
-	.tab[aria-pressed='true'] {
-		border-bottom-color: var(--accent);
-		color: var(--accent);
+	.tab[aria-selected='true'] {
+		color: var(--text-1);
 		font-weight: 500;
 	}
-	.lead { margin: 0 0 var(--space-4); font-size: var(--text-sm); color: var(--text-2); line-height: 1.5; }
-	.hint { margin: 0 0 var(--space-2); font-size: var(--text-xs); color: var(--warn); }
-	.error { margin: 0 0 var(--space-2); font-size: var(--text-xs); color: var(--danger); }
-	.notice { margin: 0 0 var(--space-2); font-size: var(--text-xs); color: var(--accent); }
+	.tab[aria-selected='true']::after {
+		content: '';
+		position: absolute;
+		left: var(--space-2);
+		right: var(--space-2);
+		bottom: -1px;
+		height: 2px;
+		border-radius: var(--radius-sharp);
+		background: var(--accent);
+	}
+	.tab:focus-visible { outline-offset: -2px; }
+	.lead { margin: 0 0 var(--space-4); }
+	.said { margin: 0 0 var(--space-2); }
 	/* Form rule v4, the same model as in the test grid: a stack of rows, and what
 	   belongs together sits in a `.pair` or a `.three`. In the continuous two-column
 	   grid that used to be here, "Centre X" fell on one row and "Centre Y" on the
@@ -823,7 +865,8 @@
 		gap: var(--space-2);
 		margin-bottom: var(--space-4);
 	}
-	.fields label { display: grid; gap: 2px; font-size: var(--text-xs); color: var(--text-2); }
+	.fields label { display: grid; gap: var(--space-1); font-size: var(--text-xs); color: var(--text-2); }
+	.fields :is(input:not([type='checkbox']), select) { width: 100%; }
 	.pair,
 	.three {
 		display: grid;
@@ -832,11 +875,10 @@
 	}
 	.pair { grid-template-columns: 1fr 1fr; }
 	.three { grid-template-columns: 1fr 1fr 1fr; }
-	.fields .check { display: flex; align-items: center; gap: 6px; align-self: start; }
+	.fields .check { display: flex; align-items: center; gap: var(--space-1h); align-self: start; }
 	/* A row that is not an <input> and therefore cannot be a <label>: the Segmented has
 	   its own aria-label, this is the one you read. */
-	.fields .wide { display: grid; gap: 2px; }
-	.grouplabel { font-size: var(--text-xs); color: var(--text-2); }
+	.fields .wide { display: grid; gap: var(--space-1); }
 	/* This one governs the four fields below it, so it lines up with them on the left. The
 	   `align-self: end` of `.check` is for a checkbox beside a field on the same row (the
 	   box tab); here there is no row to line up with, and to the right it stood alone in the
@@ -847,16 +889,15 @@
 	   it stood alone against the right edge of the form, a metre from the numbers it
 	   is about. */
 	.fields .check.listfollow { align-self: start; }
-	.bridgeline { margin: 0; font-size: var(--text-xs); color: var(--text-2); line-height: 1.5; }
-	.bridgeline.result-note { margin-bottom: var(--space-3); }
+	.result-note { margin-bottom: var(--space-3); }
 	.fontchoice { margin-bottom: var(--space-4); }
 	.letterregel {
 		display: flex;
 		align-items: center;
 		gap: var(--space-2);
 		width: 100%;
-		min-height: 40px;
-		padding: 8px var(--space-3);
+		min-height: max(40px, var(--target-min));
+		padding: var(--space-2) var(--space-3);
 		border: 1px solid var(--line);
 		border-radius: var(--radius-field);
 		background: var(--surface-2);
@@ -865,17 +906,6 @@
 		text-align: left;
 	}
 	.letterregel strong { flex: 1; color: var(--text-1); font-weight: 500; }
-	.letterregel .pijl { color: var(--text-2); }
+	.letterregel .pijl { display: grid; color: var(--text-2); }
 	.letterregel:hover { border-color: var(--accent); }
-	input,
-	select {
-		font: inherit;
-		width: 100%;
-		padding: 8px 8px;
-		border: 1px solid var(--line);
-		border-radius: var(--radius-field);
-		background: var(--surface-2);
-		color: var(--text-1);
-	}
-	.check input { width: auto; }
 </style>

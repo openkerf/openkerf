@@ -6,6 +6,8 @@
 	import { apiError, mm, number } from '$lib/i18n/core.ts';
 	import { operations, type LibraryStore } from '$lib/library.svelte';
 	import NumberField from './NumberField.svelte';
+	import Notice from './Notice.svelte';
+	import Why from './Why.svelte';
 
 	let {
 		device = null,
@@ -66,8 +68,8 @@
 	 * Two of them sit on the axes, the third stays fixed. Passes is deliberately not
 	 * among them: that multiplies the burn time of the whole board.
 	 *
-	 * Name and unit come from `$lib/api`, because the photo list on the phone
-	 * summarises the same grids; two copies of "mm/s" are two chances to drift apart.
+	 * Name and unit come from `$lib/api`; two copies of "mm/s" are two chances to
+	 * drift apart.
 	 * What stays here is the wizard's input behaviour: the step size of the plus and
 	 * minus and the field's upper bound.
 	 */
@@ -989,7 +991,7 @@
 	</ol>
 
 	{#if !canEdit}
-		<p class="muted">{t('grid.needsToken')}</p>
+		<p class="help">{t('grid.needsToken')}</p>
 	{:else}
 		<p class="lead">{t('ux.grid.purpose')}</p>
 
@@ -998,9 +1000,9 @@
 		     cannot sit side by side in that. At the top, as in LightBurn: you pick your
 		     recipe before you start tinkering, not after. -->
 		<details class="fold recipes"><summary>{t('ux.grid.recipes')}{#if pickedRecipe !== null} · {recipeName}{/if}</summary>
-		<div class="recepten">
-			<label class="field">
-				<span class="name">{t('grid.recipe')}</span>
+		<div class="recepten card inset">
+			<label class="field-label">
+				<span>{t('grid.recipe')}</span>
 				<select
 					value={pickedRecipe}
 					disabled={recepten.length === 0}
@@ -1025,7 +1027,7 @@
 					{saving ? t('grid.recipe.dontSave') : t('grid.recipe.save')}
 				</button>
 				{#if pickedRecipe !== null}
-					<button class="btn quiet" disabled={recipeBusy} title={recipeBusy ? t('reason.busy') : undefined} onclick={wipeRecipe}
+					<button class="btn ghost" disabled={recipeBusy} title={recipeBusy ? t('reason.busy') : undefined} onclick={wipeRecipe}
 						>{t('common.remove')}</button
 					>
 				{/if}
@@ -1052,22 +1054,22 @@
 						onclick={saveRecipe}>{t('common.save')}</button
 					>
 				</div>
-				<p class="hint">
+				<p class="help">
 					{t('grid.recipe.hint')}
 					{form.material_id === null
 						? t('grid.recipe.hint.noMaterial')
 						: t('grid.recipe.hint.material')}
 				</p>
 			{/if}
-			{#if recipeError}<p class="failure" role="alert">{recipeError}</p>{/if}
+			{#if recipeError}<div class="failure"><Notice tone="danger" live>{recipeError}</Notice></div>{/if}
 		</div>
 
 		</details>
 		<div class="werkbank">
 			<div class="grid">
 				<div class="paar">
-				<label class="field">
-					<span class="name">{t('library.material')}</span>
+				<label class="field-label">
+					<span>{t('library.material')}</span>
 					<select bind:value={form.material_id}>
 						<option value={null}>{t('grid.none')}</option>
 						{#each library.materials as material (material.id)}
@@ -1075,8 +1077,8 @@
 						{/each}
 					</select>
 				</label>
-				<label class="field">
-					<span class="name">{t('library.operation')}</span>
+				<label class="field-label">
+					<span>{t('library.operation')}</span>
 					<select bind:value={form.operation}>
 						{#each operations() as op (op.value)}
 							<option value={op.value}>{op.label}</option>
@@ -1091,8 +1093,8 @@
 					     warning does not only point at the gap but closes it — otherwise there
 					     is an objection with no way out beside a button that simply goes
 					     ahead. -->
-					<div class="material-note">
-						<p class="hint">{t('ux.grid.noMaterial')}</p>
+					<Notice tone="warn">
+						<p class="flat">{t('ux.grid.noMaterial')}</p>
 						<details class="fold"><summary>{t('ux.grid.newMaterial')}</summary>
 						<div class="erbij">
 							<input
@@ -1114,9 +1116,9 @@
 								onclick={makeMaterial}>{t('grid.newMaterial.create')}</button
 							>
 						</div>
-						{#if materialError}<p class="failure">{materialError}</p>{/if}
+						{#if materialError}<p class="help failure">{materialError}</p>{/if}
 						</details>
-					</div>
+					</Notice>
 				{/if}
 
 				{#if rasterImpossible}
@@ -1125,19 +1127,19 @@
 					     here — the layer throws its own shapes away and the board comes out of
 					     the machine blank. That is a gap in the engine, not a choice of ours;
 					     the least we can do is say it before the wood goes. -->
-					<p class="waarschuwing ernstig" role="alert">
+					<Notice tone="danger" live>
 						<strong>{t('job.noRaster.title')}</strong>
-						{t('grid.noRaster.body')}
-					</p>
+						<span>{t('grid.noRaster.body')}</span>
+					</Notice>
 				{/if}
 
 				{#if overgenomen}
-					<p class="overgenomen" role="status">
+					<Notice tone="info" live>
 						{t('grid.carriedOver', {
 							date: kortedatum(overgenomen.dateOf),
 							grid: overgenomen.grid
 						})}
-					</p>
+					</Notice>
 				{/if}
 
 
@@ -1221,8 +1223,8 @@
 				<!-- Decision B12: you pick which two quantities you sweep. The third stays
 				     fixed and ends up on the caption of the board. -->
 				<div class="paar">
-				<label class="field">
-					<span class="name">{t('grid.rowsDown')}</span>
+				<label class="field-label">
+					<span>{t('grid.rowsDown')}</span>
 					<select
 						value={form.row_axis}
 						onchange={(e) => kiesAs('row_axis', e.currentTarget.value as As)}
@@ -1234,8 +1236,8 @@
 						{/each}
 					</select>
 				</label>
-				<label class="field">
-					<span class="name">{t('grid.columnsRight')}</span>
+				<label class="field-label">
+					<span>{t('grid.columnsRight')}</span>
 					<select
 						value={form.column_axis}
 						onchange={(e) => kiesAs('column_axis', e.currentTarget.value as As)}
@@ -1264,8 +1266,8 @@
 				     grid you have not seen yet should go. The centre applies to the whole
 				     board, captions included — otherwise it sits askew the moment the row
 				     labels stick out on the left. -->
-				<label class="field">
-					<span class="name">{t('grid.measureFrom')}</span>
+				<label class="field-label">
+					<span>{t('grid.measureFrom')}</span>
 					<select bind:value={form.anchor}>
 						<option value="corner">{t('grid.anchor.corner')}</option>
 						<option value="center">{t('grid.anchor.center')}</option>
@@ -1302,7 +1304,7 @@
 						<input type="checkbox" bind:checked={form.border} />
 						<span>{t('grid.extras.border')}</span>
 					</label>
-					<p class="hint">
+					<p class="help">
 						{#if !form.text}
 							{t('grid.extras.noText')}
 						{:else if form.border}
@@ -1327,12 +1329,12 @@
 						<span>{t('grid.extras.code')}</span>
 					</label>
 					{#if form.code}
-						<div class="uitleg">
-							<p class="hint">{t('grid.code.why')}</p>
+						<div class="onder">
+							<Why>{t('grid.code.why')}</Why>
 							{#if preview?.plan.code_human}
 								<!-- The name is in the sentence and not glued to the end of it: a
 								     language that puts it elsewhere has nowhere to put it otherwise. -->
-								<p class="hint">{t('grid.code.name', { name: preview.plan.code_human })}</p>
+								<p class="help">{t('grid.code.name', { name: preview.plan.code_human })}</p>
 							{/if}
 							<!-- Not clamped to the engine's own 12 and 14 mm: those two numbers
 							     live in `boardcode.MIN_SIZE_MM` and `SMALL_SIZE_MM`, and a copy of
@@ -1346,10 +1348,10 @@
 								bind:value={form.code_size_mm}
 							/>
 							{#if codeRefusal}
-								<p class="krap" role="status">{codeRefusal}</p>
+								<Notice tone="warn" live>{codeRefusal}</Notice>
 							{:else}
 								{#if codeStripMm !== null}
-									<p class="hint">
+									<p class="help">
 										{t('grid.code.cost', {
 											strip: lengte(codeStripMm),
 											time: duur(preview?.plan.code_seconds),
@@ -1361,7 +1363,7 @@
 									<!-- The engine's own sentence: it carries the numbers this side
 									     cannot know, and it reaches curl and the logs in the same
 									     words. -->
-									<p class="krap" role="status">{warning.text}</p>
+									<Notice tone="warn" live>{warning.text}</Notice>
 								{/each}
 							{/if}
 						</div>
@@ -1372,13 +1374,13 @@
 						<span>{t('grid.extras.cutout')}</span>
 					</label>
 					{#if form.cutout}
-						<div class="uitleg">
+						<div class="onder">
 							{#if cutoutRefusal}
 								<!-- The refusal arrives from the preview, so it is on screen a
 								     quarter of a second after the switch goes on — with the
 								     numbers that caused it still in the fields, and before
 								     anybody has laid a plank in the machine. -->
-								<p class="krap" role="status">{cutoutRefusal}</p>
+								<Notice tone="warn" live>{cutoutRefusal}</Notice>
 							{:else}
 								{#if cutSetting}
 									<!-- Shown and not asked: the cut setting is looked up from the
@@ -1386,7 +1388,7 @@
 									     and it refuses rather than guesses, because the speed that
 									     cuts this material is the very thing a test board exists to
 									     find out. -->
-									<p class="hint">
+									<p class="help">
 										{t('grid.cutout.setting', {
 											speed: number(cutSetting.speed),
 											power: number(cutSetting.power),
@@ -1395,7 +1397,7 @@
 									</p>
 								{/if}
 								{#if cutMarginMm !== null}
-									<p class="hint">
+									<p class="help">
 										{t('grid.cutout.how', {
 											margin: lengte(cutMarginMm),
 											n: preview?.plan.cut_tabs ?? 0,
@@ -1404,7 +1406,7 @@
 									</p>
 								{/if}
 								{#if preview?.plan.cut_seconds}
-									<p class="hint">
+									<p class="help">
 										{t('grid.cutout.cost', { time: duur(preview.plan.cut_seconds) })}
 									</p>
 								{/if}
@@ -1417,7 +1419,7 @@
 						     with either of these, on any material. Every millimetre and every
 						     second above is arithmetic on pixels and on the engine's own cut
 						     plan. -->
-						<p class="hint">{t('grid.extras.untried')}</p>
+						<p class="help warn">{t('grid.extras.untried')}</p>
 					{/if}
 				</fieldset>
 
@@ -1442,47 +1444,47 @@
 					/>
 				{/if}
 
-				<label class="field wide">
-					<span class="name">{t('grid.caption')}</span>
+				<label class="field-label wide">
+					<span>{t('grid.caption')}</span>
 					<input
 						type="text"
 						bind:value={form.caption}
 						maxlength="48"
 						placeholder={t('grid.caption.placeholder')}
 					/>
-					<span class="hint">{t('grid.caption.hint')}</span>
+					<span class="help">{t('grid.caption.hint')}</span>
 				</label>
-				<p class="hint">{t('grid.lead', { columns: t('grid.lead.right', { axis: axisLabel(form.column_axis).toLowerCase() }), rows: t('grid.lead.down', { axis: axisLabel(form.row_axis).toLowerCase() }) })}</p>
+				<p class="help">{t('grid.lead', { columns: t('grid.lead.right', { axis: axisLabel(form.column_axis).toLowerCase() }), rows: t('grid.lead.down', { axis: axisLabel(form.row_axis).toLowerCase() }) })}</p>
 				</div></details>
 			</div>
 
 			{#if preview}
-				<aside class="preview" aria-label={t('grid.preview')}>
+				<aside class="preview card" aria-label={t('grid.preview')}>
 					{#if looseRefusal}
 						<!-- While typing, an intermediate state is nearly always briefly
 						     invalid: you adjust "from" and it is then higher than "to" until you
 						     adjust that too. The preview stays, with the reason above it —
 						     dropping a hole teaches you nothing and makes half the wizard
 						     jump. -->
-						<p class="unfinished" role="status">
-							{looseRefusal}<br />
-							<span class="quiet">{t('grid.preview.lastValid')}</span>
-						</p>
+						<div class="unfinished"><Notice tone="warn" live>
+							<span>{looseRefusal}</span>
+							<span>{t('grid.preview.lastValid')}</span>
+						</Notice></div>
 					{:else if previewError}
 						<!-- The reason itself is up beside the switch that caused it, which is
 						     where it can be acted on. What still belongs here is that the picture
 						     below is one board behind. -->
-						<p class="unfinished" role="status">{t('grid.preview.lastValid')}</p>
+						<div class="unfinished"><Notice tone="warn" live>{t('grid.preview.lastValid')}</Notice></div>
 					{:else if botsing}
 						<!-- The previous board is still there, and Start X/Y is still in the same
 						     place. Two boards over each other you do not see on the canvas and do
 						     see in the machine. -->
-						<p class="unfinished" role="status">
+						<div class="unfinished"><Notice tone="warn" live>
 							{t('grid.preview.overlap', {
 								id: vorigBord?.id,
 								anchor: t(form.anchor === 'center' ? 'grid.anchor.centreWord' : 'grid.anchor.startWord')
 							})}
-						</p>
+						</Notice></div>
 					{/if}
 					<div class="figures">
 						<span class="mono">{t('grid.cells', { n: preview.cells.length })}</span>
@@ -1508,7 +1510,7 @@
 					     not sideways, so a board whose only extra is a code was 20 mm taller than
 					     its squares with nothing on screen saying where those millimetres went. -->
 					{#if (preview.plan.outer_width_mm ?? 0) > preview.plan.width_mm || (preview.plan.outer_height_mm ?? 0) > preview.plan.height_mm}
-						<p class="kosten">
+						<p class="help kosten">
 							{t('grid.ofWhich', {
 								size: `${number(preview.plan.width_mm)} × ${number(preview.plan.height_mm)} mm`,
 								extras:
@@ -1537,7 +1539,7 @@
 						<!-- With a cut-out the piece you carry away is not the board: it is the
 						     board plus the margin the cut runs in. That is the measure that has to
 						     fit the offcut in your hand. -->
-						<p class="kosten">
+						<p class="help kosten">
 							{t('grid.cutout.tile', {
 								size: `${number(preview.plan.cut_width_mm)} × ${number(
 									preview.plan.cut_height_mm
@@ -1549,7 +1551,7 @@
 					     an axis the burn time can quietly go up tenfold: a row at 0.05 mm lays
 					     six times as many lines as one at 0.3 mm, and that is in no other
 					     number on this form. -->
-					<p class="kosten">{t('grid.burnTime', { time: brandtijd })}</p>
+					<p class="help kosten">{t('grid.burnTime', { time: brandtijd })}</p>
 
 					<!-- The board as it comes out: darker = more burning, and the values are
 					     alongside where they end up on the wood. -->
@@ -1633,7 +1635,7 @@
 						     nearly always down to the row labels: they are engraved left of the
 						     grid and are as wide as their longest value. With the centre as the
 						     anchor you cannot work that out yourself, so the number is here. -->
-						<p class="krap">
+						<div class="krap"><Notice tone="warn">
 							<!-- The position the engine measured this on, and with a cut-out that is
 							     the *cut* rectangle and not the board (`board_room = cut_x >= 0 and
 							     cut_y >= 0`, testgrid.py:748). Measured on the default form with a
@@ -1657,10 +1659,10 @@
 								),
 								orText: form.text ? t('grid.tooFar.orText') : ''
 							})}
-						</p>
+						</Notice></div>
 					{/if}
 
-					<p class="legenda">
+					<p class="help legenda">
 						{t('grid.legend.rows', {
 							axis: axisLabel(form.row_axis).toLowerCase(),
 							unit: AXIS_UNIT[form.row_axis]
@@ -1681,24 +1683,22 @@
 		</div>
 
 		{#if suggestedFrom !== null}
-			<p class="muted">
+			<p class="help">
 				{suggestedFrom
 					? t('grid.suggested', { n: suggestedFrom })
 					: t('grid.suggested.none')}
 			</p>
 		{/if}
 
-		{#if error}<p class="error" role="alert">{error}</p>{/if}
+		{#if error}<Notice tone="danger" live>{error}</Notice>{/if}
 
 		{#if done}
 			<!-- Gap T1: this is where the wizard used to stop, leaving you with a drawn
 			     grid on the canvas and no hint how to burn it. Frame first, then start —
 			     the same order as in the control panel, and the same APIs. -->
-			<div class="done" role="status">
-				<p>
-					<strong>{t('grid.done.title', { id: done.id })}</strong>
-					{t('grid.done.body', { cells: done.cellen })}
-				</p>
+			<Notice tone="ok" live>
+				<p class="done-title">{t('grid.done.title', { id: done.id })}</p>
+				<p class="flat">{t('grid.done.body', { cells: done.cellen })}</p>
 				<div class="branden">
 					<button
 						class="btn"
@@ -1718,35 +1718,36 @@
 					</button>
 				</div>
 				{#if naarMachine === 'frame-ready'}
-					<p class="nagekomen">{t('grid.frameDone')}</p>
+					<p class="help">{t('grid.frameDone')}</p>
 				{:else if naarMachine === 'start-ready'}
-					<p class="nagekomen">{t('grid.startDone')}</p>
+					<p class="help">{t('grid.startDone')}</p>
 				{/if}
-				{#if machineLet}<p class="nagekomen">{t('grid.watchOut', { what: machineLet })}</p>{/if}
-				{#if machineError}<p class="failure" role="alert">{machineError}</p>{/if}
-			</div>
+				{#if machineLet}<p class="help warn">{t('grid.watchOut', { what: machineLet })}</p>{/if}
+				{#if machineError}<p class="help failure" role="alert">{machineError}</p>{/if}
+			</Notice>
 		{/if}
 
 		<div class="actions ask-actions">
-			<button class="btn" disabled={busy} title={busy ? t('reason.busy') : undefined} onclick={suggest}>{t('grid.suggestRange')}</button>
+			<button class="btn ghost" disabled={busy} title={busy ? t('reason.busy') : undefined} onclick={suggest}>{t('grid.suggestRange')}</button>
 			<!-- Form rule v4: the primary button is on the right, the helper on the left.
 			     They used to sit next to each other on the left, and then the button that
 			     goes into the wood is as prominent as the one that suggests a number. -->
 			<span class="stretch"></span>
-			<!-- E4: without a material this stays an ordinary button. It works — sometimes
-			     you *do* want to burn a board without getting a preset out of it — but it
-			     does not promise that this is the intended route. -->
+			<!-- E4: without a material the button says so in its own words ("Draw it
+			     anyway, without a material"), under the warning that closes the gap. It
+			     stays the primary: it is the one step this row exists for, and a row of
+			     two equal grey buttons left the step without a clear way forward. -->
 			<!-- Once a grid is there, starting is the next step and not yet another grid.
 			     Two equally bright buttons side by side make you choose between two things
 			     of which only one is at issue. The button on a burned board does not draw,
 			     it puts you back at the settings: a second board would otherwise fall on
 			     the first. -->
 			{#if done}
-				<button class="btn" onclick={again}>{t('grid.another')}</button>
+				<!-- The step's primary is Start in the notice above; this is the way back. -->
+				<button class="btn ghost" onclick={again}>{t('grid.another')}</button>
 			{:else}
 				<button
-					class="btn"
-					class:primary={!noMaterial}
+					class="btn primary"
 					disabled={busy || !preview || previewError !== null}
 				title={busy ? t('reason.busy') : (previewError ?? t('reason.noneYet'))}
 					onclick={generate}
@@ -1808,17 +1809,17 @@
 		font-family: var(--font-mono);
 		font-size: var(--text-xs);
 	}
+	/* Where you are is a state, not an action: ink, so the step's one teal thing is
+	   its primary button. */
 	.steps li.now { color: var(--text-1); font-weight: 600; }
 	.steps li.now .nr {
-		background: var(--accent);
-		border-color: var(--accent);
-		color: var(--accent-ink);
+		background: var(--text-1);
+		border-color: var(--text-1);
+		color: var(--surface-1);
 	}
 
-	.material-note .hint { margin: 0 0 var(--space-1); }
 	.layout-options { margin-top: var(--space-2); }
-	.lead { margin: 0; font-size: var(--text-sm); color: var(--text-1); max-width: 62ch; }
-	.muted { color: var(--text-2); margin: 0; font-size: var(--text-xs); }
+	.lead { margin: 0; font-size: var(--text-sm); color: var(--text-1); max-width: var(--measure); }
 
 	/* Form rule v4: the form is a stack of rows, not a continuous two-column grid. In
 	   that grid every field fell into the next free slot, and so "Speed from" sat
@@ -1838,7 +1839,6 @@
 		gap: var(--space-3);
 		align-items: end;
 	}
-	.field { display: grid; gap: 4px; }
 	.name { font-size: var(--text-xs); color: var(--text-2); }
 	/* An axis is one statement: from, to and the number of steps belong in one framed
 	   block, because loose in the flow they read as three separate numbers. */
@@ -1853,59 +1853,16 @@
 	}
 	.asblok { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
 	.asblok .paar { display: contents; }
-	.asblok legend { padding: 0 4px; }
-	.hint { font-size: var(--text-xs); color: var(--text-2); }
+	.asblok legend { padding: 0 var(--space-1); }
 	select, input[type='text'] {
-		font: inherit;
-		font-size: var(--text-sm);
 		width: 100%;
-		box-sizing: border-box;
-		padding: 8px;
-		border: 1px solid var(--line);
-		border-radius: var(--radius-field);
-		background: var(--surface-2);
-		color: var(--text-1);
 	}
 
-	.waarschuwing {
-		grid-column: 1 / -1;
-		display: grid;
-		gap: var(--space-2);
-		margin: 0;
-		padding: var(--space-2) var(--space-3);
-		border-radius: var(--radius-field);
-		border-left: 3px solid var(--warn-solid, var(--warn));
-		background: color-mix(in srgb, var(--warn-solid, var(--warn)) 12%, transparent);
-		font-size: var(--text-xs);
-		color: var(--text-1);
-	}
-	/* A board that comes out of the machine blank is not a point of attention but a
-	   wasted plate: that message gets the danger colour. */
-	.waarschuwing.ernstig {
-		/* Back to one text block: the shared frame is a grid, and then every word
-		   between two <strong>s becomes a row of its own. */
-		display: block;
-		border-left-color: var(--danger-solid, var(--danger));
-		background: color-mix(in srgb, var(--danger-solid, var(--danger)) 12%, transparent);
-	}
 	/* The way out is in the warning itself: type one line and you are out, without
 	   opening the library and losing this dialog. */
 	.erbij { display: flex; gap: var(--space-2); flex-wrap: wrap; }
 	.erbij input { flex: 1; min-width: 12rem; }
-	.failure { color: var(--danger-solid, var(--danger)); }
-
-	/* What worked last time comes back — but visibly, because otherwise the form
-	   changes under your hands without you knowing why. */
-	.overgenomen {
-		grid-column: 1 / -1;
-		margin: 0;
-		padding: var(--space-1h) var(--space-3);
-		border-radius: var(--radius-field);
-		border-left: 3px solid var(--accent);
-		background: color-mix(in srgb, var(--accent) 10%, transparent);
-		font-size: var(--text-xs);
-		color: var(--text-1);
-	}
+	.failure { color: var(--danger); }
 
 	/* The recipe bar: one row at the top, as in LightBurn. Choosing is the main
 	   action, saving sits beside it and only opens when you ask for it — otherwise the
@@ -1916,18 +1873,13 @@
 		gap: var(--space-2) var(--space-3);
 		align-items: end;
 		padding: var(--space-2) var(--space-3);
-		border: 1px solid var(--line);
-		border-radius: var(--radius-card);
-		background: var(--surface-2);
 	}
-	.recepten .erbij,
-	.recepten .hint,
-	.recepten .failure { grid-column: 1 / -1; }
-	.receptknoppen { display: flex; gap: var(--space-2); }
-	/* Deleting is quiet: it is there in case you need it, not as a suggestion beside
+	.recepten > .erbij,
+	.recepten > .help,
+	.recepten > .failure { grid-column: 1 / -1; }
+	/* Deleting is a ghost: it is there in case you need it, not as a suggestion beside
 	   the button you actually have to use. */
-	.btn.quiet { border-color: transparent; background: transparent; color: var(--text-2); }
-	.btn.quiet:hover:not(:disabled) { background: var(--surface-1); color: var(--text-1); }
+	.receptknoppen { display: flex; gap: var(--space-2); }
 
 	/* Two switches that belong together: a fieldset, because they share one question
 	   ("what else goes on the board"). */
@@ -1948,16 +1900,15 @@
 		font-size: var(--text-sm);
 		color: var(--text-1);
 	}
-	.schakelaars .hint { margin: 0; max-width: 52ch; }
+	.schakelaars > .help { max-width: 52ch; }
 	/* What a switch needs once it is on, indented under it so it reads as belonging to
 	   that switch and not to the fieldset. */
-	.uitleg {
+	.onder {
 		display: grid;
 		gap: var(--space-1h);
 		margin-left: calc(var(--space-2) + 1em);
 		max-width: 52ch;
 	}
-	.schakelaars .krap { margin: 0; max-width: 52ch; }
 
 	/* Setting up and seeing what you set, side by side. Below 720px it stacks. The
 	   preview column has a fixed width instead of `auto`: with `auto` it followed the
@@ -1984,24 +1935,14 @@
 		   and sticking would mean it covers the fields. */
 		position: sticky;
 		top: 0;
-		border: 1px solid var(--line);
-		border-radius: var(--radius-card);
 		padding: var(--space-3);
-		background: var(--surface-1);
 		box-shadow: var(--lift-1);
 	}
 	/* The reason the preview is briefly not keeping up. A calm notice and not an
 	   alarm: this is an intermediate state while typing, not a failure. */
 	.unfinished {
 		margin: 0 0 var(--space-2);
-		padding: var(--space-1h) var(--space-2);
-		border-radius: var(--radius-field);
-		border-left: 3px solid var(--warn-solid, var(--warn));
-		background: color-mix(in srgb, var(--warn-solid, var(--warn)) 12%, transparent);
-		font-size: var(--text-xs);
-		color: var(--text-1);
 	}
-	.unfinished .quiet { color: var(--text-2); }
 
 	.figures {
 		display: flex;
@@ -2018,7 +1959,7 @@
 		display: grid;
 		grid-template-columns: auto auto;
 		grid-template-rows: auto auto;
-		gap: 4px;
+		gap: var(--space-1);
 	}
 	/* Without a caption there is no label column either: then the board is exactly the
 	   squares, and that is what the preview should show. */
@@ -2087,24 +2028,13 @@
 	}
 	.kosten {
 		margin: 0 0 var(--space-2);
-		font-size: var(--text-xs);
-		color: var(--text-2);
 	}
 	.krap {
 		margin: var(--space-2) 0 0;
-		padding: var(--space-1h) var(--space-2);
-		border-radius: var(--radius-field);
-		border-left: 3px solid var(--warn-solid, var(--warn));
-		background: color-mix(in srgb, var(--warn-solid, var(--warn)) 12%, transparent);
-		max-width: 24ch;
-		font-size: var(--text-xs);
-		color: var(--text-1);
 	}
 	.legenda {
 		margin: var(--space-2) 0 0;
 		max-width: 24ch;
-		font-size: var(--text-xs);
-		color: var(--text-2);
 	}
 
 	/* The button from step 1 has to stay on screen. In an 80vh dialog with twelve
@@ -2130,34 +2060,11 @@
 		background: var(--surface-1);
 		border-top: 1px solid var(--line);
 	}
-	/* Without this rule the general hover beats .primary: on hover the button went
-	   light grey with white text. Same specificity, later in the stylesheet — a
-	   classic. */
-	/* A disabled primary button must not look like a button that works: 45% accent
-	   still reads as "click me" in the dark theme. */
-	.btn.primary:disabled {
-		background: var(--surface-2);
-		border-color: var(--line);
-		color: var(--text-2);
-		opacity: 1;
-	}
-	.error, .done {
-		margin: 0;
-		padding: var(--space-2) var(--space-3);
-		border-radius: var(--radius-field);
-		font-size: var(--text-xs);
-	}
-	.error { background: color-mix(in srgb, var(--danger-solid, var(--danger)) 14%, transparent); }
-	.done {
-		display: grid;
-		gap: var(--space-2);
-		background: color-mix(in srgb, var(--ok) 14%, transparent);
-		border-left: 3px solid var(--ok);
-	}
-	.done p { margin: 0; }
-	.branden { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+	.done-title { font-weight: 600; }
+	.done-title,
+	.flat { margin: 0; }
+	.branden { display: flex; gap: var(--space-2); flex-wrap: wrap; margin-block: var(--space-1); }
 	/* The start button should be the largest in this block, but not so large that it
 	   starts imitating the sticky main button below it. */
 	.branden .btn { flex: 1; min-width: 10rem; }
-	.nagekomen { color: var(--text-2); }
 </style>

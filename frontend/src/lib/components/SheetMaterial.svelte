@@ -66,14 +66,14 @@
 </script>
 
 <div class="wrap">
-	<p class="hint">
+	<p class="help">
 		{t('sheetMat.applies', {
 			sheet: sheet.name,
 			size: `${i18n.number(sheet.width_mm)} × ${i18n.number(sheet.height_mm)} mm`
 		})}
 	</p>
 
-	<label class="field">
+	<label class="field-label">
 		<span>{t('library.material')}</span>
 		<select
 			value={sheet.material_id === null ? '' : String(sheet.material_id)}
@@ -109,7 +109,7 @@
 		<button class="link" onclick={() => (adding = true)}>{t('sheetMat.notListed')}</button>
 	{/if}
 
-	<div class="field">
+	<div class="field-label">
 		<!-- The unit in the label, not behind the input: otherwise there is a row of
 		     bare numbers whose measure only becomes clear on the right. -->
 		<span>{t('sheetMat.thickness')}</span>
@@ -138,12 +138,12 @@
 	</div>
 
 	{#if sheets.error}
-		<p class="error" role="alert">{sheets.error}</p>
+		<p class="refusal" role="alert">{sheets.error}</p>
 	{/if}
 
 	<!-- What this yields, visible at once: the library filters on it later, so the
 	     count says whether it is any use to you. -->
-	<p class="opbrengst">
+	<p class="help">
 		{#if sheet.material_id === null}
 			{t('sheetMat.noMaterial')}
 		{:else if settings.length === 0}
@@ -170,70 +170,32 @@
 		display: grid;
 		gap: var(--space-3);
 	}
-	.hint {
-		margin: 0;
-		color: var(--text-2);
-		font-size: var(--text-sm);
-	}
-	.field {
-		display: grid;
-		gap: var(--space-1h);
-	}
-	.field > span {
-		font-size: var(--text-xs);
-		color: var(--text-2);
-	}
-	select,
-	input[type='text'],
-	input[type='number'] {
-		font: inherit;
-		padding: 8px var(--space-3);
-		border: 1px solid var(--line);
-		border-radius: var(--radius-field);
-		background: var(--surface-1);
-		color: var(--text-1);
-	}
 	.fresh {
 		display: flex;
 		gap: var(--space-2);
 	}
 	.fresh input { flex: 1; min-width: 0; }
-	.link {
+	.wrap > .link {
 		justify-self: start;
-		color: var(--text-2);
 		font-size: var(--text-xs);
-		text-decoration: underline;
-		text-underline-offset: 3px;
 	}
-	.link:hover { color: var(--text-1); }
 	.thicknesses {
 		display: flex;
 		flex-wrap: wrap;
 		align-items: center;
 		gap: var(--space-1h);
 	}
-	.chip {
+	/* The shared chip; the thickness is a value, so its figures are mono. Pressed is
+	   tint *and* edge *and* aria-pressed (tokens.css), never colour alone. */
+	.thicknesses .chip {
 		min-width: 40px;
-		padding: 8px var(--space-3);
-		border: 1px solid var(--line);
-		border-radius: var(--radius-field);
-		background: var(--surface-1);
+		justify-content: center;
+		font-family: var(--font-mono);
 		font-variant-numeric: tabular-nums;
 	}
-	.chip:hover:not(:disabled) { background: var(--surface-2); }
-	/* The same double encoding as the sheet bar: border *and* tint *and* aria-pressed,
-	   never colour alone. */
-	.chip[aria-pressed='true'] {
-		border-color: var(--accent);
+	.thicknesses .chip[aria-pressed='true'] {
 		font-weight: 600;
-		background: color-mix(in srgb, var(--accent) 10%, transparent);
 	}
 	.anders { width: 6em; }
-	.opbrengst {
-		margin: 0;
-		font-size: var(--text-xs);
-		color: var(--text-2);
-	}
-	.error { margin: 0; color: var(--danger); font-size: var(--text-sm); }
-
+	.refusal { margin: 0; }
 </style>

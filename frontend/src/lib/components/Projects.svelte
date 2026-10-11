@@ -16,6 +16,9 @@
 	 */
 	import Dialog from './Dialog.svelte';
 	import Menu from './Menu.svelte';
+	import Icon from './Icon.svelte';
+	import Notice from './Notice.svelte';
+	import EmptyState from './EmptyState.svelte';
 	import { t } from '$lib/i18n/index.svelte';
 	import { cleanName, MAX_NAME, type ProjectEntry, type ProjectsStore } from '$lib/projects.svelte';
 	import type { Menu as MenuList } from '$lib/actions';
@@ -56,6 +59,14 @@
 		| { kind: 'delete'; name: string };
 	let ask = $state<Ask | null>(null);
 	let rowMenu = $state<{ list: MenuList; x: number; y: number } | null>(null);
+	/**
+	 * The mode the window is in now. Opened to open a project on a server that has none,
+	 * its empty state offers the one thing that makes the first — saving the work under a
+	 * name — and that turns this same window into its save mode, rather than ending in a
+	 * sentence with nothing to press.
+	 */
+	let switched = $state<'saveAs' | null>(null);
+	const shown = $derived(switched ?? mode);
 	// Plain, not `$state`: read only from inside the `open` effect below, at the
 	// moment that effect itself decides whether this close was a save or not — never
 	// a value anything else needs to react to.
@@ -68,6 +79,7 @@
 		if (open) {
 			opened = true;
 			settled = false;
+			switched = null;
 			projects.load();
 			typed = projects.current?.name ?? '';
 			ask = null;
@@ -183,31 +195,37 @@
 	}
 </script>
 
-<Dialog title={mode === 'saveAs' ? t('projects.saveAs.title') : t('projects.title')} bind:open width="560px" footer={mode === 'saveAs' || ask ? projectFooter : undefined}>
+<Dialog title={shown === 'saveAs' ? t('projects.saveAs.title') : t('projects.title')} bind:open size="m" footer={shown === 'saveAs' || ask ? projectFooter : undefined}>
 	{#if projects.error}
-		<p class="error" role="alert">{projects.error}</p>
+		<Notice tone="danger" live>{projects.error}</Notice>
 	{/if}
 	{#if projects.list.length === 0}
-		<p class="hint">{t('projects.empty')}</p>
+		<EmptyState title={t('projects.empty.title')} text={t('projects.empty')}>
+			{#snippet action()}
+				{#if shown === 'open'}
+					<button class="btn" onclick={() => (switched = 'saveAs')}>{t('projects.saveAs.title')}</button>
+				{/if}
+			{/snippet}
+		</EmptyState>
 	{:else}
 		<div class="rows" role="list">
-			<div class="head"><span>{t('projects.column.name')}</span><span>{t('projects.column.saved')}</span><span></span></div>
+			<div class="head label-section"><span>{t('projects.column.name')}</span><span>{t('projects.column.saved')}</span><span></span></div>
 			{#each projects.list as entry (entry.name)}
 				<div
 					class="row"
 					class:current={entry.current}
 					role="listitem"
-					ondblclick={() => (mode === 'saveAs' ? (typed = entry.name) : chooseOpen(entry.name))}
+					ondblclick={() => (shown === 'saveAs' ? (typed = entry.name) : chooseOpen(entry.name))}
 				>
 					<span class="name">{entry.name}{#if entry.current} <em>{t('projects.current')}</em>{/if}</span>
 					<span class="when">{when(entry.saved_at)}</span>
 					<span class="verbs">
-						{#if mode === 'open'}
+						{#if shown === 'open'}
 							<button class="btn open" onclick={() => chooseOpen(entry.name)}>{t('projects.open')}</button>
 						{:else}
 							<button class="btn" onclick={() => (typed = entry.name)}>{t('ux.projects.useName')}</button>
 						{/if}
-						<button class="btn more" aria-haspopup="menu" aria-label={t('common.more')} onclick={(e) => menuFor(entry, e.currentTarget as HTMLElement)}>⋮</button>
+						<button class="btn ghost icon more" aria-haspopup="menu" aria-label={t('common.more')} title={t('common.more')} onclick={(e) => menuFor(entry, e.currentTarget as HTMLElement)}><Icon name="more" /></button>
 					</span>
 				</div>
 			{/each}
@@ -217,9 +235,9 @@
 
 	{#snippet projectFooter()}
 	<div class="project-actions">
-	{#if mode === 'saveAs'}
+	{#if shown === 'saveAs'}
 		<div class="saveas">
-			<label>
+			<label class="field-label">
 				<span>{t('projects.name')}</span>
 				<input
 					class="project-name"
@@ -246,7 +264,7 @@
 		</p>
 	{:else if ask?.kind === 'rename'}
 		<div class="ask rename" role="alert">
-			<label>
+			<label class="field-label">
 				<span>{t('projects.rename.to', { name: ask.from })}</span>
 				<input class="rename-name" type="text" maxlength={MAX_NAME} value={ask.typed} oninput={renameTyped} />
 			</label>
@@ -279,22 +297,20 @@
 	.project-actions { width: 100%; }
 	.rows { display: grid; gap: 2px; }
 	.head, .row { display: grid; grid-template-columns: 1fr auto auto; gap: var(--space-3); align-items: center; padding: var(--space-2) var(--space-3); }
-	.head { font-size: var(--text-xs); color: var(--text-2); text-transform: uppercase; letter-spacing: 0.04em; }
 	.row { border-radius: var(--radius-field); min-height: 44px; }
-	.row:hover { background: var(--surface-2); }
+	.row:hover { background: var(--hover); }
 	.row.current .name { font-weight: 600; }
 	.row em { font-style: normal; color: var(--text-2); font-size: var(--text-xs); margin-left: var(--space-2); }
 	.when { color: var(--text-2); font-size: var(--text-sm); white-space: nowrap; }
 	.verbs { display: flex; gap: var(--space-2); }
 	.saveas { display: flex; gap: var(--space-2); align-items: end; margin-top: 0; }
-	.saveas label { display: grid; gap: 4px; flex: 1; }
-	.saveas input { min-height: 44px; padding: 0 var(--space-3); border: 1px solid var(--line); border-radius: var(--radius-field); font: inherit; }
+	.saveas label { flex: 1; }
+	/* The field as tall as the Save beside it. */
+	.saveas input { min-height: max(36px, var(--target-min)); }
 	.ask { display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; margin-top: var(--space-3); }
 	/* The question takes the room it needs and the answers hang at the end of the
 	   line — the same row as in every other window (`.ask-actions` in tokens.css). */
 	.ask .ask-actions { flex: 1; }
-	.ask.rename label { display: grid; gap: 4px; flex: 1; min-width: 180px; }
-	.ask.rename input { min-height: 44px; padding: 0 var(--space-3); border: 1px solid var(--line); border-radius: var(--radius-field); font: inherit; width: 100%; }
-	.hint, .error { color: var(--text-2); }
-	.error { color: var(--danger, #b3261e); }
+	.ask.rename label { flex: 1; min-width: 180px; }
+	.ask.rename input { min-height: max(36px, var(--target-min)); width: 100%; }
 </style>

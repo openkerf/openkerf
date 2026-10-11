@@ -1,5 +1,7 @@
 <script lang="ts">
 	import NumberField from './NumberField.svelte';
+	import Icon from './Icon.svelte';
+	import Why from './Why.svelte';
 	import { i18n, t } from '$lib/i18n/index.svelte';
 	import type { SheetStore } from '$lib/sheets.svelte';
 	import type { LibraryStore } from '$lib/library.svelte';
@@ -122,7 +124,7 @@
 	     own: what you see is exactly what gets burned. -->
 	{#each sheets.sheets as sheet (sheet.id)}
 		<button
-			class="sheet"
+			class="chip sheet"
 			aria-pressed={sheet.active}
 			disabled={sheets.busy}
 			title="{sheet.name} — {i18n.number(sheet.width_mm)} × {i18n.number(sheet.height_mm)} mm{materialName(
@@ -139,22 +141,23 @@
 
 	{#if canEdit}
 		<button
-			class="sheet add"
+			class="chip sheet add"
 			disabled={sheets.busy}
 			title={t('sheets.addSheet')}
+			aria-label={t('sheets.addSheet')}
 			onclick={voegToe}
-		>+</button>
+		><Icon name="plus" /></button>
 	{/if}
 
 	{#if sheets.error}
-		<span class="error">{sheets.error}</span>
+		<span class="refusal">{sheets.error}</span>
 	{/if}
 </div>
 
 {#if editing && sheets.active && canEdit}
 	{@const sheet = sheets.active}
 	<div class="editor">
-		<label>
+		<label class="field-label">
 			<span>{t('panel.name')}</span>
 			<input
 				type="text"
@@ -162,7 +165,7 @@
 				onchange={(e) => sheets.update(sheet.id, { name: e.currentTarget.value })}
 			/>
 		</label>
-		<label>
+		<label class="field-label">
 			<span>{t('gen.width')}</span>
 			<input
 				class="mono"
@@ -173,7 +176,7 @@
 				onchange={(e) => sheets.update(sheet.id, { width_mm: Number(e.currentTarget.value) })}
 			/>
 		</label>
-		<label>
+		<label class="field-label">
 			<span>{t('gen.height')}</span>
 			<input
 				class="mono"
@@ -195,8 +198,8 @@
 			Steppers, not bare number inputs: DESIGN-SYSTEM, "number input is a stepper
 			everywhere" — you set these standing at a machine.
 		-->
-		<p class="head wide">{t('sheets.tiling.head')}</p>
-		<p class="why wide">{t('sheets.tiling.why')}</p>
+		<p class="label-section wide">{t('sheets.tiling.head')}</p>
+		<div class="wide"><Why>{t('sheets.tiling.why')}</Why></div>
 		<div class="wide three">
 			<NumberField
 				label={t('sheets.tiling.margin')}
@@ -225,9 +228,9 @@
 		<!-- Material is not filled in a second time here. It is in the top bar, because
 		     everything downstream reads it there; two places to choose the same thing
 		     only raises the question which is the real one. -->
-		<label class="wide">
+		<label class="field-label wide">
 			<span>{t('library.material')}</span>
-			<button class="material" onclick={() => onEditMaterial?.()}>
+			<button class="btn mini material" onclick={() => onEditMaterial?.()}>
 				{materialName(sheet.material_id) ?? t('sheets.materialNotFilled')}{sheet.thickness_mm ===
 				null
 					? ''
@@ -235,12 +238,12 @@
 			</button>
 		</label>
 		<button
-			class="drop"
+			class="btn mini danger drop"
 			disabled={sheets.sheets.length < 2 || sheets.busy}
 			title={sheets.sheets.length < 2 ? t('sheets.needsOne') : undefined}
 			onclick={() => askOrGo(sheet.id)}
 		>{t('sheets.removeSheet')}</button>
-		<button class="close" onclick={() => (editing = null)}>{t('common.done')}</button>
+		<button class="btn mini close" onclick={() => (editing = null)}>{t('common.done')}</button>
 	</div>
 
 	{#if bevestigen === sheet.id}
@@ -250,7 +253,7 @@
 			<p>{t('sheets.removeAsk', { sheet: sheet.name, what: telling(toRemove) })}</p>
 			<div class="ask-actions">
 				<button class="btn mini" onclick={() => (bevestigen = null)}>{t('common.cancel')}</button>
-				<button class="btn mini gone" disabled={sheets.busy} title={sheets.busy ? t('reason.busy') : undefined} onclick={() => verwijder(sheet.id)}>
+				<button class="btn mini danger" disabled={sheets.busy} title={sheets.busy ? t('reason.busy') : undefined} onclick={() => verwijder(sheet.id)}>
 					{sheets.busy
 						? t('common.busy')
 						: t('sheets.removeConfirm', { what: telling(toRemove) })}
@@ -265,41 +268,30 @@
 		flex: none;
 		display: flex;
 		align-items: center;
-		gap: 4px;
-		padding: 4px var(--space-3);
+		gap: var(--space-1);
+		padding: var(--space-1) var(--space-3);
 		background: var(--surface-1);
 		border-bottom: 1px solid var(--line);
 		overflow-x: auto;
 	}
+	/* A sheet is the shared chip: pressed is the current sheet, in the accent tint and
+	   its edge, never the accent as text (accent on its tint only reaches 4.24:1 and
+	   these are small letters). The weight is the third sign beside tint and
+	   aria-pressed. */
 	.sheet {
 		flex: none;
-		display: flex;
 		align-items: baseline;
-		gap: 8px;
-		padding: 4px 8px;
-		border-radius: 999px;
-		border: 1px solid var(--line);
-		background: var(--surface-1);
-		color: var(--text-1);
-		font-size: var(--text-xs);
+		gap: var(--space-2);
 	}
-	.sheet:hover:not(:disabled) { background: var(--surface-2); color: var(--text-1); }
 	.sheet[aria-pressed='true'] {
-		/* The accent sits in the border and the tint, not in the text: accent colour
-		   on an accent tint only reaches 4.24:1 and these are the smallest letters on
-		   screen. The active state is still doubly encoded (border + tint +
-		   aria-pressed). */
-		border-color: var(--accent);
-		color: var(--text-1);
 		font-weight: 600;
-		background: color-mix(in srgb, var(--accent) 10%, transparent);
 	}
 	/* No opacity on text: that lowers the contrast unpredictably. The size is
 	   secondary, but it has to stay readable. */
-	.sheet .size { font-size: var(--text-xs); color: var(--text-2); }
+	.sheet .size { color: var(--text-2); }
 	/* Reachable with a finger, gloved as well. */
-	.sheet.add { padding: 4px 12px; font-weight: 600; min-width: 44px; }
-	.error { font-size: var(--text-xs); color: var(--danger); }
+	.sheet.add { align-items: center; min-width: max(32px, var(--target-min)); justify-content: center; }
+	.refusal { margin: 0; }
 	.editor {
 		flex: none;
 		display: flex;
@@ -310,60 +302,21 @@
 		background: var(--surface-2);
 		border-bottom: 1px solid var(--line);
 	}
-	.editor label { display: grid; gap: 2px; font-size: var(--text-xs); color: var(--text-2); }
-	.editor input {
-		font: inherit;
-		font-size: var(--text-xs);
-		padding: 4px 8px;
-		border: 1px solid var(--line);
-		border-radius: var(--radius-field);
-		background: var(--surface-1);
-		color: var(--text-1);
-	}
-	.editor .material {
-		font-size: var(--text-xs);
-		padding: 4px 8px;
-		border: 1px solid var(--line);
-		border-radius: var(--radius-field);
-		background: var(--surface-1);
-		/* Between two input fields a button in ordinary text colour looks like a field
-		   that is not taking part. The accent colour says something happens when you
-		   press it. */
-		color: var(--accent-text);
-		text-align: left;
-	}
-	.editor .material:hover { background: var(--surface-2); }
+	/* The wells sit on the editor's grey, so they take the panel white to stay wells. */
+	.editor input { background: var(--surface-1); }
+	/* Between two input fields a button in ordinary text colour looks like a field
+	   that is not taking part; this one is a door to the material window. */
+	.editor .material { justify-content: flex-start; }
 	/* The tiling row: a heading, a sentence and the three fields in a line. `wide`
 	   breaks the flex row, so each of the three parts starts on its own. */
 	.editor .wide { flex-basis: 100%; }
-	.editor .head {
-		margin: var(--space-2) 0 0;
-		font-size: var(--text-xs);
-		font-weight: 600;
-		color: var(--text-2);
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-	}
-	.editor .why {
-		margin: 0 0 var(--space-1);
-		max-width: 62ch;
-		font-size: var(--text-xs);
-		color: var(--text-2);
-	}
+	.editor .label-section { margin-top: var(--space-2); }
 	.editor .three { display: flex; gap: var(--space-2); }
 	.editor input[type='text'] { width: 9em; }
 	.editor input[type='number'] { width: 5em; }
-	.drop,
-	.close {
-		font-size: var(--text-xs);
-		padding: 4px 8px;
-		border-radius: var(--radius-field);
-		border: 1px solid var(--line);
-		background: var(--surface-1);
-	}
-	.drop { color: var(--danger); }
 	/* The question belongs below the button that asks it, not in a dialog in the
-	   middle of the screen: you keep looking at the same strip. */
+	   middle of the screen: you keep looking at the same strip. Tinted as the danger
+	   it asks about, not striped. */
 	.confirm {
 		flex: none;
 		display: flex;
@@ -371,22 +324,13 @@
 		align-items: center;
 		gap: var(--space-3);
 		padding: var(--space-2) var(--space-3);
-		background: var(--surface-2);
-		border-bottom: 1px solid var(--line);
-		border-left: 3px solid var(--danger-solid);
+		background: var(--danger-tint);
+		border-bottom: 1px solid var(--danger-edge);
 	}
 	.confirm p { margin: 0; font-size: var(--text-xs); color: var(--text-1); }
 	/* The row itself is the shared ask row in tokens.css, which also keeps the two
 	   outcomes 24 px apart — they exclude each other and one of them is irreversible.
 	   All this says is that it hangs at the end of the line the question is on. */
 	.ask-actions { margin-left: auto; }
-	.gone {
-		background: var(--danger-solid);
-		border-color: var(--danger-solid);
-		color: var(--on-color);
-		font-weight: 600;
-	}
-	.gone:hover:not(:disabled) { filter: brightness(1.06); }
-	.drop:disabled { opacity: 0.45; cursor: not-allowed; }
 	.close { margin-left: auto; }
 </style>
