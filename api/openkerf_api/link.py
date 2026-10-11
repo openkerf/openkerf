@@ -134,6 +134,31 @@ class MachineLink(Protocol):
     def stop(self) -> None:
         """Ahead of anything still queued on the line; must work while a file is going out."""
 
+    # -- phase 5: burning -------------------------------------------------------------------
+    #
+    # Only for a link with `carries_jobs`; `EngineLink` keeps today's plan-and-spool path in
+    # `CommandRunner` and says False here, so a K40 burns exactly as before.
+
+    carries_jobs: bool
+
+    def start_job(self, rd: bytes, name: str | None = None) -> None:
+        """
+        Stream a complete RD file (`CommandRunner.build_job_bytes()`) to the machine, which
+        burns it as it arrives. Returns once streaming has *started* — the file goes out on
+        a worker of the link's own — or raises `ConnectionError` with a sentence when it
+        cannot start (no line, a file or job already on it). Never resumes a stream that a
+        reconnect broke.
+        """
+
+    def job(self) -> dict | None:
+        """
+        The job this link last started, or `None` if none:
+        `{"name", "phase", "sent", "total", "detail", "started", "finished"}` where `phase`
+        is "sending" | "running" | "paused" | "done" | "stopped" | "failed", `sent`/`total`
+        count confirmed packets, `started`/`finished` are `time.time()` stamps and
+        `detail` is a sentence for "failed"/"stopped". Never raises.
+        """
+
 
 # ------------------------------------------------------------------ which link
 
