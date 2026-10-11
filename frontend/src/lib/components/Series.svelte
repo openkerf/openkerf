@@ -1000,15 +1000,12 @@
 				</div>
 				<p class="help">{t('series.startAt.hint')}</p>
 
-				<!-- The shared ask row (`.ask-actions` in tokens.css): the way out — here
-				     the button that detaches the list — first, the primary last. It sticks
-				     to the bottom of the column it scrolls in, which is the one thing said
-				     locally. -->
-
 			</div>
 		</section>
 		</div>
 	</div>
+	<!-- The window's foot, the shared ask row (`.ask-actions` in tokens.css): the way
+	     out — here the button that detaches the list — first, the primary last. -->
 	{#snippet footer()}
 					{#if attached}
 						<button

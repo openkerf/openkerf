@@ -371,7 +371,8 @@ notches in its outline is not what happens.
 **When it goes wrong.**
 
 - Not every kind of shape can carry them. On a line, a text or an image the panel says so:
-  Bridges work on a rectangle, an ellipse, a polyline or a path. The menu row is greyed with the short version, "A line,
+  "This shape carries no bridges. They work on a rectangle, an ellipse, a polyline or a path
+  — not on a line, text or an image." The menu row is greyed with the short version, "A line,
   text or an image carries no bridges".
 - Bridges only mean something to a cut. In an engrave or raster layer — and on a shape in
   no layer at all — the panel keeps the fields and says so instead of promising a cut:

@@ -26,6 +26,14 @@ const NAME = 'Name trial bench';
 let reachable = false;
 let browser: Browser | null = null;
 let page: Page;
+/**
+ * The machine type the wizard is walked with. The name rule does not depend on the type,
+ * so this takes a Ruida where the server knows one and otherwise the first type the
+ * catalogue offers: the disposable scratch server (`gauntlet/scratch_server.py`) loads no
+ * driver plugins on purpose, and there `ruida-beta` is not a type at all — measured, the
+ * Create button then made nothing and all three tests failed on that, not on the names.
+ */
+let type = 'ruida-beta';
 
 const machines = async (): Promise<{ path: string; label: string }[]> =>
 	(await fetch(`${BASE}/api/machines`)).json();
@@ -35,6 +43,11 @@ before(async () => {
 		.then((r) => r.ok)
 		.catch(() => false);
 	if (!reachable) return;
+	const catalog: { machines: { key: string }[] }[] = await (
+		await fetch(`${BASE}/api/machines/catalog`)
+	).json();
+	const keys = catalog.flatMap((family) => family.machines.map((m) => m.key));
+	if (!keys.includes(type) && keys.length) type = keys[0];
 	browser = await chromium.launch();
 	page = await (await browser.newContext({ viewport: { width: 1440, height: 900 } })).newPage();
 });
@@ -59,7 +72,7 @@ after(async () => {
 });
 
 async function name(label: string) {
-	await page.goto(`${BASE}/setup/name?type=ruida-beta`, { waitUntil: 'domcontentloaded' });
+	await page.goto(`${BASE}/setup/name?type=${type}`, { waitUntil: 'domcontentloaded' });
 	await page.waitForTimeout(1800);
 	await page.fill('input[type=text]', label);
 	await page.waitForTimeout(500);
@@ -99,7 +112,7 @@ test('the suggested name is free of clashes straight away', async (t) => {
 	assert.deepEqual([...labels].sort(), [NAME, `${NAME} (2)`]);
 
 	// And the default name on a fresh screen no longer clashes either.
-	await page.goto(`${BASE}/setup/name?type=ruida-beta`, { waitUntil: 'domcontentloaded' });
+	await page.goto(`${BASE}/setup/name?type=${type}`, { waitUntil: 'domcontentloaded' });
 	await page.waitForTimeout(1800);
 	assert.equal(await page.getByRole('alert').count(), 0);
 });

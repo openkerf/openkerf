@@ -222,10 +222,11 @@ for (const withRaster of [true, false]) {
 
 			// The arrow may not have pushed the button that burns out of reach: it shares
 			// the footer with it.
+			// Found as the primary beside the arrow, not by its words: it was "Start job"
+			// and reads "Prepare job" since the desktop review, and a text match that finds
+			// nothing failed this test on every size without the button having moved.
 			const start = await page.evaluate(() => {
-				const button = [...document.querySelectorAll('.pf-actions button')].find((b) =>
-					/Start job|Job starten/.test(b.textContent ?? '')
-				);
+				const button = document.querySelector('.pf-actions button.primary');
 				if (!button) return null;
 				const box = button.getBoundingClientRect();
 				const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
@@ -254,22 +255,25 @@ for (const withRaster of [true, false]) {
 				let scroller: HTMLElement | null = null;
 				for (let el = column?.parentElement as HTMLElement | null; el; el = el.parentElement)
 					if (el.scrollHeight > el.clientHeight + 4) { scroller = el; break; }
-				if (!scroller || !column) return ['no scrolling column'];
+				if (!column) return ['no pre-flight column'];
+				// A column that fits does not scroll, and then "all the way down" is the one
+				// offset there is: measured at 1920 x 1080 since the desktop review, the
+				// panel is shorter than the window. That offset is still measured.
 				const found: string[] = [];
-				const max = scroller.scrollHeight - scroller.clientHeight;
+				const max = scroller ? scroller.scrollHeight - scroller.clientHeight : 0;
+				const port = (scroller ?? document.documentElement).getBoundingClientRect();
 				for (let top = 0; top <= max; top += 10) {
-					scroller.scrollTop = top;
+					if (scroller) scroller.scrollTop = top;
 					await new Promise((r) => requestAnimationFrame(r));
 					const summary = document.querySelector('.pf-actions button.pf-more');
 					if (!summary) return ['the arrow is gone'];
 					const box = summary.getBoundingClientRect();
-					const port = scroller.getBoundingClientRect();
-					if (box.top < port.top || box.bottom > port.bottom) continue;
+					if (box.top < port.top || box.bottom > Math.min(port.bottom, window.innerHeight)) continue;
 					const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
 					if (hit !== summary && !summary.contains(hit))
 						found.push(`${top}: ${hit ? hit.tagName + '.' + String(hit.className).split(' ')[0] : 'nothing'}`);
 				}
-				scroller.scrollTop = 0;
+				if (scroller) scroller.scrollTop = 0;
 				return found;
 			});
 			assert.deepEqual(

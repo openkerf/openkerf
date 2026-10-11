@@ -1426,7 +1426,15 @@
 					<p class="help" role="status">{bridgeNote}</p>
 				{/if}
 			</div>
-
+			{:else if chosen.length}
+				<!-- A line, a text or an image: the fields would only be grey, so they go, and
+				     the reason stays. Measured before this: the block vanished whole and a line
+				     in a cut layer said nothing about bridges at all, while the handbook promised
+				     the panel would. -->
+				<div class="bridges">
+					<span class="label-section">{t('panel.bridges')}</span>
+					<p class="help">{t('panel.bridges.notSupported')}</p>
+				</div>
 			{/if}
 
 			<!-- Three collapsed folds used to be here: Combine (unite, difference,

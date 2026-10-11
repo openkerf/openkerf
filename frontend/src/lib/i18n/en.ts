@@ -935,6 +935,7 @@ export const en = {
 	'panel.bridges.explain': '{count} bridges of {length} mm, spread over a contour of {total} mm. What is left to cut is {cut} mm.',
 	'panel.bridges.explainTightest': 'Each of these {n} shapes gets {count} bridges of {length} mm. The tightest contour among them is {total} mm long, which leaves {cut} mm to cut there.',
 	'panel.bridges.places': 'At {places} percent along the contour, each {length} mm long.',
+	'panel.bridges.notSupported': 'This shape carries no bridges. They work on a rectangle, an ellipse, a polyline or a path — not on a line, text or an image.',
 	'panel.bridges.mixed': 'These shapes have different bridges. Setting a number here gives them all the same.',
 	'panel.bridges.notCut': {
 		one: 'This shape is not in a cut layer, so bridges change nothing yet. They only matter to a cut.',

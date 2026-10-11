@@ -34,12 +34,19 @@ const post = (path: string, body?: unknown) =>
 		body: body === undefined ? undefined : JSON.stringify(body)
 	});
 
-/** The print-and-cut block as one line of text. */
-const block = async () => {
-	const text = await page.evaluate(() => document.body.innerText);
-	const from = text.indexOf('PRINT AND CUT');
-	return from < 0 ? '' : text.slice(from, from + 500).replace(/\s+/g, ' ');
-};
+/**
+ * The print-and-cut block as one line of text.
+ *
+ * Read from the block itself: the fold's summary used to be set in capitals ("PRINT AND
+ * CUT") and the text was cut out of the whole page from there. Since folds look the same
+ * everywhere the summary is in sentence case, and the anchor found nothing.
+ */
+const block = async () =>
+	(
+		(await page.evaluate(
+			() => (document.querySelector('details.printcut') as HTMLElement | null)?.innerText
+		)) ?? ''
+	).replace(/\s+/g, ' ');
 
 before(async () => {
 	reachable = await fetch(`${BASE}/api/health`, { signal: AbortSignal.timeout(2000) })
@@ -81,6 +88,20 @@ async function open(selected: string[] = []) {
 	const query = selected.length ? `&select=${selected.map(encodeURIComponent).join(',')}` : '';
 	await page.goto(`${BASE}/?tab=job${query}`, { waitUntil: 'domcontentloaded' });
 	await page.waitForTimeout(3000);
+	// The block is getting-ready work: it sits in "Operate machine", and is a fold of its
+	// own in there, and both start shut unless marks are picked or measured. Opened the
+	// way a hand opens them, by the summary. Without this every lookup below waited 30 s
+	// for a button that was in the page but not on the screen.
+	// The inner fold also opens by itself once picked marks arrive, so a click can land
+	// just after that and shut it again: click until it is open, and look each time.
+	for (const fold of ['details.machinevouw', 'details.machinevouw details.printcut']) {
+		const details = page.locator(fold).first();
+		for (let i = 0; i < 3; i++) {
+			if (await details.evaluate((d) => (d as HTMLDetailsElement).open)) break;
+			await details.locator(':scope > summary').click();
+			await page.waitForTimeout(400);
+		}
+	}
 }
 
 test('without two shapes picked, the button says why it cannot', async (t) => {
@@ -124,8 +145,10 @@ test('with both points it reads back an offset you can check', async (t) => {
 	// The offset of the first mark: 32 − 30 and 31 − 30.
 	assert.match(shown, /2,.?0?,?\s*1/, `the offset was not shown: ${shown}`);
 	assert.match(shown, /sheet lies 0.05° out/, `the angle was not shown: ${shown}`);
-	// And it says that the zero point stays out of it, because both would shift twice.
-	assert.match(shown, /zero point stays out of it/i);
+	// And it says that the zero point stays out of it, because both would shift twice —
+	// behind the block's "Why?", so read from the text the fold holds, not what is open.
+	const why = await page.evaluate(() => document.querySelector('details.printcut')?.textContent ?? '');
+	assert.match(why, /zero point stays out of it/i);
 });
 
 test('forgetting the alignment gives the ordinary job back', async (t) => {
@@ -138,7 +161,7 @@ test('forgetting the alignment gives the ordinary job back', async (t) => {
 	// "Off" as a value, the way the zero point above it says the same state; the
 	// sentence that used to stand here in full is behind it as a title. See
 	// `job-quiet.test.ts` for why the panel stopped explaining what is switched off.
-	assert.match(await block(), /PRINT AND CUT Off /);
+	assert.match(await block(), /^Print and cut Off\b/);
 	assert.equal(
 		await page.locator('p.help.off[title]').last().getAttribute('title'),
 		'Off. The work burns where you drew it. Pick the two marks that are on your material as well — printed crosses, drilled holes, an engraved corner — and point them out here.'

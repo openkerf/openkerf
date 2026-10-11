@@ -92,9 +92,11 @@ test('the window says how many slits it will cut, and how wide the bridge is', a
 		`the size line says ${JSON.stringify(lines)}`
 	);
 
-	// Beside the fields, where the eye is while you type the number.
+	// Under the fields, in "Bending direction and bridges": the desktop review (V22) put the
+	// explanation on demand, and the handbook says it is there. Still a live sentence about
+	// the numbers just typed, so it is read whether the fold is open or not.
 	const beside = await page.evaluate(
-		() => document.querySelector('.formulier .bridgeline')?.textContent ?? ''
+		() => document.querySelector('.formulier details.fit-help')?.textContent ?? ''
 	);
 	assert.match(beside, /3\.0 mm of material stays behind, and between two rows 2\.0 mm/);
 	assert.match(beside, /twists, and what breaks/);
