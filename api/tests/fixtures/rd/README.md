@@ -18,21 +18,24 @@ deleted, so each file holds exactly one RD layer (part 0).
 | File | Bytes | Commands | Design |
 |---|---|---|---|
 | `cut_rect_circle.rd` | 984 | 171 | 20 x 10 mm rectangle at (10, 10) mm and a circle r = 8 mm at (50, 20) mm, one cut layer, defaults (10 mm/s, 100 %) |
-| `raster_filled_rect.rd` | 3618 | 849 | 10 x 5 mm rectangle at (10, 10) mm, filled (`POST /api/design/fill`), one raster layer, defaults (150 mm/s), our headless rasteriser |
+| `raster_filled_rect.rd` | 3625 | 850 | 10 x 5 mm rectangle at (10, 10) mm, filled (`POST /api/design/fill`), one raster layer, defaults (150 mm/s), our headless rasteriser |
 | `cut_3_passes.rd` | 521 | 70 | 20 x 10 mm rectangle, cut layer with 3 passes; the Z step is refused on a Ruida (409), so none |
 | `cut_3_passes_zstep.rd` | 418 | 59 | the same, plus `z_step_mm = 0.5` set on the layer node, as a layer brought along from a machine with a Z axis keeps it |
 
-Two of these pin behaviour that is wrong today; the test docstrings carry the measurements:
+Two of these pinned behaviour that was wrong; one is repaired, one still pins it on purpose:
 
 - `cut_3_passes_zstep.rd` holds **one** pass, not three. A Z step splits the plan into
   three cutcodes with `z_move` console steps between them, and every cutcode's
   `plot_start` calls `start_record()`, which clears the `RDJob` buffer. Only the last
   pass is left.
-- `raster_filled_rect.rd` says 150 mm/s in the layer table, then `Speed Laser 1 10.0mm/s`
-  in the stream right before the first move: the driver moves before it reads the
-  layer's settings, so it writes its default speed, and `RuidaDriver.set` does nothing.
+- `raster_filled_rect.rd` used to say 150 mm/s in the layer table and then
+  `Speed Laser 1 10.0mm/s` in the stream before the first move, and nothing after it: the
+  driver moved before it read the layer's settings and `RuidaDriver.set` did nothing.
+  Repaired in `openkerf_api/ruida_speed.py`; the file was regenerated for it and now has
+  the layer's 150 right after the jump, before the first cut (3618 → 3625 bytes, one
+  command more).
 
-Fixing either changes the bytes. Regenerate the file then, on purpose, and say why.
+Fixing the Z step changes the bytes too. Regenerate the file then, on purpose, and say why.
 
 ## Regenerating
 

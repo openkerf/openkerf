@@ -288,27 +288,29 @@ def test_the_cut_file():
 
 def test_the_raster_file():
     """
-    Measured: 3618 bytes, 849 commands, work mode 1 (`raster_step_y` set):
+    Measured: 3625 bytes, 850 commands, work mode 1 (`raster_step_y` set):
     one absolute move, then 106 vertical steps and 107 absolute cuts — about
     one long cut per line — between short horizontal moves and cuts.
 
-    And a surprise the file shows: the layer table and the layer block say
-    150 mm/s, but the stream says `Speed Laser 1 10.0mm/s` right before the
-    first move. `RuidaDriver.plot_start` moves to the start *before*
-    `self.settings.update(q.settings)`, so `_move` writes `Parameters`' default
-    speed; `RuidaDriver.set` is a no-op, so nothing writes 150 after it. What a
-    controller does with that is not measured here.
+    The jump to the start still carries `Parameters`' default
+    `Speed Laser 1 10.0mm/s`, and right after it, before the first cut, the
+    layer's own 150 mm/s (`ruida_speed`). Before that repair the 150 never
+    came: 3618 bytes, 849 commands, and every cut at 10 mm/s.
     """
     data = _fixture("raster_filled_rect")
     kinds = _kinds(data)
-    assert (len(data), len(kinds)) == (3618, 849)
+    assert (len(data), len(kinds)) == (3625, 850)
     assert "Work Mode 1" in kinds
     assert _count(kinds, "Move Absolute") == 1
     assert _count(kinds, "Move Vertical Relative") == 106
     assert _count(kinds, "Cut Absolute") == 107
     assert "0, Speed 150.0mm/s" in kinds
     speeds = [kind for kind in kinds if kind.startswith("Speed Laser 1")]
-    assert speeds == ["Speed Laser 1 150.0mm/s", "Speed Laser 1 10.0mm/s"]
+    assert speeds == [
+        "Speed Laser 1 150.0mm/s",
+        "Speed Laser 1 10.0mm/s",
+        "Speed Laser 1 150.0mm/s",
+    ]
 
 
 def test_three_passes_stay_one_layer():
