@@ -19,13 +19,15 @@ channels or signals; `test_ruida_session_own.py` ports its thirty tests.
   twice is a damaged file. So it fails that packet *and everything queued
   behind it*, bumps the generation and reconnects, and the caller decides.
 - **An acknowledged read that is not answered fails only that read.** The ACK
-  proves the line; the answer is a second datagram the controller may leave out.
-  Measured on a KH-5030 (card id 0x0628414A10, over UDP): the first memory read on
-  a fresh socket was acknowledged in 98–166 ms and never answered, every read after
-  it was answered 29–33 ms after its ACK. Treating that silence as a dead line
-  closed the socket, and the next read was a first read on a fresh socket again —
-  12 probes and 11 unanswered reads in 20 s, not one status word. So it is a
-  `TimeoutError` on that Future, no new generation, no reconnect.
+  proves the line; the answer is a second datagram that may not reach us.
+  Measured on a KH-5030 (RDC6442S, over UDP) while a second program — an older
+  OpenKerf in Docker on another host, its engine polling every 0.2 s — talked to
+  the same controller: about 40 % of reads acknowledged and never answered here,
+  ACKs taking 30–440 ms. Treating that silence as a dead line closed the socket
+  and reconnected: 12 probes and 11 unanswered reads in 20 s, not one status
+  word. So it is a `TimeoutError` on that Future, no new generation, no
+  reconnect. With the other program stopped: 96 of 96 reads answered, ACK and
+  answer within 3–5 ms, one probe, generation 0.
 - **The generation pins a transfer.** It moves on every close, shutdown and
   failure; a write that names an older one is refused, so a reconnect can never
   quietly carry on with the second half of a file.
