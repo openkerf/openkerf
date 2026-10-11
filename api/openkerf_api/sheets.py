@@ -72,6 +72,74 @@ class Sheets:
     def _file(self, sheet_id: str) -> Path:
         return self.directory / f"{sheet_id}.svg"
 
+    def _layers_file(self, sheet_id: str) -> Path:
+        return self.directory / f"{sheet_id}.layers.json"
+
+    # ------------------------------------------------------------ layers
+
+    def _keep_layers(self, sheet_id: str) -> None:
+        """
+        A new sheet starts with the layers of the sheet it was added from.
+
+        Without this a new sheet started with no layers at all, and the first import
+        got the engine's defaults — "Standard-Raster" at 150 mm/s @ 100% and "Cut" at
+        1 mm/s @ 100% — while the user had just set up their black and red layers on the
+        sheet before. Same material, same machine, same habits: the layers come along,
+        empty, with their kind, colour, label, speed, power and passes.
+
+        Kept as the engine writes an operation into a sheet file (`SVGWriter`), so the
+        layers come back through the same attributes a saved sheet uses. In a file of
+        their own, because a sheet file is only written once there are shapes in it.
+        """
+        try:
+            from xml.etree.ElementTree import Element
+
+            from meerk40t.core.svg_io import SVGWriter
+
+            layers = []
+            for op in self.kernel.elements.ops():
+                if not self.drawing._plain_layer(op) or self.drawing._is_board_layer(op):
+                    continue
+                holder = Element("g")
+                SVGWriter._write_operation(holder, op, "default")
+                written = holder[0]
+                attrs = {
+                    k: v for k, v in written.attrib.items() if k not in ("references",)
+                }
+                layers.append(attrs)
+        except Exception:  # pragma: no cover - the engine must not break adding a sheet
+            return
+        if not layers:
+            return
+        self.directory.mkdir(parents=True, exist_ok=True)
+        self._layers_file(sheet_id).write_text(json.dumps(layers, indent=1))
+
+    def _seed_layers(self, sheet_id: str) -> None:
+        """Put the kept layers of a sheet without shapes on the table (`_keep_layers`)."""
+        try:
+            layers = json.loads(self._layers_file(sheet_id).read_text())
+        except (OSError, ValueError):
+            return
+        elements = self.kernel.elements
+        for attrs in layers if isinstance(layers, list) else []:
+            attrs = dict(attrs)
+            node_type = attrs.pop("type", None)
+            node_id = attrs.pop("id", None)
+            if not str(node_type or "").startswith("op "):
+                continue
+            # As the engine's own SVG reader makes an operation (`svg_io.py`).
+            try:
+                op = elements.op_branch.add(type=node_type, **attrs)
+                if hasattr(op, "validate"):
+                    op.validate()
+                op.id = node_id
+            except (AttributeError, ValueError):
+                continue
+        elements.validate_ids()
+        for op in elements.ops():
+            if getattr(op, "id", None):
+                self.drawing.user_operations.add(op.id)
+
     # ------------------------------------------------------------ state
 
     def state(self) -> dict:
@@ -191,6 +259,13 @@ class Sheets:
                 code="sheet.tooMany",
             )
         bed_width, bed_height = self._bed()
+        # The next sheet is usually cut from the same board: asked for while on a
+        # birch sheet of 3 mm, it starts as birch of 3 mm, as it starts with that
+        # sheet's layers (`_keep_layers`). A material or thickness asked for wins.
+        current = self.active() or {}
+        if material_id is None and thickness_mm is None:
+            material_id = current.get("material_id")
+            thickness_mm = current.get("thickness_mm")
         number = max(
             (int(s["id"].rsplit("-", 1)[-1]) for s in sheets if s["id"][-1].isdigit()),
             default=0,
@@ -215,6 +290,7 @@ class Sheets:
         }
         sheets.append(sheet)
         self._write(sheets)
+        self._keep_layers(sheet["id"])
         return self.state()
 
     def _thickness(self, value):
@@ -309,6 +385,7 @@ class Sheets:
             self.activate(other["id"])
             sheets = self._read()
         self._file(sheet_id).unlink(missing_ok=True)
+        self._layers_file(sheet_id).unlink(missing_ok=True)
         self._write([s for s in sheets if s["id"] != sheet_id])
         return self.state()
 
@@ -322,6 +399,8 @@ class Sheets:
         """
         self.directory.mkdir(parents=True, exist_ok=True)
         for old in self.directory.glob("*.svg"):
+            old.unlink(missing_ok=True)
+        for old in self.directory.glob("*.layers.json"):
             old.unlink(missing_ok=True)
         self.index_path.unlink(missing_ok=True)
         self._active = None
@@ -380,6 +459,8 @@ class Sheets:
                 self.kernel.elements._filename = None
             except Exception:  # pragma: no cover - the engine must not break us
                 pass
+        else:
+            self._seed_layers(sheet_id)
         self.kernel.elements.signal("rebuild_tree", "all")
         self.kernel.elements.signal("refresh_scene", "Scene")
 
@@ -430,6 +511,9 @@ class Sheets:
             source = self._file(sheet["id"])
             if source.is_file():
                 bundle.write(source, f"sheets/{sheet['id']}.svg")
+            layers = self._layers_file(sheet["id"])
+            if layers.is_file():
+                bundle.write(layers, f"sheets/{sheet['id']}.layers.json")
         return sheets
 
     def import_from(self, bundle, sheets: list[dict], active: str | None = None) -> None:
@@ -439,8 +523,14 @@ class Sheets:
         self.directory.mkdir(parents=True, exist_ok=True)
         for old in self.directory.glob("*.svg"):
             old.unlink(missing_ok=True)
+        for old in self.directory.glob("*.layers.json"):
+            old.unlink(missing_ok=True)
         names = set(bundle.namelist())
         for sheet in sheets:
+            if f"sheets/{sheet['id']}.layers.json" in names:
+                self._layers_file(sheet["id"]).write_bytes(
+                    bundle.read(f"sheets/{sheet['id']}.layers.json")
+                )
             # `vellen/` is where these lived before the interface became English; a project
             # from that version still opens.
             for name in (f"sheets/{sheet['id']}.svg", f"vellen/{sheet['id']}.svg"):

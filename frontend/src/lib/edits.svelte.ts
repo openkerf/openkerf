@@ -170,6 +170,18 @@ export class EditController {
 	}
 
 	/**
+	 * The layer's shapes into another layer, and the layer gone — one undo step.
+	 *
+	 * What cleaning up after an import asks for: removing alone leaves the shapes in no
+	 * layer, on the bed and burning nothing.
+	 */
+	async mergeLayer(id: string, intoId: string) {
+		return this.#post(
+			`/api/design/operations/${encodeURIComponent(id)}/merge-into/${encodeURIComponent(intoId)}`
+		);
+	}
+
+	/**
 	 * Every ordinary layer in one operation (point 4 from the second test round).
 	 *
 	 * The shapes stay; they are in no layer afterwards. Cells of a test grid stay put —

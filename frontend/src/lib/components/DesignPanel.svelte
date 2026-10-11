@@ -29,6 +29,7 @@
 	import { screen } from '$lib/screen.svelte';
 	import { bridgesRefusal, lockRefusal, layerMenu, type Menu as MenuList } from '$lib/actions';
 	import { placeholders, resolve } from '$lib/series';
+	import { mergeTarget, shapesOnlyIn as onlyIn } from '$lib/layers';
 	import type { SeriesStore } from '$lib/series.svelte';
 	import { untrack } from 'svelte';
 
@@ -631,7 +632,7 @@
 					down: () => moveLayer(op.id, 'down'),
 					openSettings: () => openSettings(op.id),
 					chooseMaterial: () => onChooseMaterial?.(op.id),
-					remove: () => (confirmDrop = op.id)
+					remove: () => askDrop(op.id)
 				}
 			)
 		};
@@ -721,6 +722,20 @@
 	// Throwing a layer away takes its assignments with it. That must not happen on one
 	// tap beside the speed fields, so a confirmation comes in between.
 	let confirmDrop = $state<string | null>(null);
+	// Where the shapes of the layer being removed go. A layer with shapes is mostly
+	// removed to tidy up after an import; then they belong in the other layer of the same
+	// kind and colour, and removing alone would leave them in no layer, burning nothing.
+	let dropInto = $state<string | null>(null);
+
+	function askDrop(id: string) {
+		const op = plainLayers.find((o) => o.id === id);
+		dropInto = op ? mergeTarget(op, plainLayers) : null;
+		confirmDrop = id;
+	}
+
+	function shapesOnlyIn(op: DesignOperation): number {
+		return onlyIn(op, design.elements);
+	}
 	// Throwing everything away at once is the same action times ten, so the same
 	// confirmation — but one that says *how much* goes and what stays.
 	let confirmDropAll = $state(false);
@@ -857,7 +872,15 @@
 
 	async function dropLayer(id: string) {
 		confirmDrop = null;
-		if (await edits.removeLayer(id)) onLayerChange?.();
+		if ((await edits.removeLayer(id)).ok) onLayerChange?.();
+	}
+
+	async function mergeLayer(id: string) {
+		if (!dropInto) return;
+		const into = dropInto;
+		confirmDrop = null;
+		// A refusal lands in `edits.error`, which the notice line shows.
+		if ((await edits.mergeLayer(id, into)).ok) onLayerChange?.();
 	}
 
 	async function dropAllLayers() {
@@ -2163,21 +2186,69 @@
 							><Icon name="arrow-down" /> {t('panel.order.later')}</button>
 						</div>
 
-						{#if confirmDrop === op.id}
-							<div class="confirm wide">
-								<span>{t('panel.drop.ask', { label: op.label })}</span>
-								<div class="ask-actions">
-									<button class="btn mini" onclick={() => (confirmDrop = null)}>{t('common.cancel')}</button>
-									<button class="btn mini danger drop" onclick={() => dropLayer(op.id)}
-										>{t('panel.drop.confirm')}</button
-									>
-								</div>
-							</div>
-						{:else}
-							<button class="btn mini gone wide" onclick={() => (confirmDrop = op.id)}>
+						{#if confirmDrop !== op.id}
+							<button class="btn mini gone wide" onclick={() => askDrop(op.id)}>
 								{t('panel.drop.layer')}
 							</button>
 						{/if}
+					{/if}
+				</div>
+			{/if}
+			<!-- The question stands under the row and not inside its fold. Inside the fold
+			     it was only drawn while that layer's settings were open, so *Remove layer*
+			     from the row menu set the question and nothing appeared: the reported "it
+			     simply doesn't do it" on a layer with shapes. -->
+			{#if canEdit && confirmDrop === op.id}
+				{@const elsewhere = plainLayers.filter((o) => o.id !== op.id)}
+				{@const loose = shapesOnlyIn(op)}
+				<div class="confirm drop-ask">
+					{#if op.element_ids.length && elsewhere.length}
+						<span>{t('panel.drop.askShapes', { label: op.label, n: op.element_ids.length })}</span>
+						<label class="drop-into">
+							<span>{t('panel.drop.into')}</span>
+							<select class="field" bind:value={dropInto}>
+								{#each elsewhere as other (other.id)}
+									<option value={other.id}>{other.label}</option>
+								{/each}
+							</select>
+						</label>
+					{:else}
+						<span>{t('panel.drop.ask', { label: op.label })}</span>
+					{/if}
+					<div class="ask-actions">
+						<button class="btn mini" onclick={() => (confirmDrop = null)}>{t('common.cancel')}</button>
+						{#if op.element_ids.length && elsewhere.length}
+							<button
+								class="btn mini primary"
+								disabled={edits.busy || !dropInto}
+								title={edits.busy ? t('reason.busy') : undefined}
+								onclick={() => mergeLayer(op.id)}>{t('panel.drop.merge')}</button
+							>
+						{:else}
+							<button
+								class="btn mini danger drop"
+								disabled={edits.busy}
+								title={edits.busy ? t('reason.busy') : undefined}
+								onclick={() => dropLayer(op.id)}>{t('panel.drop.confirm')}</button
+							>
+						{/if}
+					</div>
+					<!-- Removing without moving is the other answer, beside the sentence that
+					     says what it costs, so three buttons need not share one line. -->
+					{#if op.element_ids.length && elsewhere.length}
+						<div class="drop-only">
+							{#if loose}
+								<span>{t('panel.drop.loose', { n: loose })}</span>
+							{/if}
+							<button
+								class="btn mini gone"
+								disabled={edits.busy}
+								title={edits.busy ? t('reason.busy') : undefined}
+								onclick={() => dropLayer(op.id)}>{t('panel.drop.removeAnyway')}</button
+							>
+						</div>
+					{:else if loose}
+						<span>{t('panel.drop.loose', { n: loose })}</span>
 					{/if}
 				</div>
 			{/if}
@@ -3028,6 +3099,26 @@
 	   empty panel to their right — measured at 1440 — while the same question about a
 	   sheet, a few hundred pixels away, was answered at the right-hand edge. */
 	.confirm .ask-actions { flex: 1; }
+	/* Under the layer row it belongs to, not inside its fold (see the markup). */
+	.drop-ask { margin: 0 0 var(--space-2); }
+	.drop-into {
+		display: flex;
+		flex-basis: 100%;
+		align-items: center;
+		gap: var(--space-2);
+	}
+	.drop-into span { flex-basis: auto; }
+	.drop-only {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--space-2);
+		flex-basis: 100%;
+		padding-top: var(--space-2);
+		border-top: 1px solid var(--danger-edge);
+	}
+	.drop-only .gone { color: var(--danger); border-color: var(--danger-edge); }
+	.drop-into select { flex: 1; min-width: 0; }
 	/* The answer that removes is the shared `.btn.danger`: it erases straight away. */
 	/* A red-lettered button, not a filled one: which is why the class is not called
 	   `danger` — the safety net in tokens.css fills every `button.danger` solid red on

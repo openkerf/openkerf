@@ -206,7 +206,8 @@ Two roads, and they can be mixed on one sheet.
 **Draw it.** The tool rail on the left holds **Select**, **Nodes**, **Rectangle**,
 **Circle**, **Line**, **Pen**, **Text** and **Measure**, one active at a time.
 Pick a tool and click the bed. With **Select** you click a shape to select it,
-drag a box to grab several, drag the box to move, its corners to scale, the handle
+drag a box to grab several (left to right takes what lies inside it, right to left
+what it touches), drag the selection to move, its corners to scale, the handle
 to rotate; the arrow keys move 0.1 mm, and 1 mm with shift held.
 
 ![The bed with a divided red rectangle, a red circle, two yellow squares, a green QR block and orange lettering, each carrying its layer number, and the colour strip along the bottom reading "Colour for new work".](images/06-canvas-drawn.png)
@@ -225,6 +226,11 @@ Importing **adds**. It does not empty the bed, and nothing you already drew is
 thrown away — a sheet is a plate, and a plate holds more than one part. What
 arrived is selected straight away so you can drag it into place, and the panel
 says how much came in: "4 shapes imported and selected — drag them into place."
+Every imported shape goes into one layer: into the layer of its colour you already
+have, if there is one — a filled shape into your raster layer, a red outline into your
+red cut layer — and into a new layer only for a colour no layer has yet.
+A group in the file that only gives its shapes a colour, or an Inkscape layer, is not
+kept, so each shape can be picked on its own; a group that makes up one part stays a group.
 
 ![The bed just after an import: four black shapes selected inside a dashed selection box marked 150.0 × 90.0 mm, with the right-hand panel showing W 150.0, H 90.0, X 5.0, Y 5.0 and the note "4 shapes imported and selected — drag them into place."](images/22-import.png)
 

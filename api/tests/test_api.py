@@ -119,6 +119,9 @@ def test_write_routes_are_limited_to_the_known_set(client):
         "/api/design/operations/{operation_id}/type",
         "/api/design/operations/sort",
         "/api/design/operations/{operation_id}/type",
+        # A layer's shapes into another layer and the layer gone, in one undo step —
+        # tidying up after an import (test_delete_layer.py).
+        "/api/design/operations/{operation_id}/merge-into/{target_id}",
         "/api/design/align",
         "/api/design/offset",
         "/api/design/simplify",

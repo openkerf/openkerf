@@ -471,6 +471,146 @@ class Drawing:
         if not keep:
             self._own_layer(node)
 
+    def settle_import(self, before_ops: set, before_nodes: set) -> dict:
+        """
+        Every shape a file brought in in exactly one layer, and no layer twice.
+
+        The engine's classification does two things on an import that a user never wants.
+        It classifies the file's `<g>` groups as well as their shapes, and a group matches
+        no layer, so it gets a fresh one from the defaults (pass 3 of `Elements.classify`)
+        — unless a layer of that type, colour *and speed* already exists. Once the user has
+        set their own speed that check fails, and a second "Standard-Raster" at 150 mm/s
+        or "Cut" at 1 mm/s appears. From then on every filled shape lands in every raster
+        layer and every red one in every red cut layer, because those classifications do
+        not stop at the first match.
+
+        So: a layer the import made beside an existing one of the same kind and colour is
+        folded into that one; then each new shape keeps one layer (`_single_layer`); a
+        layer the import made and left empty goes. What still has no layer is classified
+        once more, and what even then has none is reported by id — the canvas already
+        draws such a shape as burning nothing.
+        """
+        ops = list(self.elements.ops())
+        old = [
+            op
+            for op in ops
+            if id(op) in before_ops
+            and str(op.type).startswith("op ")
+            and not self._is_board_layer(op)
+        ]
+        # The layers the user sees first, the engine's empty reserve after.
+        old.sort(key=lambda op: 0 if self._plain_layer(op) else 1)
+        fresh = [op for op in ops if id(op) not in before_ops]
+        for op in fresh:
+            twin = next((o for o in old if self._same_layer_kind(op, o)), None)
+            if twin is None:
+                continue
+            for reference in list(op.children):
+                if reference.type != "reference":
+                    continue
+                node = reference.node
+                reference.remove_node()
+                if twin not in self._layers_of(node):
+                    twin.add_reference(node)
+
+        shapes = [
+            node
+            for node in self.elements.elems()
+            if id(node) not in before_nodes and str(node.type).startswith("elem ")
+        ]
+        for node in shapes:
+            self._single_layer(node)
+        loose = [node for node in shapes if not self._layers_of(node)]
+        if loose and getattr(self.elements, "classify_new", True):
+            self.elements.classify(loose)
+            for node in loose:
+                self._single_layer(node)
+
+        for op in fresh:
+            if op.parent is not None and not op.children:
+                op.remove_node()
+        return {"unassigned": [n.id for n in shapes if not self._layers_of(n)]}
+
+    def dissolve_colour_groups(self, before_nodes: set) -> int:
+        """
+        Take away the groups a file only used to colour its shapes; keep real groups.
+
+        The engine reads every `<g>` into a group, and a selection takes a whole group.
+        Drawing programs and scripts often wrap all shapes of one colour in a single
+        `<g fill="#0000ff">` or `<g stroke="#ff0000">` — the user's lasercut files do
+        exactly that, two per file — and then clicking one letter selected all 94 letters
+        on the sheet, and a window drawn around one part selected nothing.
+
+        Telling the two apart: a colour wrapper carries a colour of its own (the engine
+        keeps the `<g>`'s fill and stroke on the group node) and holds only shapes, no
+        further groups; an Inkscape layer (`inkscape:groupmode="layer"`) is never a part
+        either. A group with no colour of its own, or one that holds groups, is kept: that
+        is how a drawing program writes a part made of several shapes.
+        """
+        groups = [
+            node
+            for node in self.elements.elems_nodes()
+            if node.type == "group"
+            and id(node) not in before_nodes
+            and node.parent is not None
+            and (self._is_layer_group(node) or self._is_colour_wrapper(node))
+        ]
+        if not groups:
+            return 0
+        with self.elements.node_lock:
+            # Innermost first, so a layer's colour wrappers go before the layer does.
+            for group in reversed(groups):
+                group.insert_siblings(list(group.children), below=False, fast=True)
+                group.remove_node()
+        self.elements.signal("rebuild_tree", "elements")
+        return len(groups)
+
+    @staticmethod
+    def _is_layer_group(group) -> bool:
+        """An Inkscape layer, by the attribute the engine keeps from the `<g>`."""
+        return any(
+            str(key).endswith("groupmode") and str(value) == "layer"
+            for key, value in vars(group).items()
+        )
+
+    def _is_colour_wrapper(self, group) -> bool:
+        """A group with a colour of its own around nothing but shapes."""
+        own_colour = any(
+            self.elements._valid_color(getattr(group, side, None))
+            for side in ("fill", "stroke")
+        )
+        children = list(group.children)
+        return (
+            own_colour
+            and bool(children)
+            and all(str(child.type).startswith("elem ") for child in children)
+        )
+
+    @staticmethod
+    def _layers_of(node) -> list:
+        """The layers a shape is in."""
+        return [r.parent for r in getattr(node, "_references", []) if r.parent is not None]
+
+    def _same_layer_kind(self, made, existing) -> bool:
+        """
+        Would a user call these two the same layer? Same type and the same colour.
+
+        A raster layer's colour decides nothing unless `classify_fill` is on: every filled
+        shape goes to every raster layer. So two raster layers are the same kind whatever
+        their colour, and folding the import's one into the user's is what keeps the
+        user's speed and power on the new shapes.
+        """
+        if made.type != existing.type:
+            return False
+        if made.type in ("op raster", "op image") and not getattr(
+            self.elements, "classify_fill", False
+        ):
+            return True
+        colour = normalise(str(getattr(made, "color", "") or "")[:7])
+        return colour is not None and colour == normalise(
+            str(getattr(existing, "color", "") or "")[:7]
+        )
+
     def _own_layer(self, node) -> None:
         """
         Give a shape without a layer one, on its own stroke colour.
@@ -2241,6 +2381,68 @@ class Drawing:
         self.user_operations.discard(operation_id)
         self._refresh()
         return {"removed": operation_id}
+
+    def merge_operation(self, operation_id: str, target_id: str) -> dict:
+        """
+        One layer's shapes into another, and the emptied layer gone — one undo step.
+
+        Why: an import that makes two layers of one colour leaves the user cleaning up,
+        and removing a layer alone leaves its shapes in no layer — on the bed, burning
+        nothing. Moving them first by hand meant selecting the layer's shapes, putting
+        them in the other layer, then removing; three steps for what is one thought.
+
+        Refused before anything moves, so a refusal leaves both layers as they were:
+        merging a layer into itself, a cell of a test grid on either side (its settings
+        are the test), and a target that will not take some of the shapes (a dots
+        layer takes points only — `add_reference` would drop the rest without a word).
+        """
+        source = self._operation(operation_id)
+        target = self._operation(target_id)
+        if source is target:
+            raise DesignError(
+                "A layer cannot be merged into itself; choose another layer for its shapes.",
+                code="layer.mergeSelf",
+            )
+        for node, node_id in ((source, operation_id), (target, target_id)):
+            if self._is_grid_cell(node, node_id):
+                raise DesignError(
+                    "This is a cell of a test grid; its shapes and settings are the test.",
+                    code="layer.mergeGridCell",
+                )
+        shapes = [
+            reference.node
+            for reference in list(source.children)
+            if getattr(reference, "node", None) is not None
+        ]
+        kind = str(target.type).replace("op ", "", 1)
+        unwanted = [node for node in shapes if not _may_hold(kind, node)]
+        if unwanted:
+            n = len(unwanted)
+            # One plural sentence, the way `stencil.singleStroke` does it; the catalogue
+            # says the one-shape case with `{one, other}`.
+            raise DesignError(
+                f"{n} shapes in this layer cannot go into "
+                f"“{operation_label(target)}”: it burns single points, so a point is the "
+                "only thing it takes. Choose another layer for the shapes.",
+                code="layer.mergeWontHold",
+                values={"n": n, "label": operation_label(target)},
+            )
+        moved = 0
+        with self.elements.undoscope("Merge layer"):
+            for node in shapes:
+                if any(getattr(c, "node", None) is node for c in target.children):
+                    continue
+                target.add_reference(node)
+                moved += 1
+            source.remove_node()
+        self.user_operations.discard(operation_id)
+        self._refresh()
+        return {
+            "removed": operation_id,
+            "into": target_id,
+            "moved": moved,
+            "already_there": len(shapes) - moved,
+        }
 
     # Shapes that have an inside. A line and a point have none, and the engine would set
     # the fill but never do anything with it — a button that switches on and does

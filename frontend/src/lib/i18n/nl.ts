@@ -1000,6 +1000,17 @@ export const nl: Catalogue = {
 	'panel.drop.ask': '“{label}” weggooien? De vormen blijven, de instellingen niet.',
 	'panel.drop.confirm': 'Verwijderen',
 	'panel.drop.layer': 'Laag verwijderen…',
+	'panel.drop.askShapes': {
+		one: '“{label}” bevat één vorm. Eerst naar een andere laag verplaatsen?',
+		other: '“{label}” bevat {n} vormen. Eerst naar een andere laag verplaatsen?'
+	},
+	'panel.drop.into': 'Verplaatsen naar',
+	'panel.drop.loose': {
+		one: 'Verwijderen zonder verplaatsen laat één vorm in geen enkele laag achter; die wordt niet gebrand.',
+		other: 'Verwijderen zonder verplaatsen laat {n} vormen in geen enkele laag achter; die worden niet gebrand.'
+	},
+	'panel.drop.merge': 'Verplaatsen en verwijderen',
+	'panel.drop.removeAnyway': 'Alleen verwijderen',
 	'panel.grid.title': 'Testraster #{id}',
 	'panel.grid.cells': '{n} cellen · snelheid en vermogen liggen vast',
 	'panel.grid.showCells': 'Cellen van raster {id} tonen',
@@ -2421,6 +2432,12 @@ export const nl: Catalogue = {
 	'api.layer.gridCell': 'Dit is een cel van een testraster; het soort bewerking is de test.',
 	'api.layer.noAirAssist': 'Deze machine kent geen commando voor air assist, dus een schakelaar hier zou niets doen. Stel eerst bij de machine in welke methode de blazer aanstuurt.',
 	'api.layer.noZAxis': 'Deze machine heeft geen Z-as die de driver kan bewegen, dus een stap per pass zou niets doen. Zet de Z-as aan bij de machine, of laat dit veld leeg.',
+	'api.layer.mergeSelf': 'Een laag kan niet in zichzelf worden samengevoegd; kies een andere laag voor de vormen.',
+	'api.layer.mergeGridCell': 'Dit is een cel van een testraster; de vormen en instellingen zijn de test.',
+	'api.layer.mergeWontHold': {
+		one: 'Eén vorm in deze laag kan niet naar “{label}”: die laag brandt losse punten, dus alleen een punt past erin. Kies een andere laag voor de vormen.',
+		other: '{n} vormen in deze laag kunnen niet naar “{label}”: die laag brandt losse punten, dus alleen een punt past erin. Kies een andere laag voor de vormen.'
+	},
 	'api.library.machine.wattRange': 'Een buisvermogen tussen {min} en {max} watt, graag.',
 	'api.library.starter.needsKind':
 		'OpenKerf weet niet wat voor laser {machine} is. Een CO2-preset op een diode is geen startpunt.',

@@ -21,6 +21,7 @@
 		type SnapGuide
 	} from '$lib/snapping';
 	import { penPath, penPreview, HANDLE_THRESHOLD_PX, type PenPoint } from '$lib/pen';
+	import { bandMode, bandSelection, boxOf, pickAt, type Selectable } from '$lib/selecting';
 
 	let {
 		onPointerMm,
@@ -1120,7 +1121,8 @@
 		onEdited?.();
 	}
 
-	// Drag selection: everything the frame touches gets selected.
+	// Drag selection. Dragged to the right only what lies entirely inside the frame is
+	// selected, dragged to the left everything it touches; `selecting.ts` has the rules.
 	let band = $state<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
 	// After releasing, a click still fires in the same place. Without this flag that
 	// would clear the selection the drag frame has just made.
@@ -1143,6 +1145,37 @@
 			if (id && !ids.includes(id)) ids.push(id);
 		}
 		return ids;
+	}
+
+	/** An element as the selection rules in `selecting.ts` see it, in the design's units. */
+	function selectable(element: (typeof design.elements)[number]): Selectable {
+		return {
+			id: element.id,
+			bounds: element.bounds ?? null,
+			path: element.image ? null : element.path,
+			face: Boolean(element.image) || design.strokeFor(element).filled,
+			hidden: element.hidden || !design.strokeFor(element).visible,
+			group_id: element.group_id ?? null
+		};
+	}
+
+	/**
+	 * The shape a click (plain or with shift) takes: the one actually under the pointer.
+	 *
+	 * `stackAt` has every shape whose hit zone is under the pointer, and an outline's hit
+	 * zone is twelve pixels wide, so it can lie over the letters of a text inside it.
+	 * `pickAt` takes the shape whose drawn geometry is nearest, then the smallest.
+	 */
+	function pickClicked(event: MouseEvent, fallback: string): string {
+		const stack = stackAt(event.clientX, event.clientY);
+		if (stack.length < 2 || !design.design) return fallback;
+		const perMm = design.design.units_per_mm;
+		const at = pointerMm(event, true);
+		const pile = stack
+			.map((id) => design.elements.find((e) => e.id === id))
+			.filter((e): e is (typeof design.elements)[number] => Boolean(e))
+			.map(selectable);
+		return pickAt(pile, at.x * perMm, at.y * perMm, perMm * mmPerPx) ?? fallback;
 	}
 
 	/**
@@ -1231,6 +1264,7 @@
 			y1: Math.max(band.y1, band.y2)
 		};
 		const dragged = box.x1 - box.x0 > 0.5 || box.y1 - box.y0 > 0.5;
+		const mode = bandMode(band.x1, band.x2);
 		band = null;
 		if (!dragged || !design.design) return;
 		bandJustEnded = true;
@@ -1246,14 +1280,11 @@
 			return;
 		}
 
+		// Left to right a window, right to left a crossing box, measured in the design's
+		// own units so a path needs no conversion.
 		const perMm = design.design.units_per_mm;
-		const hit = design.elements.filter((element) => {
-			if (!element.bounds || element.hidden) return false;
-			const [ex0, ey0, ex1, ey1] = element.bounds.map((v) => v / perMm);
-			// Overlap, not full containment: that way you do not have to drag exactly.
-			return ex0 <= box.x1 && ex1 >= box.x0 && ey0 <= box.y1 && ey1 >= box.y0;
-		});
-		design.selectMany(hit.map((element) => element.id));
+		const units = boxOf(box.x0 * perMm, box.y0 * perMm, box.x1 * perMm, box.y1 * perMm);
+		design.selectMany(bandSelection(units, mode, design.elements.map(selectable)));
 	}
 
 	// Rulers. Two things the previous version did not do: the ticks are aligned to the
@@ -2142,9 +2173,9 @@
 											bandJustEnded = false;
 											return;
 										}
-										if (e.shiftKey) design.toggle(element.id);
+										if (e.shiftKey) design.toggle(pickClicked(e, element.id));
 										else if (e.altKey) pickUnder(e, element.id);
-										else design.select(element.id);
+										else design.select(pickClicked(e, element.id));
 									}}
 									oncontextmenu={(e) => {
 										e.preventDefault();
@@ -2152,7 +2183,8 @@
 										// Right-clicking something that was not selected selects it
 										// first: otherwise there is a menu over one shape that acts on
 										// *another* shape.
-										if (!design.isSelected(element.id)) design.select(element.id);
+										const picked = pickClicked(e, element.id);
+										if (!design.isSelected(picked)) design.select(picked);
 										onContextObject?.(e, stackAt(e.clientX, e.clientY));
 									}}
 									onkeydown={(e) => {
@@ -2267,11 +2299,12 @@
 											bandJustEnded = false;
 											return;
 										}
-										// Shift keeps the existing selection.
-										if (e.shiftKey) design.toggle(element.id);
+										// Shift keeps the existing selection. Both take the shape
+										// actually under the pointer, not merely the topmost hit zone.
+										if (e.shiftKey) design.toggle(pickClicked(e, element.id));
 										// Alt goes one shape deeper into the pile under the pointer.
 										else if (e.altKey) pickUnder(e, element.id);
-										else design.select(element.id);
+										else design.select(pickClicked(e, element.id));
 									}}
 									ondblclick={(e) => {
 										// A node exactly where you double-clicked, the way every drawing
@@ -2286,7 +2319,8 @@
 									oncontextmenu={(e) => {
 										e.preventDefault();
 										e.stopPropagation();
-										if (!design.isSelected(element.id)) design.select(element.id);
+										const picked = pickClicked(e, element.id);
+										if (!design.isSelected(picked)) design.select(picked);
 										onContextObject?.(e, stackAt(e.clientX, e.clientY));
 									}}
 									onkeydown={(e) => {
@@ -2661,8 +2695,11 @@
 					/>
 				{/if}
 				{#if band}
+					<!-- Solid: a window, selects what lies entirely inside. Dashed: a crossing
+					     box, dragged to the left, selects everything it touches. -->
 					<rect
 						class="band"
+						class:crossing={!cropping && bandMode(band.x1, band.x2) === 'crossing'}
 						x={Math.min(band.x1, band.x2)}
 						y={Math.min(band.y1, band.y2)}
 						width={Math.abs(band.x2 - band.x1)}
@@ -3587,8 +3624,10 @@
 		fill: var(--accent-tint);
 		stroke: var(--accent);
 		stroke-width: 1;
-		stroke-dasharray: 4 3;
 		vector-effect: non-scaling-stroke;
+	}
+	.band.crossing {
+		stroke-dasharray: 4 3;
 	}
 	.zoom {
 		position: absolute;
