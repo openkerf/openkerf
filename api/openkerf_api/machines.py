@@ -16,6 +16,7 @@ import socket
 import time
 
 from .commands import CommandRunner
+from .link import is_ruida, links_for
 
 # Settings a first-time setup actually needs. Everything else stays available
 # through the full sheet listing, but the wizard leads with these.
@@ -77,6 +78,19 @@ PROFILE_SUFFIX = ".openkerf-machine"
 # laser have the same use for them — but the preview on import names them separately,
 # because they are the first thing that does not hold elsewhere.
 LOCAL_ATTRS = ("address", "serial_port", "port")
+
+
+def _essentials(device) -> tuple:
+    """
+    `ESSENTIAL_ATTRS` as this device has them.
+
+    A Ruida's line is ours and always UDP (`link.py`), so its `interface` is not a choice
+    any more: offering USB would be a setting nothing reads. `address` and `magic` stay —
+    `RuidaLink` reads both at every connect.
+    """
+    if is_ruida(device):
+        return tuple(attr for attr in ESSENTIAL_ATTRS if attr != "interface")
+    return ESSENTIAL_ATTRS
 
 
 def _type_name(value_type) -> str:
@@ -282,6 +296,7 @@ class MachineManager:
         # `device add` makes it active straight away; that choice should survive the
         # restart. See `_remember_active`.
         if getattr(self.kernel.device, "path", None) == device.path:
+            links_for(self.kernel).only(device)
             self._remember_active(device)
         self.flush()
         return {
@@ -293,6 +308,8 @@ class MachineManager:
     def activate(self, path: str) -> dict:
         device = self._find(path)
         self.kernel.activate_service_path("device", device.path)
+        # One line to a controller: the machine you leave lets go of its Ruida line.
+        links_for(self.kernel).only(device)
         self._remember_active(device)
         return {"path": device.path, "active": True}
 
@@ -348,6 +365,8 @@ class MachineManager:
         if self.kernel.device is device:
             # Destroying the active service leaves the kernel without a device.
             raise MachineError("The active machine cannot be removed.")
+        # Its line goes with it, before the kernel can hand the slot to somebody else.
+        links_for(self.kernel).forget(device.path)
         device.destroy()
         self.flush()
         return {"removed": path}
@@ -360,6 +379,7 @@ class MachineManager:
         label, tip, type and current value per attribute.
         """
         device = self._find(path)
+        essentials = _essentials(device)
         sheets = []
         described: set[str] = set()
         for sheet_path in sorted(device.match("choices")):
@@ -371,7 +391,9 @@ class MachineManager:
                 if not isinstance(choice, dict) or "attr" not in choice:
                     continue
                 attr = choice["attr"]
-                if essential_only and attr not in ESSENTIAL_ATTRS:
+                if essential_only and attr not in essentials:
+                    continue
+                if attr == "interface" and attr not in essentials:
                     continue
                 if not hasattr(device, attr):
                     continue
@@ -406,7 +428,7 @@ class MachineManager:
         inferring the type from the current value.
         """
         fields = []
-        for attr in ESSENTIAL_ATTRS:
+        for attr in _essentials(device):
             if attr in described or not hasattr(device, attr):
                 continue
             value = getattr(device, attr)
@@ -516,7 +538,7 @@ class MachineManager:
                     types[choice["attr"]] = choice.get("type", str)
         # Settings created with a bare setting() call carry no sheet entry; they
         # are still editable, with the type taken from the current value.
-        for attr in ESSENTIAL_ATTRS:
+        for attr in _essentials(device):
             if attr not in types and hasattr(device, attr):
                 value = getattr(device, attr)
                 if isinstance(value, (str, int, float, bool)):
@@ -761,11 +783,15 @@ SERIAL_SIGNATURES = (
         "vid": 0x0403,
         "pid": 0x6001,
         "title": "FTDI-seriële poort",
-        "kind": "co2-ruida",
-        "keys": ("ruida-beta", "grbl-generic"),
+        # Not a Ruida, although an RDC6442 hangs off USB through this very chip: OpenKerf
+        # keeps the line to a Ruida itself, over the network only (`link.py`), so a Ruida
+        # found here would be a machine that can never connect. A Ruida is found by the
+        # network search instead.
+        "kind": "diode",
+        "keys": ("grbl-generic",),
         "confidence": "onzeker",
-        "why": "A Ruida RDC6442 hangs off USB through this FTDI chip, but it is not exclusive.",
-        "settings": {"interface": "usb"},
+        "why": "An FTDI chip sits on some GRBL frames and on many other devices.",
+        "settings": {},
     },
     {
         "vid": 0x1A86,

@@ -453,16 +453,25 @@ def test_values_are_json_safe(kernel, manager):
 
 
 def test_connection_settings_appear_even_without_a_choices_sheet(kernel, manager):
-    """Ruida creates `interface` with a bare setting(), so no sheet lists it."""
+    """Ruida creates `address` with a bare setting(), so no sheet lists it.
+
+    Until phase 2 of the own Ruida line this test was about `interface` (USB or UDP).
+    A Ruida's line is OpenKerf's own now and always UDP, so `interface` is no longer
+    offered at all (`machines._essentials`); `address`, made the same bare way, is the
+    setting that carries the mechanism.
+    """
     created = manager.create("ruida-beta", label="Ruida")
     fields = [f for s in manager.settings(created["path"], True) for f in s["fields"]]
     by_attr = {f["attr"]: f for f in fields}
 
-    assert "interface" in by_attr
-    assert by_attr["interface"]["options"] == ["usb", "udp"]
+    assert "address" in by_attr
+    assert by_attr["address"]["options"] is None
+    assert "interface" not in by_attr
 
-    manager.update_settings(created["path"], {"interface": "udp"})
-    assert kernel.device.interface == "udp"
+    manager.update_settings(created["path"], {"address": "10.0.0.7"})
+    assert kernel.device.address == "10.0.0.7"
+    with pytest.raises(MachineError):
+        manager.update_settings(created["path"], {"interface": "usb"})
 
 
 def test_essential_filter_narrows_the_list(kernel, manager):
@@ -601,9 +610,32 @@ def test_serial_signature_becomes_a_candidate_with_its_port(monkeypatch, scanner
     assert found["transport"] == "serieel"
     assert found["where"] == "/dev/cu.usbserial-1420"
     assert found["settings"]["serial_port"] == "/dev/cu.usbserial-1420"
-    assert "ruida-beta" in [s["key"] for s in found["suggestions"]]
-    # An FTDI chip is no proof of a Ruida; the screen has to say so too.
+    # An FTDI chip is no proof of anything; the screen has to say so too.
     assert found["confidence"] == "onzeker"
+
+
+def test_an_ftdi_port_is_never_proposed_as_a_ruida(monkeypatch, scanner):
+    """
+    A Ruida over USB is out of OpenKerf: its line is ours and UDP only (`link.py`).
+
+    This chip used to come back with `ruida-beta` among the suggestions and
+    `{"interface": "usb"}` in its settings — a machine that, once made, could never
+    connect. What is proposed now is only what OpenKerf can drive behind it.
+    """
+    _no_usb(monkeypatch, scanner)
+    _no_network(monkeypatch, scanner)
+    monkeypatch.setattr(
+        "serial.tools.list_ports.comports",
+        lambda: [FakeSerialPort("/dev/cu.usbserial-1420", 0x0403, 0x6001, "FT232R")],
+    )
+
+    found = scanner.scan(network=False)["candidates"][0]
+
+    keys = [s["key"] for s in found["suggestions"]]
+    assert "ruida-beta" not in keys, keys
+    assert found["kind"] != "co2-ruida"
+    assert "interface" not in found["settings"], found["settings"]
+    assert "ruida" not in found["why"].lower(), found["why"]
 
 
 def test_unknown_serial_adapter_is_not_proposed(monkeypatch, scanner):

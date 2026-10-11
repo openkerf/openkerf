@@ -102,7 +102,7 @@ export const en = {
 	'transport.stop.onMachine': 'Stop on the machine',
 	'transport.stop.now': 'Abort the job right away ({key})',
 	'transport.stop.armed':
-		'Nothing is running — this aborts a job the moment one starts ({key})',
+		'Nothing is running right now ({key})',
 	'transport.noServer': 'No connection to OpenKerf — this button will not arrive.',
 	'transport.noServer.stop': 'Stopping is only possible with the emergency stop on the machine now.',
 	'transport.noServer.pause': 'Pausing is only possible with the button on the machine now.',
@@ -154,6 +154,12 @@ export const en = {
 	'status.machine.connected': 'Connected to the laser',
 	'status.machine.connectionUnknown.hint':
 		'The engine is running, but this driver does not report whether a machine is attached. Check the machine before starting.',
+	'status.machine.connectedShared': 'Connected, but not alone',
+	'status.machine.secondClient.title': 'Another program seems to be talking to this laser',
+	'status.machine.secondClient.body':
+		"{unanswered} of the last {asked} status questions were acknowledged but not answered. Close the other program — two programs on one controller lose each other's answers.",
+	'status.machine.secondClient.ack':
+		'The controller took {ms} ms to acknowledge; with one program talking to it, that takes a few milliseconds.',
 	'status.connect': 'Connect',
 	'status.connect.busy': 'Connecting…',
 	'status.connect.title': 'Open the connection to the machine. This moves nothing.',
@@ -1096,6 +1102,10 @@ export const en = {
 	'notify.job.done': 'Job done',
 	'notify.job.doneBody': '{name} — {time} of burning.',
 	'notify.job.endedBody': '{name} has finished.',
+	// A job on a Ruida's line that ended in failure; the line's sentence is the evidence.
+	'notify.job.failed': 'The job did not finish',
+	'notify.job.failedBody': '{name} ended before it was through.',
+	'notify.job.failedAdvice': 'Look at the material before you burn it again: part of the job may already be on it.',
 	'notify.lost.title': 'The connection dropped during a job',
 	'notify.lost.body': 'OpenKerf can no longer reach the server while it was burning. The machine is probably still going; stopping is only possible on the machine itself.',
 	'notify.stalled.title': 'The job is not making progress',
@@ -1847,7 +1857,7 @@ export const en = {
 	'setup.gone.noPath': 'There was no machine in the address.',
 	'setup.gone.bookmark': 'You have probably ended up here via an old bookmark.',
 	'setup.toYourMachines': 'To your machines',
-	'setup.firstJob': 'The connection to the laser is only made at the first job. Do that first time with the lid open and without a workpiece — then you see whether the head moves as you expect without anything being able to burn.',
+	'setup.firstJob': 'Do the first job with the lid open and without a workpiece — then you see whether the head moves as you expect without anything being able to burn.',
 	'setup.sheetFits': 'Does your sheet come along to this bed?',
 	'setup.sheetFits.body': 'Your sheet is {sheet}, the bed of {machine} is {bed}.',
 	'setup.sheetFits.thisMachine': 'this machine',
@@ -2769,6 +2779,29 @@ export const en = {
 		'A job is running. Stop it first: releasing the motors during a burn takes the drive out from under a head that is following a path, and the job is lost.',
 	'api.machine.sendingAFile':
 		'A file is being sent to the machine. Wait until it is there and then try again: anything sent now lands in the middle of that file, and the machine gives no sign of it.',
+	// Burning on a Ruida (phase 5): `CommandRunner.start_job` hands the RD file to our own
+	// line. A job still on it is refused before the build; `{detail}` in the second is
+	// the line's own sentence, in English, as with `ruidaConnectFailed` below.
+	'api.job.alreadyOnTheMachine':
+		'A job is already on this machine. Wait until it is done, or stop it; nothing has been sent.',
+	'api.job.notStarted': 'The machine did not take the job: {detail}',
+	// A phase 4 verb (move, home, frame, focus, lock, pause, resume) that the line to the
+	// machine did not carry (`link.on_the_line`): a lost or refusing line, or no
+	// acknowledgement in time. Stop has its own sentence, because "try again" is the
+	// wrong advice for a stop.
+	'api.machine.notConnected':
+		'There is no working line to the machine, so this did not reach it. Connect first, then try again.',
+	'api.machine.unconfirmed':
+		'The machine did not confirm this in time, so it is not known whether it arrived. Look at the machine before trying again.',
+	'api.machine.stopUnconfirmed':
+		'Stopping was not confirmed by the machine. Press the stop button on the machine itself.',
+	// `{detail}` is the line's own sentence — which address stayed silent, or why it was
+	// refused — and comes in English: it is measured per attempt, not a constant of ours.
+	'api.machine.ruidaConnectFailed': 'Connecting to the Ruida did not work: {detail}',
+	'api.machine.ruidaSilent':
+		'Connecting to the Ruida did not work. Is the machine on, and is the address in the machine settings right?',
+	'api.machine.ruidaStillOpen':
+		'Disconnecting from the Ruida did not take: the line still reads as open. Check the machine before trying again.',
 	'api.upload.noMachine': 'There is no active machine to send the file to.',
 	'api.upload.notConnected':
 		'There is no connection to the machine, so the file cannot be sent. Connect first; nothing has been sent.',
@@ -2780,7 +2813,6 @@ export const en = {
 		'A job is on this machine — burning, or waiting in the queue to start. Wait until it is done, or stop it: the file would go down the same connection that job uses. Nothing has been sent.',
 	'api.upload.busy':
 		'This machine is already being sent a file. Wait until that one is done and press again; nothing has been sent.',
-	'api.upload.engineUpgrade': 'This engine cannot confirm packet delivery. Install the Ruida session update before sending files; nothing has been sent.',
 	'api.upload.lineInUse':
 		'This machine is already being sent something on this line. Wait until that is done and press again; nothing has been sent.',
 	'api.upload.emptyFile': 'The job came out empty, so there is nothing to send. Nothing has been sent.',

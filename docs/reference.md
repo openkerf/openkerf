@@ -142,11 +142,17 @@ the canvas focused the window opens and nothing else moves.
 
 | Keys | What it does |
 |---|---|
-| ⌘ + . / Ctrl + . | Stop: abort the job right away. Pressed with nothing running, it aborts a job the moment one starts. |
+| ⌘ + . / Ctrl + . | Stop: abort the job right away (on a Ruida: see below). |
 | Pause | Pause the job, and press again to resume. |
 
 None of the shortcuts fire while the cursor is in a field: in a measurement box
 a full stop is a decimal point, not an emergency stop.
+
+On a Ruida, Stop ends a running job, but it does not halt a jog, a frame or a move
+that is already under way, and with nothing running it is not held over for the
+next job: it goes to the controller at once and that is all. For a moving head the
+stop button on the machine is the stop; see
+[Burning](job.md#what-stop-does-on-a-ruida).
 
 While a job runs the machine refuses everything that would move the head, and
 releasing the motors is refused with it: letting go mid-burn takes the drive out

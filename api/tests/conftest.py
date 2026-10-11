@@ -148,6 +148,36 @@ def _projects_of_their_own(tmp_path, monkeypatch):
     return folder
 
 
+@pytest.fixture(autouse=True)
+def _no_engine_ruida_session(request, monkeypatch):
+    """
+    No test may bring the engine's own `RuidaSession` to life, unless its module says
+    `ENGINE_RUIDA_SESSION_ALLOWED = True` (the measurements of `test_engine_device_closed`).
+
+    Every Ruida talks through `openkerf_api/ruida/`; the engine's session is replaced by
+    `ClosedSession` at plugin registration (`ruida/closed.py`). On the engine as released
+    a real session is not just a stray socket: its `shutdown()` can spin for ever
+    (`ruidasession.py:123-130`). So the whole suite is the proof that none is made.
+    """
+    try:
+        import meerk40t.ruida.ruidasession as ruidasession
+    except ImportError:  # pragma: no cover - an engine without its Ruida module
+        yield
+        return
+    made = []
+    real = ruidasession.RuidaSession.__init__
+
+    def counted(session, *args, **kwargs):
+        made.append(session)
+        real(session, *args, **kwargs)
+
+    monkeypatch.setattr(ruidasession.RuidaSession, "__init__", counted)
+    yield
+    if made and not getattr(request.module, "ENGINE_RUIDA_SESSION_ALLOWED", False):
+        pytest.fail(f"{len(made)} engine RuidaSession(s) constructed; ClosedSession must "
+                    "keep the engine's Ruida device from making one.")
+
+
 @pytest.fixture
 def kernel():
     k = _bootstrap()

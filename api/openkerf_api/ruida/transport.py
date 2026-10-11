@@ -6,7 +6,7 @@ we send from the socket we listen on, as the engine does. Both ports are
 arguments only so a test can use ephemeral ones on 127.0.0.1.
 
 **A numeric address, refused otherwise.** The engine resolves a host name with
-`gethostbyname` on every open (`udp_transport.py:37` with the session patch), on
+`gethostbyname` on every open (`udp_transport.py:37` with the former session patch), on
 the worker that also owns shutdown, and the patch's README warns that the
 platform resolver can take longer than the bounded shutdown wait. A laser on a
 workshop network has a fixed IP anyway, so we take the IPv4 literal and never

@@ -9,7 +9,6 @@ we ask the active device what it knows instead of assuming it.
 """
 
 import types
-import time
 
 import pytest
 from fastapi.testclient import TestClient
@@ -195,10 +194,3 @@ def test_the_routes_exist_and_report_what_the_device_can_do(client, kernel):
     kernel.console("service device start ruida -i\n")
     caps = client.get("/api/capabilities").json()
     assert caps["connection"] == {"connect": True, "disconnect": True}
-
-
-def test_connect_waits_for_async_session_handshake(monkeypatch):
-    control = control_for(connected=False)
-    control.kernel.device.active_session = types.SimpleNamespace(supports_write_completion=True)
-    monkeypatch.setattr(time, "sleep", lambda seconds: setattr(control.kernel.device, "connected", True))
-    assert control.connect()["connection"]["state"] == "connected"

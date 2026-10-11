@@ -89,7 +89,20 @@ def a_job_is_running(kernel) -> bool:
     A spooler that cannot answer counts as not running: a broken read is not
     evidence of a burn, and the refusals built on this are not what keeps a laser
     from firing; they keep two things off one connection.
+
+    A Ruida burns over our own line (phase 5), so its job is the link's
+    (`link.job_under_way`) and the engine's spooler, which nothing of ours fills for
+    it any more, does not count. A paused job counts as running on both: pausing never
+    touches the engine's `is_running()` either.
     """
+    from .link import job_under_way, link_for
+
+    try:
+        link = link_for(kernel)
+    except Exception:  # pragma: no cover - a link must not break the question
+        link = None
+    if getattr(link, "carries_jobs", False):
+        return job_under_way(link) is not None
     spooler = _spooler(kernel)
     if spooler is None:
         return False
@@ -128,17 +141,45 @@ def the_line_is_in_use(kernel) -> str | None:
     measured, it clears in about two tenths of a second. If a disabled job ever
     becomes reachable, this is the line that has to learn to skip it too.
     """
-    if a_job_is_running(kernel):
+    # The line itself first: for a Ruida that is our own link (`link.py`), for every
+    # other laser the engine's spooler, through `EngineLink.line_in_use` and so through
+    # `spooler_use` below. Imported here for the reason `DesignError` is: nothing at the
+    # top of this module imports anything of ours.
+    #
+    # A link that carries jobs answers "burning" from its job too (`link.job_under_way`),
+    # so the answer does not hang on the link remembering to say it in two places.
+    from .link import job_under_way, link_for
+
+    try:
+        link = link_for(kernel)
+        use = link.line_in_use()
+    except Exception:  # pragma: no cover - a link must not break the question
+        link, use = None, None
+    if use is not None:
+        return use
+    if job_under_way(link) is not None:
         return "burning"
-    spooler = _spooler(kernel)
-    if spooler is not None:
-        try:
-            if list(spooler.queue):
-                return "queued"
-        except Exception:  # pragma: no cover - the spooler must not break us
-            pass
     if a_file_is_being_sent(kernel):
         return "uploading"
+    return None
+
+
+def spooler_use(spooler) -> str | None:
+    """`'burning'`, `'queued'` or `None`, read off one engine spooler.
+
+    The engine's half of `the_line_is_in_use`, kept here beside its reasoning and
+    asked by `EngineLink.line_in_use`.
+    """
+    if spooler is None:
+        return None
+    try:
+        queue = list(spooler.queue)
+        if any(job.is_running() for job in queue):
+            return "burning"
+        if queue:
+            return "queued"
+    except Exception:  # pragma: no cover - the spooler must not break us
+        pass
     return None
 
 

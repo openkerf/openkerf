@@ -71,6 +71,7 @@ from .testgrid import (
     plan_grid,
     raster_supported,
 )
+from .link import is_ruida, links_for
 from .machine import MachineControl
 from .machines import MachineError, MachineManager
 from .operations import fence_operations
@@ -274,6 +275,10 @@ class ApiServer:
         self.bind = bind
         self.frontend = Path(frontend).expanduser() if frontend else None
         self.reader = StatusReader(kernel)
+        # The lines to the machines: our own for a Ruida, the engine's for the rest. One
+        # per kernel, so the readers and controls built per request find the same line;
+        # the server owns it in the sense that it closes every line when it stops.
+        self.links = links_for(kernel)
         self.document = Document()
         self.commands = CommandRunner(kernel, self.document)
         self.machines = MachineManager(kernel, self.commands)
@@ -3758,6 +3763,7 @@ class ApiServer:
         )
         self._thread.start()
         self._attach_signals()
+        self.connect_once()
         # Close the camera as soon as nobody is watching. A read thread that runs on for
         # hours costs power and keeps the device busy for other programs; the brake is in
         # Camera.reap().
@@ -3776,6 +3782,34 @@ class ApiServer:
             self.channel("Write actions are open (bound to localhost).")
         else:
             self.channel(f"Write actions need this token: {self.token}")
+
+    def connect_once(self):
+        """
+        One attempt to connect a Ruida at startup, in the background; the thread, or `None`.
+
+        Only when the active machine is a Ruida with an address set: a machine the user
+        never pointed anywhere is not probed. One `RuidaLink.connect()` — bounded by the
+        link (`connect_seconds`), and on failure the link closes its session, so the
+        status simply reads "disconnected" with the link's own sentence and nothing
+        is sent after it (`test_ruida_startup_connect.py`). Never retried, never
+        waited for: startup does not depend on a controller that may be switched off.
+        """
+        device = getattr(self.kernel, "device", None)
+        if not is_ruida(device):
+            return None
+        if not str(getattr(device, "address", "") or "").strip():
+            return None
+        link = self.links.for_device(device)
+
+        def attempt():
+            try:
+                link.connect()
+            except Exception as error:  # pragma: no cover - a link must not take us down
+                self.channel(f"Connecting to the Ruida at startup failed: {error}")
+
+        thread = threading.Thread(target=attempt, name="openkerf-ruida-connect", daemon=True)
+        thread.start()
+        return thread
 
     def _beside(self, name: str, was: str | None = None) -> Path:
         """
@@ -3841,49 +3875,9 @@ class ApiServer:
         if self._upload_dir is not None:
             shutil.rmtree(self._upload_dir, ignore_errors=True)
             self._upload_dir = None
-        self._wait_for_the_machine_to_go_quiet()
+        # Our own lines last. Bounded and idempotent, see `RuidaLink.close`.
+        self.links.close()
         self.channel("OpenKerf API stopped.")
-
-    # How long we wait on shutdown for the machine to finish talking. Long enough for the
-    # tail of a transmission, short enough not to get in the way when a job really is still
-    # running.
-    QUIET_TIMEOUT_S = 2.0
-
-    def _wait_for_the_machine_to_go_quiet(self):
-        """
-        Letting the driver's send thread finish its sentence.
-
-        On shutdown this appeared in the user's log:
-
-            Exception in thread Thread-3 (_data_sender):
-              ruida/controller.py:128 in _data_sender -> self.write(data)
-              ruida/ruidasession.py:186 in write -> ConnectionError(
-                  'Not connected to the Ruida controller.')
-
-        That is a thread of MeerK40t's own: `_data_sender` empties its queue without
-        checking whether the connection is still there, so as soon as the session under it
-        drops out it trips. Fixing that belongs there (see the upstream list in CLAUDE.md) —
-        we do not touch `meerk40t/`.
-
-        What we *can* do: not be the first to pull the door shut. We start the device
-        service, so we wait here for a moment until it has finished talking before the rest
-        of the shutdown removes the connection. Everything behind `getattr`: a dummy device
-        has none of these things, and the shutdown must never break on this.
-        """
-        import time
-
-        device = getattr(self.kernel, "device", None)
-        controller = getattr(getattr(device, "driver", None), "controller", None)
-        if controller is None:
-            return
-        deadline = time.monotonic() + self.QUIET_TIMEOUT_S
-        while time.monotonic() < deadline:
-            try:
-                if not controller.is_busy:
-                    return
-            except Exception:
-                return
-            time.sleep(0.05)
 
     def is_running(self):
         return self._thread is not None and self._thread.is_alive()

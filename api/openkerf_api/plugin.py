@@ -15,6 +15,14 @@ def plugin(kernel, lifecycle=None):
     if lifecycle == "register":
         _ = kernel.translation
 
+        # The line to a Ruida is ours (`link.py`), so the engine's Ruida device must never
+        # open a session of its own. Here, at `register`, because activating a device
+        # constructs that session and its worker starts binding UDP 40200 at once —
+        # closing it afterwards is too late. See `ruida/closed.py`.
+        from .ruida.closed import install as keep_the_engine_ruida_closed
+
+        keep_the_engine_ruida_closed()
+
         # Without a rasteriser `op raster` throws its own children away while planning and
         # every raster operation comes out of the machine blank. The wxPython GUI registers
         # one; headless there is nothing. We fill that gap, and only that gap: if the wx

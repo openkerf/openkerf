@@ -11,6 +11,12 @@ import threading
 from contextlib import contextmanager
 
 from .busy import refuse_while_a_file_is_being_sent
+from .link import (
+    job_under_way,
+    link_for,
+    on_the_line,
+    stop_on_the_line,
+)
 
 ANSI = re.compile(r"\x1b\[[0-9;]*[a-zA-Z]")
 
@@ -72,56 +78,6 @@ class CommandError(RuntimeError):
         self.output = output
 
 
-class _AlwaysConnected:
-    """
-    Reports a Ruida service as always connected and never busy, to keep its
-    status-monitor thread from redialling the machine.
-
-    `RuidaController.__init__` unconditionally starts a daemon thread
-    (`ruida/controller.py:50`); its loop (`:162`) sleeps 3 s and then, every 0.2 s
-    forever, calls `service.connect()` whenever
-    `service.connected and not service.is_busy` is false (`:172`, `:189`) — five
-    times a second, for as long as the service reports itself not connected.
-    Measured against a `build_job_bytes` driver, isolated from the live driver's
-    own identical thread (see `task-1-report-fix-4.md`): 6 calls in a 4.2 s wait
-    that started right after construction — the first roughly 3 s of that window
-    is the startup sleep, so this is 5/s over the ~1.2 s of it that is actually
-    active — before this wrapper existed; 0 in the same window with it. A build
-    driver that lived for the rest of the process would otherwise have this app
-    quietly redialling a laser that is off or unplugged, forever, once per build.
-
-    Both halves matter: reporting only `connected` as true and leaving `is_busy`
-    proxied through to the real, shared device left a real gap — the device's
-    `is_busy` reads a session shared with the live driver, and a build that leaves
-    it transiently true (measured: right at job completion) still sent the thread
-    down the "keep dialling" branch on its very next check, once, before the busy
-    state cleared. Overriding both closes it regardless of that shared state.
-
-    With both true, the thread instead takes the *other* branch of that `if`,
-    which only calls `job.get_setting(..., output=self.write)` (our own no-op) —
-    harmless, and it never reaches `connect()`. That branch acquires and releases
-    `_job_lock` each time (`:173`/`:182`), the same lock every `_data_sender`
-    started by a later build's `stop_record()` (`ruida/driver.py:301`) needs; see
-    `_upload_driver_for` for why that lock has to be released once, up front.
-    Wraps rather than patches the real service, so everything else it is asked
-    for (`setting`, `channel`, ...) still reaches the genuine object.
-    """
-
-    def __init__(self, service):
-        self._service = service
-
-    @property
-    def connected(self):
-        return True
-
-    @property
-    def is_busy(self):
-        return False
-
-    def __getattr__(self, name):
-        return getattr(self._service, name)
-
-
 class CommandRunner:
     def __init__(self, kernel, document=None):
         self.kernel = kernel
@@ -180,11 +136,14 @@ class CommandRunner:
         return any(True for _ in self.kernel.find("command", input_type, f"{name}$"))
 
     def capabilities(self) -> dict:
+        # Pause, resume and stop from the machine's link: a Ruida's own line answers
+        # for itself, every other laser's `EngineLink` asks this console as before.
+        motion = self.link().motion_capabilities()
         return {
             "start": self.supports("plan") and self.supports("spool"),
-            "pause": self.supports("pause"),
-            "resume": self.supports("resume"),
-            "stop": self.supports("estop") or self.supports("abort"),
+            "pause": bool(motion.get("pause")),
+            "resume": bool(motion.get("resume")),
+            "stop": bool(motion.get("stop")),
             "clear_queue": self.supports("spool"),
             "load": self.supports("load"),
             # Whether a job can be put in the machine's memory as a file. Reported
@@ -254,7 +213,7 @@ class CommandRunner:
 
     def start_job(self, name: str | None = None, mutators=()) -> list[str]:
         """
-        Building the plan and sending it to the spooler.
+        Building the plan and sending it to the machine.
 
         First look at *whether* there is anything to burn. An empty design ran cheerfully
         through here and reported "succeeded": the user presses start, the app says yes, and
@@ -262,6 +221,12 @@ class CommandRunner:
         state beside it waiting.
 
         `mutators` are operations on the copied plan (tiles, Z steps). See `_plan_and_spool`.
+
+        Two roads from here, chosen by the machine's link (`link.py`). A link that
+        `carries_jobs` — a Ruida over our own line — gets the job as one RD file,
+        built by `build_job_bytes` with the same mutators, rotary and claim on the plan
+        the spooler's road applies, and streams it on a worker of its own. Every other
+        laser plans and spools exactly as before.
         """
         # Not while a file is going out: the spooler would pick this up and the
         # driver write it down the line the upload is using. In the runner and not
@@ -269,10 +234,54 @@ class CommandRunner:
         # (`series.py:2278`) — the other two callers of this method — are covered by
         # the same line.
         refuse_while_a_file_is_being_sent(self.kernel)
+        link = self.link()
+        if getattr(link, "carries_jobs", False):
+            return self._start_on_the_line(link, name, mutators)
         burnable = self._require_something_to_burn()
         output = self._plan_and_spool(mutators)
         self._name_job(name, burnable)
         return output
+
+    def _start_on_the_line(self, link, name, mutators) -> list[str]:
+        """
+        `start_job` for a link that carries jobs: the RD file, then `link.start_job`.
+
+        The refusals that cost nothing come before the build, which plans the whole
+        job: nothing to burn, a job still on the line, no line at all. What the link
+        itself says no to afterwards — it went away while we built, or something took
+        the line meanwhile — is its `ConnectionError`, turned into a sentence here.
+
+        No `wordlist advance` either, where `spool` runs one inside itself
+        (`core/spoolers.py:57`): a series primes the list itself before every burn and
+        reads that advance as drift to undo (`Series._ensure_primed`).
+        """
+        from .edits import DesignError
+
+        burnable = self._require_something_to_burn()
+        if job_under_way(link) is not None:
+            raise DesignError(
+                "A job is already on this machine. Wait until it is done, or stop it; "
+                "nothing has been sent.",
+                code="job.alreadyOnTheMachine",
+            )
+        if (link.connection() or {}).get("state") != "connected":
+            raise DesignError(
+                "There is no working line to the machine, so this did not reach it. "
+                "Connect first, then try again.",
+                code="machine.notConnected",
+            )
+        rd = self.build_job_bytes(mutators)
+        title = self._job_title(name, burnable)
+        try:
+            link.start_job(rd, title)
+        except (ConnectionError, TimeoutError) as error:
+            detail = str(error).strip()
+            raise DesignError(
+                f"The machine did not take the job: {detail}",
+                code="job.notStarted",
+                values={"detail": detail},
+            ) from error
+        return [f"Sent {title} ({len(rd)} bytes) to the machine."]
 
     def _require_something_to_burn(self) -> int:
         """The count `start_job` does too, split out so both read it."""
@@ -313,10 +322,9 @@ class CommandRunner:
         `RDJob` buffer — no connection, no send thread reaching the machine.
 
         `_upload_driver_for` builds that driver once per device and reuses it: a
-        fresh `RuidaController` per call starts a daemon thread that, unless parked,
-        redials the machine forever (see `_AlwaysConnected`) — ten calls to this
-        method must not leave ten such threads running. Its buffer is cleared before
-        every build instead.
+        fresh `RuidaController` per call starts a status thread that never ends — ten
+        calls to this method must not leave ten such threads running. Its buffer is
+        cleared before every build instead.
 
         Why not `save_job` itself: it sets `controller.write` to `f.write` and then
         *executes* the RDJob, while the bytes we want are the ones that land in the
@@ -361,9 +369,12 @@ class CommandRunner:
         The `build_job_bytes` driver for `device`, made once and reused.
 
         `RuidaController.__init__` unconditionally starts a daemon thread
-        (`ruida/controller.py:50`) that, left alone, redials the machine forever —
-        see `_AlwaysConnected`. A fresh `RuidaDriver` per call would leave one more
-        such thread behind every time somebody builds a file: measured, 10 calls to
+        (`ruida/controller.py:50`) whose loop has no way out. While the device is not
+        connected — and the engine's Ruida device never is: its session is
+        `ClosedSession` (`ruida/closed.py`) — that loop only calls
+        `service.connect()`, which `ClosedSession` turns into nothing. A fresh
+        `RuidaDriver` per call would still leave one more such thread behind every
+        time somebody builds a file: measured, 10 calls to
         `build_job_bytes` before this method existed left 20 extra threads running
         (a status monitor and a `_data_sender` per call, `task-1-report-fix-3.md`).
         One driver per device instead, emptied (`controller.job.buffer.clear()`)
@@ -390,18 +401,14 @@ class CommandRunner:
             # channel (`ruida/driver.py:47,48`) — the same channel the live
             # driver's own controller watches. A build driver never needs an
             # answer (it talks to a no-op `write` and only ever assembles bytes),
-            # but a real reply arriving while this driver still exists would be
+            # but a reply on that channel while this driver still exists would be
             # decoded twice: `update_x`/`update_y` (`ruida/controller.py:259-277`)
-            # write `self.service.driver.native_x/native_y` — through
-            # `_AlwaysConnected.__getattr__` that is still `device.driver`, the
+            # write `self.service.driver.native_x/native_y` — `device.driver`, the
             # *live* driver, so the same value would land there a second time for
             # no reason. No path toward the machine either way, but there is
             # nothing this watcher is for, so it comes straight off.
             driver.recv.unwatch(driver.controller.recv)
-            # Neutralise the thread before anything else — the 3 s startup sleep
-            # (`ruida/controller.py:170`) is slack, not something to rely on.
-            driver.controller.service = _AlwaysConnected(device)
-            # Nothing from here may reach a socket either.
+            # The bytes stay in `controller.job`; nothing is written anywhere.
             driver.controller.write = lambda data: None
             # `__init__` acquires `_job_lock` and never releases it
             # (`ruida/controller.py:49`) — meant to hold the status thread until
@@ -414,28 +421,6 @@ class CommandRunner:
             # once here lets the status thread and every `_data_sender` take turns
             # on it normally instead.
             driver.controller.resume_monitor()
-            # `wait_idle` (`ruida/controller.py:401`) is
-            # `while not self._idle and self.service.connected: sleep(...)` — with
-            # `_AlwaysConnected` the second half is always true, so once anything
-            # ever sets `_idle` false (`:212-218`, on a home or move step; nothing
-            # today's plain cut layer produces reaches that) this would spin
-            # forever instead of returning once real status updates stop arriving.
-            # Its caller `sync` (`:407`) then calls
-            # `self.service.active_session.close()` — through `__getattr__`, so the
-            # *real*, shared session. Screened off rather than merely explained:
-            # this controller is never asked to wait for or resync anything.
-            driver.controller.wait_idle = lambda: None
-            driver.controller.sync = lambda: None
-            # `physical_home` (`ruida/driver.py:392`) calls `sync` and, either
-            # side of it, `gross_timeout`/`normal_timeout` (`ruida/controller.py
-            # :108,115`) — both just `self.service.set_timeout(...)`, which
-            # through `__getattr__` reaches `RuidaDevice.set_timeout`
-            # (`ruida/device.py:689`) and so `active_session.set_timeout(...)`
-            # on the *real*, shared session. Same neighbourhood as `sync`, same
-            # reason: this controller is never asked to home, so screened off
-            # rather than left to reach a session it has no business touching.
-            driver.controller.gross_timeout = lambda: None
-            driver.controller.normal_timeout = lambda: None
             self._upload_driver = driver
             self._upload_device = device
         driver = self._upload_driver
@@ -986,9 +971,7 @@ class CommandRunner:
         rename the job after it is in the queue. Only when the engine knew nothing itself: if
         you have loaded a file, that name is better than ours.
         """
-        title = (name or "").strip()
-        if not title:
-            title = f"{burnable} operation" + ("" if burnable == 1 else "en")
+        title = self._job_title(name, burnable)
         try:
             queue = list(self.kernel.device.spooler.queue)
         except Exception:
@@ -1004,61 +987,47 @@ class CommandRunner:
         except Exception:  # pragma: no cover - the engine must not break us
             pass
 
-    def _driver_paused(self):
-        """`driver.paused` of the active device, or None when nobody says."""
-        try:
-            flag = self.kernel.device.driver.paused
-        except Exception:
-            return None
-        return flag if isinstance(flag, bool) else None
+    @staticmethod
+    def _job_title(name, burnable: int) -> str:
+        """The sheet's name, or a count of what burns; for the spooler and for a link."""
+        title = (name or "").strip()
+        if not title:
+            title = f"{burnable} operation" + ("" if burnable == 1 else "en")
+        return title
+
+    def link(self):
+        """The active machine's link (`link.py`), with this runner as its console."""
+        return link_for(self.kernel, None, self)
 
     def pause(self) -> list[str]:
         """
-        Pausing, and nothing else.
-
-        On lihuiyu, ruida *and* grbl `pause` is a *toggle*: if the driver is already paused,
-        the same command resumes (lihuiyu/device.py:844,
-        ruida/device.py:425, grbl/device.py:982). So pressing Pause twice sets the machine
-        burning again, and that is exactly the opposite of what is on the button.
+        Pausing, and nothing else — `EngineLink.pause` keeps the engine's toggle from
+        turning a second press into a resume.
         """
-        # `RuidaController.pause` is `job.pause_process(output=self.write)`
-        # (`ruida/controller.py:416`) — realtime, straight onto the line an upload is
-        # using, with no spooler in between. And there is nothing to pause during an
-        # upload: `start_job` cannot have run.
+        # A pause is realtime, straight onto the line an upload is using, with no
+        # spooler in between. And there is nothing to pause during an upload:
+        # `start_job` cannot have run.
         refuse_while_a_file_is_being_sent(self.kernel)
-        if self._driver_paused() is True:
+        link = self.link()
+        if link.kind != "engine" and link.machine_state() == "paused":
             return ["already paused"]
-        return self.run("pause")
+        return on_the_line(link.pause)
 
     def resume(self) -> list[str]:
         """
-        Resuming, and checking that it has actually happened.
-
-        Measured on a lihuiyu device: `resume` reports "Lihuiyu Channel Resumed." and the
-        machine stays put. The cause is in the engine — the device registers `resume` twice,
-        first as a realtime resume (device.py:855) and later again as "Resume Controller"
-        (device.py:1045). The second wins, and that starts the controller instead of the
-        driver: `driver.paused` stays True and `hold_work()` holds the work back. On a K40 a
-        paused job therefore never got going again — the resume button did nothing, every
-        time.
-
-        We cannot fix that in `meerk40t/`, so we check the result: if the driver is still
-        paused afterwards, we take it off with the toggle. For ruida and grbl nothing changes;
-        there the flag is already gone after the first attempt.
+        Resuming. `EngineLink.resume` checks it has actually happened — a lihuiyu's
+        `resume` leaves the driver paused, see there.
         """
         refuse_while_a_file_is_being_sent(self.kernel)
-        if self._driver_paused() is False:
-            return ["not paused"]
-        output = self.run("resume")
-        if self._driver_paused() is True:
-            output = output + self.run("pause")
-        return output
+        return on_the_line(self.link().resume)
 
     def stop(self) -> list[str]:
-        """Abort the running job. estop is realtime; abort is the fallback."""
-        if self.supports("estop"):
-            return self.run("estop")
-        return self.run("abort")
+        """
+        Abort the running job. Never refused here: not while a file is being sent, not
+        while a job burns. It must stay reachable in one call, always — and on a Ruida
+        it goes ahead of anything still queued on our line.
+        """
+        return stop_on_the_line(self.link().stop)
 
     def clear_queue(self) -> list[str]:
         return self.run("spool clear")

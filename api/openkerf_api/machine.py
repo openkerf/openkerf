@@ -1,21 +1,23 @@
 """
 De machine bewegen: homen, jogpen, ontgrendelen.
 
-These commands set the head in motion. Unlike pausing and stopping they are not
-device-specific: `core/spoolers.py` registers them on the kernel, so they always exist and
-go through the active device's spooler. We report the availability anyway, so that the UI
-does not have to assume it stays that way.
+The verbs go to the machine's link (`link.py`): a Ruida over our own line, every other
+laser through the engine's console as before (`EngineLink`). What stays here is
+everything about the request itself — finite numbers, a jog of zero, a frame outside the
+bed, the rotary, nothing while a job burns or a file goes out — so both links get the
+same guards, asked before the link is.
 """
 
 import json
-
-import time
 
 from .busy import a_job_is_running, refuse_while_a_file_is_being_sent
 from .commands import CommandRunner
 from .edits import DesignError, _finite
 
 MOVES = ("home", "physical_home", "unlock", "lock")
+
+#: The motion block `/api/capabilities` has always served, read from the link.
+MOTION_KEYS = MOVES + ("move", "jog", "focus")
 
 
 # Where saved positions live (gap J6).
@@ -35,19 +37,18 @@ MAX_NAAM = 40
 # machine — two zero points at once is no longer a zero point.
 ORIGIN_KEY = "openkerf_origin"
 
-# Focusing sits on the Ruida (`focusz`), not on every device. The same approach as with
-# pausing and stopping: ask what this device knows, do not assume.
-FOCUS = "focusz"
-
-# Verbinden en verbreken.
-#
-# Every driver family calls it something different and marks it `hidden=True`: Ruida has
-# `ruida_connect` (`ruida/device.py:448`), lihuiyu, moshi, newly and balor have
-# `usb_connect`. Grbl registers none — it opens its connection itself as soon as data has to
-# go there. So we ask the active device what it knows, in the same order, and a machine that
-# does not know it gets no button either.
-CONNECTS = ("ruida_connect", "usb_connect")
-DISCONNECTS = ("ruida_disconnect", "usb_disconnect")
+# Verbinden en verbreken: a Ruida through our own line, every other laser through the
+# console commands its family registers. Both live in `link.py`; the names are imported
+# here because this is where they were looked for.
+from .link import (  # noqa: E402
+    CONNECTS,
+    DISCONNECTS,
+    FOCUS,
+    busy_notice,
+    is_ruida,
+    links_for,
+    on_the_line,
+)
 
 # What `_idle()` says when a job is running, as a sentence and a code.
 #
@@ -85,10 +86,6 @@ def _motors_while_burning() -> DesignError:
     )
 
 
-def _mm(value: float) -> str:
-    return f"{value:.4f}mm"
-
-
 def _zonder_echo(output, command: str) -> str:
     """
     What the engine had to report, without the echo of the command itself.
@@ -112,26 +109,26 @@ class MachineControl:
         self.runner = runner or CommandRunner(kernel)
 
     def capabilities(self) -> dict:
-        caps = {name: self.runner.supports(name) for name in MOVES}
-        caps["move"] = self.runner.supports("move_absolute")
-        caps["jog"] = self.runner.supports("move_relative")
-        caps["focus"] = self.runner.supports(FOCUS)
-        return caps
+        """What the machine's link says it can be asked; the keys the UI has always read."""
+        caps = self._link_for_the_machine().motion_capabilities()
+        return {name: bool(caps.get(name)) for name in MOTION_KEYS}
 
     def connection_capabilities(self) -> dict:
         """A block of its own, not under `motion`: connecting does not move the head."""
+        link = self._link_for_the_machine()
+        if link.kind != "engine":
+            # Our own line always knows how to open and close.
+            return {"connect": True, "disconnect": True}
         return {
-            "connect": self._link_command(CONNECTS) is not None,
-            "disconnect": self._link_command(DISCONNECTS) is not None,
+            "connect": link.command(CONNECTS) is not None,
+            "disconnect": link.command(DISCONNECTS) is not None,
         }
 
     # ------------------------------------------------------------- connection
 
-    def _link_command(self, names) -> str | None:
-        for name in names:
-            if self.runner.supports(name):
-                return name
-        return None
+    def _link_for_the_machine(self):
+        device = getattr(self.kernel, "device", None)
+        return links_for(self.kernel).for_device(device, self.runner)
 
     def _connection(self) -> dict:
         """
@@ -152,21 +149,23 @@ class MachineControl:
         return self._link(DISCONNECTS, "disconnect", "disconnected")
 
     def _link(self, names, verb: str, wanted: str) -> dict:
-        command = self._link_command(names)
+        device = getattr(self.kernel, "device", None)
+        if is_ruida(device):
+            return self._ruida_link(device, verb, wanted)
+
+        link = self._link_for_the_machine()
+        command = link.command(names)
         if command is None:
             raise DesignError(
                 f"This device has no command to {verb}. Grbl, for instance, "
                 "opens its connection itself as soon as work goes to it."
             )
-        output = self.runner.run(command)
+        # `EngineLink` runs the console command and, after a connect, waits for a
+        # session that confirms asynchronously; the state is then read the way the
+        # status bar reads it.
+        getattr(link, verb)()
+        output = link.output
         state = self._connection()
-        session = getattr(self.kernel.device, "active_session", None)
-        if verb == "connect" and getattr(session, "supports_write_completion", False):
-            # open() requests the worker handshake; it no longer reads the UDP socket here.
-            deadline = time.monotonic() + 3.0
-            while state["state"] == "disconnected" and time.monotonic() < deadline:
-                time.sleep(0.02)
-                state = self._connection()
 
         # The engine reports a failed connection only on the channel and then
         # returns quietly (`ruida/device.py:452`). The state afterwards is therefore
@@ -182,6 +181,44 @@ class MachineControl:
                 "The connection is not confirmed; check the machine before trying again."
             )
         return {"connection": state, "output": output}
+
+    def _ruida_link(self, device, verb: str, wanted: str) -> dict:
+        """
+        Our own line to a Ruida (`ruida/link.py`). One line to a controller: connecting
+        this machine closes whatever line another machine still had open — a switch made
+        from the console never passed through `MachineManager.activate`.
+
+        `RuidaLink.connect` waits a bounded time for the first answer and lets the line
+        go if none came, saying which address stayed silent; that sentence is the
+        reason given here. "connecting" after that wait is not a connection.
+        """
+        links = links_for(self.kernel)
+        if verb == "connect":
+            links.only(device)
+        link = links.for_device(device)
+        reading = getattr(link, verb)()
+        state = self._connection()
+        if state.get("state") == wanted:
+            return {"connection": state, "output": []}
+        if verb == "disconnect":
+            raise DesignError(
+                "Disconnecting from the Ruida did not take: the line still reads as "
+                "open. Check the machine before trying again.",
+                code="machine.ruidaStillOpen",
+            )
+        # The link's own sentence: which address stayed silent, or why it was refused.
+        detail = (reading or {}).get("detail") or state.get("detail")
+        if detail:
+            raise DesignError(
+                f"Connecting to the Ruida did not work: {detail}",
+                code="machine.ruidaConnectFailed",
+                values={"detail": detail},
+            )
+        raise DesignError(
+            "Connecting to the Ruida did not work. Is the machine on, and is the "
+            "address in the machine settings right?",
+            code="machine.ruidaSilent",
+        )
 
     def _idle(self, burning=_moving_while_burning) -> None:
         """
@@ -209,8 +246,14 @@ class MachineControl:
         if a_job_is_running(self.kernel):
             raise burning()
 
-    def _require(self, command: str):
-        if not self.runner.supports(command):
+    def _require(self, command: str, capability: str | None = None):
+        """
+        Whether the machine's link can be asked this. `command` names it in the
+        sentence, as the console knows it; `capability` is its key in
+        `motion_capabilities()` when that differs.
+        """
+        caps = self._link_for_the_machine().motion_capabilities()
+        if not caps.get(capability or command):
             raise DesignError(
                 f"This device does not know '{command}'; movement is handled by the "
                 "device service itself."
@@ -235,7 +278,8 @@ class MachineControl:
             reason = self._rotary().homing_refusal()
             if reason is not None:
                 raise DesignError(reason, code="rotary.homeWhileActive")
-        return {"output": self.runner.run(command), "forced": bool(force)}
+        link = self._link_for_the_machine()
+        return {"output": on_the_line(link.home, bool(physical)), "forced": bool(force)}
 
     def _rotary(self):
         from .rotary import RotaryControl
@@ -244,11 +288,11 @@ class MachineControl:
 
     def move_to(self, x_mm, y_mm) -> dict:
         """Absolute position. The head moves; this is not a drawing command."""
-        self._require("move_absolute")
+        self._require("move_absolute", "move")
         self._idle()
         x = _finite(x_mm, "x_mm")
         y = _finite(y_mm, "y_mm")
-        return {"output": self.runner.run(f"move_absolute {_mm(x)} {_mm(y)}")}
+        return {"output": on_the_line(self._link_for_the_machine().move_to, x, y)}
 
     def frame(self, x_mm, y_mm, width_mm, height_mm) -> dict:
         """
@@ -258,7 +302,7 @@ class MachineControl:
         is the clamp in the way. The laser stays off — there is only movement, with the same
         guard as on a jog.
         """
-        self._require("move_absolute")
+        self._require("move_absolute", "frame")
         self._idle()
         x = _finite(x_mm, "x_mm")
         y = _finite(y_mm, "y_mm")
@@ -282,29 +326,14 @@ class MachineControl:
             (x, y + height),
             (x, y),
         ]
-        # `-f` (force) is the whole repair here. Without that flag `move_absolute` refuses
-        # as soon as the spooler is not idle (`core/spoolers.py:243`), and after the first
-        # corner the head is of course on its way: measured on a real machine the head went
-        # to the top left and the next four corners came back as "Busy Error". With the flag
-        # they go into the queue and follow each other neatly. Nothing can jump the queue:
-        # that no job is running has already been checked above.
-        output = []
-        for hx, hy in corners:
-            resultaat = self.runner.run(f"move_absolute -f {_mm(hx)} {_mm(hy)}")
-            output.extend(resultaat if isinstance(resultaat, list) else [resultaat])
-
-        # The message stays as a safety net, but should no longer go off: since the corners
-        # go into the queue with `-f`, nothing refuses any more.
-        busy = [r for r in output if "busy" in str(r).lower() or "error" in str(r).lower()]
+        # How the corners go out is the link's: `EngineLink.trace` puts them in the
+        # engine's queue with `move_absolute -f`, `RuidaLink.trace` sends them over our
+        # own line. That no job is running has already been checked above.
+        output = on_the_line(self._link_for_the_machine().trace, corners)
         return {
             "output": output,
             "corners": len(corners),
-            "notice": (
-                "The machine reported it was busy; the frame may not have run "
-                "all the way. Try again when the head is standing still."
-                if busy
-                else None
-            ),
+            "notice": busy_notice(output),
         }
 
     def _bed_mm(self):
@@ -318,27 +347,27 @@ class MachineControl:
             return None
 
     def jog(self, dx_mm, dy_mm) -> dict:
-        self._require("move_relative")
+        self._require("move_relative", "jog")
         self._idle()
         dx = _finite(dx_mm, "dx_mm")
         dy = _finite(dy_mm, "dy_mm")
         if dx == 0 and dy == 0:
             raise DesignError("A jog of zero does nothing.")
-        return {"output": self.runner.run(f"move_relative {_mm(dx)} {_mm(dy)}")}
+        return {"output": on_the_line(self._link_for_the_machine().move_by, dx, dy)}
 
     def focus(self, distance_mm) -> dict:
         """
         Moving the head up or down. Focusing is daily work: a new material
         thickness, a new height.
         """
-        self._require(FOCUS)
+        self._require(FOCUS, "focus")
         self._idle()
         distance = _finite(distance_mm, "distance_mm")
         if distance == 0:
             raise DesignError("A movement of zero does nothing.")
         if abs(distance) > 100:
             raise DesignError("More than 100 mm at once is not focusing.")
-        return {"output": self.runner.run(f"{FOCUS} {_mm(distance)}")}
+        return {"output": on_the_line(self._link_for_the_machine().focus, distance)}
 
     # ------------------------------------------------- bewaarde positions (J6)
 
@@ -607,7 +636,7 @@ class MachineControl:
         """
         self._idle(_motors_while_burning)
         self._require("unlock")
-        return {"output": self.runner.run("unlock")}
+        return {"output": on_the_line(self._link_for_the_machine().unlock)}
 
     def lock(self) -> dict:
         """Hold the motors again.
@@ -617,4 +646,4 @@ class MachineControl:
         """
         self._idle(_motors_while_burning)
         self._require("lock")
-        return {"output": self.runner.run("lock")}
+        return {"output": on_the_line(self._link_for_the_machine().lock)}

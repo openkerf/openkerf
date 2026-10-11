@@ -7,9 +7,9 @@ A modern interface for a laser cutter, built on top of the
 
 MeerK40t drives the machine and does it well. OpenKerf is the part in front of it: a
 browser interface for drawing, laying out and burning, and a small API layer that talks
-to the engine through its `meerk40t.extension` entry point. The pinned engine currently
-requires the small Ruida session patch in `deploy/patches/ruida-session.patch`; Docker
-applies it during the build. See [engine setup](docs/running-in-docker.md) for local installation.
+to the engine through its `meerk40t.extension` entry point. The engine runs unpatched;
+for a Ruida, OpenKerf has its own network line to the controller (UDP), and every other
+laser is driven by the engine as it is.
 
 The machine it was written for is a 5030 CO₂ laser with a Ruida controller, and that is
 the machine it has cut and engraved on. Anything MeerK40t drives should work; only Ruida
@@ -42,9 +42,12 @@ screenshot taken by a script so the pages cannot quietly drift from the app.
 You need Python 3.9+ (developed on 3.14) and Node 20+.
 
 ```bash
-# install the patched engine first, as described in docs/running-in-docker.md
+# the engine at the revision deploy/Dockerfile pins (MEERK40T_REV), unpatched
+git clone https://github.com/meerk40t/meerk40t.git meerk40t
+git -C meerk40t checkout 5f68a45
 python3 -m venv .venv
-.venv/bin/pip install -e api
+.venv/bin/pip install -e meerk40t
+.venv/bin/pip install -e 'api[dev]' 'Pillow>=10' 'ezdxf>=1.1'
 
 # the API beside the engine, headless
 .venv/bin/meerk40t --no-gui -d -e "openkerf -p 8080"
@@ -57,6 +60,10 @@ The interface then runs on `http://localhost:5173` and talks to the API through 
 To reach it from a tablet next to the machine, start the engine with
 `openkerf -p 8080 -b 0.0.0.0`.
 
+Only one program may talk to a Ruida at a time. Stop any other OpenKerf, LightBurn or
+MeerK40t connected to the same controller before you connect this one; see
+[Running in Docker](docs/running-in-docker.md#one-program-per-controller).
+
 `openkerf -l <path>` gives the API a library file of its own, which is what you want for
 anything experimental: the library lives beside the engine's settings and is shared by
 every instance on the machine.
@@ -67,7 +74,7 @@ a Linux box beside the laser — see [Running in Docker](docs/running-in-docker.
 ## Tests
 
 ```bash
-.venv/bin/python -m pytest api/tests -q      # 1523 tests
+.venv/bin/python -m pytest api/tests -q      # about 1950 tests
 cd frontend && npx svelte-check              # types
 cd frontend && node --test tests/*.test.ts   # the promises the interface makes
 ```

@@ -4,7 +4,9 @@ Can the engine's Ruida device stay closed while OpenKerf owns the connection?
 We keep a MeerK40t Ruida device service for its settings, its bed and its RD encoding
 (`CommandRunner.build_job_bytes`, the `rdjob` encoders). In the new design that service
 must never open a session, a socket or a serial port towards the machine. Measured on
-this checkout (engine 5f68a45 with `deploy/patches/ruida-session.patch`):
+engine 5f68a45 with `deploy/patches/ruida-session.patch`, which OpenKerf shipped until
+phase 6 of the own-connection plan, and checked again on 5f68a45 as released, which is
+what the image installs now. Where the two differ, it says so.
 
 **What opens, and when** (`test_today_activation_opens_a_session_that_outlives_the_device`)
 
@@ -21,20 +23,23 @@ this checkout (engine 5f68a45 with `deploy/patches/ruida-session.patch`):
   attempts in the first second; with `udp`, 2 `UDPTransport.open` per second — each one
   binds `("", 40200)` (`ruida/udp_transport.py:40`) and sends an ENQ — retried every
   0.5 s after a failure (`ruidasession.py:330-332`) for as long as nobody answers.
-- *Nothing closes it.* After switching the active device to the dummy: still 2 UDP opens
-  in the next second (`RuidaDevice` has no `service_detach`). After `kernel()` shutdown:
-  still 2 per second, with the handshaker and the status monitor alive.
+- *Nothing closes it.* After switching the active device to the dummy the session is
+  still the device's and its handshaker still runs (`RuidaDevice` has no
+  `service_detach`); after `kernel()` shutdown too. With the patch it went on opening
+  UDP, 2 per second; as released, a refused UDP open is not retried (the worker keeps
+  writing into the closed transport, `ruidasession.py:256-272`) but the thread lives on.
 - `ruida_connect` (`device.py:452-457`) calls `active_session.open()` again.
 - An `interface` that is neither `usb` nor `udp` does not close it either. Measured
   during this investigation with `interface = "none"`: the session and its thread are
   created all the same, and the worker fails on "Unsupported interface"
   (`ruidasession.py:293-294`) every 0.5 s — generation 3 after 1.5 s — each time calling
   `recv(None)` and signalling "Disconnected".
-- The unpatched engine (5f68a45 as released, exported and run separately) does the same
-  at activation: a session, a handshaker thread and 2 `USBTransport.open` attempts within
-  1.5 s. Switching it to `udp` with `interface_update` hung for more than 120 s; its
-  `shutdown()` busy-waits on `_is_shutdown` (upstream `ruidasession.py:126`), which is the
-  likely place, not measured further.
+- The engine as released does the same at activation: a session, a handshaker thread
+  and USB open attempts within the first second. Its `shutdown()` busy-waits on
+  `_is_shutdown` (`ruidasession.py:123-130`), which only the handshaker's last line sets:
+  a worker that died on an exception leaves it spinning for ever. Measured once while
+  investigating, switching such a device to `udp` with `interface_update` hung for more
+  than 120 s. Hence `stop()` below, which never calls that `shutdown()`.
 
 So the session must never be *created*; shutting it down after activation races a worker
 that has already started opening, and a session left bound to 40200 would hold the very
@@ -43,15 +48,18 @@ port our own transport needs.
 **The mechanism** (`test_a_closed_session_keeps_the_device_closed`)
 
 `device.py` imports `RuidaSession` once (`device.py:20`) and constructs it in exactly one
-place (`:409`). Replacing that module attribute with `ClosedSession` below, *before* any
+place (`:409`). Replacing that module attribute with `ClosedSession` (`openkerf_api/ruida/closed.py`), *before* any
 Ruida device activates, keeps everything shut: 0 real sessions, 0 transport opens, no
 socket bound and no handshaker thread, also after `interface = "udp"` + `interface_update`,
 `ruida_connect`, `ruida_disconnect`, `ruida_connect`. The live status monitor made 0
-writes in 3.6 s (it only polls while `connected`, `controller.py:177`). A realtime
+writes in 3.6 s (it only polls while `connected`, `controller.py:172`). A realtime
 `pause` reached `ClosedSession.write` once, which raises `ConnectionError`, and
-`RDJob.__call__` swallows exactly that (`ruida/rdjob.py:576-580`). `connected`,
-`is_busy` and the controller's `is_busy` all read `False`, so the API's shutdown wait
-(`server.py`, `_wait_for_the_machine_to_go_quiet`) returns at once.
+`RDJob.__call__` swallows exactly that (`ruida/rdjob.py:576-580`). The device's
+`connected` and `is_busy` read `False`. The controller's own `is_busy` does not, as
+released: its status monitor sets `_waiting` on the not-connected branch and nothing
+clears it (`controller.py:186-189`; the patch cleared it). Nothing of ours reads it: the
+API's shutdown no longer waits on the engine's controller (that wait only ever served the
+engine's Ruida line), and a Ruida's busy state is our own session's.
 
 **The bytes** (`test_build_job_bytes_and_the_encoders_are_unchanged`)
 
@@ -84,62 +92,14 @@ from meerk40t.ruida.ruidatransport import TransportError
 
 from conftest import _bootstrap
 from openkerf_api.commands import CommandRunner
+# Proposed here first, and since phase 2 of the plan installed by our plugin at
+# `register` for every kernel (`openkerf_api/ruida/closed.py`). The measurements of
+# today's behaviour below therefore put the engine's own `RuidaSession` back after
+# `_bootstrap()`, which is where the plugin installs the closed one.
+from openkerf_api.ruida.closed import ClosedSession
 
-
-class ClosedSession:
-    """
-    The proposed stand-in for `RuidaSession` on the engine's Ruida device.
-
-    It carries what the device, the controller and our own layer read off
-    `active_session` — `interface` (compared by `interface_update`, `device.py:401`),
-    `connected`, `is_connecting`, `is_busy`, `supports_write_completion`, `set_timeout`,
-    `location` — and opens nothing. `write` raises `ConnectionError` rather than
-    returning quietly, because that is the one exception `RDJob.__call__` drops
-    (`rdjob.py:579`) and the patched `_data_sender` reports (`controller.py:134`).
-    """
-
-    supports_write_completion = True
-    connected = False
-    is_connecting = False
-    is_busy = False
-    is_open = False
-    generation = 0
-    transport = None
-
-    def __init__(self, service):
-        self.interface = service.interface
-        self.writes = 0
-
-    def set_swizzles(self, swizzle, unswizzle):
-        pass
-
-    def open(self):
-        pass
-
-    def connect(self):
-        pass
-
-    def close(self):
-        pass
-
-    def abort_connect(self):
-        pass
-
-    def shutdown(self, *args, **kwargs):
-        pass
-
-    def update_connect_status(self):
-        pass
-
-    def set_timeout(self, seconds):
-        pass
-
-    def location(self):
-        return "closed"
-
-    def write(self, data, *, expected_generation=None):
-        self.writes += 1
-        raise ConnectionError("The engine's Ruida device does not talk to the machine.")
+#: These measurements construct the engine's own session on purpose (see `conftest.py`).
+ENGINE_RUIDA_SESSION_ALLOWED = True
 
 
 class _Halt:
@@ -177,6 +137,26 @@ def halt(*controllers):
             assert not thread.is_alive()
     finally:
         threading.excepthook = previous
+
+
+def stop(session):
+    """
+    End a real engine session's handshaker, bounded, on either engine.
+
+    The patched session's `shutdown()` is a bounded join. The released one's is
+    `while not self._is_shutdown: continue` (`ruidasession.py:123-130`), and only the
+    handshaker's last line sets that flag — so it is not called here: the flag the loops
+    watch is set, the thread joined with a limit, the transport closed.
+    """
+    thread = session._handshake_thread
+    if hasattr(session, "_state"):  # the patched session
+        session.shutdown()
+    else:
+        session._shutdown = True
+        if thread is not None:
+            thread.join(3)
+        session.close()
+    assert thread is None or not thread.is_alive()
 
 
 @pytest.fixture(autouse=True)
@@ -278,10 +258,12 @@ def encoded(device):
 
 def test_today_activation_opens_a_session_that_outlives_the_device(monkeypatch):
     """The problem, measured with every open refused before it reaches a socket:
-    nothing at service start, a session and a worker at activation that keeps opening
-    the transport — 2 per second — through a device switch and a kernel shutdown."""
+    nothing at service start, a session and a worker at activation that opens the
+    transport, and that worker still running after a device switch and a kernel
+    shutdown."""
     opens = Opens(monkeypatch, refuse=True)
     kernel = _bootstrap()
+    monkeypatch.setattr(ruida_device_module, "RuidaSession", ruidasession.RuidaSession)
     device = session = None
     try:
         kernel.console("service device start ruida\n")
@@ -299,25 +281,27 @@ def test_today_activation_opens_a_session_that_outlives_the_device(monkeypatch):
         time.sleep(1.0)
         assert opens.of(device)["usb"] >= 1  # 2 measured
 
+        # Away from USB before the switch: the released `shutdown()` that
+        # `interface_update` calls (`device.py:405`) waits for the handshaker, which
+        # ends within its 1 s retry sleep while every open is refused.
         device.address = "127.0.0.1"
         device.interface = "udp"
         kernel.console(".interface_update\n")
         session = device.active_session
         time.sleep(1.0)
-        assert opens.of(device)["udp"] >= 1  # 2 measured
+        assert opens.of(device)["udp"] >= 1  # 2 measured with the patch, 1 without
 
         kernel.console("device activate 0\n")
         assert kernel.device is not device
-        before = opens.of(device)["udp"]
         time.sleep(1.0)
-        assert opens.of(device)["udp"] > before  # 2 more measured
+        assert device.active_session is session
+        assert session._handshake_thread.is_alive()
     finally:
         kernel()
         if session is not None:
-            before = opens.of(device)["udp"]
-            time.sleep(1.0)
-            assert opens.of(device)["udp"] > before  # 2 more measured, after kernel shutdown
-            session.shutdown()
+            time.sleep(0.5)
+            assert session._handshake_thread.is_alive()  # after kernel shutdown too
+            stop(session)
         if device is not None:
             halt(device.driver.controller)
 
@@ -354,8 +338,7 @@ def test_a_closed_session_keeps_the_device_closed(monkeypatch):
         assert opens.of(device) == {"udp": 0, "usb": 0, "session": 0}
         assert opens.binds_from_new_threads() == []
         assert opens.new("_ruida_handshaker") == []
-        assert (device.connected, device.is_busy, device.driver.controller.is_busy) == (
-            False, False, False)
+        assert (device.connected, device.is_busy) == (False, False)
     finally:
         kernel()
         if device is not None:
@@ -374,6 +357,9 @@ def test_build_job_bytes_and_the_encoders_are_unchanged(monkeypatch):
         if label == "closed":
             monkeypatch.setattr(ruida_device_module, "RuidaSession", ClosedSession)
         kernel = _bootstrap()
+        if label == "today":
+            monkeypatch.setattr(
+                ruida_device_module, "RuidaSession", ruidasession.RuidaSession)
         device = runner = None
         try:
             kernel.console("service device start ruida -i\n")
@@ -397,8 +383,8 @@ def test_build_job_bytes_and_the_encoders_are_unchanged(monkeypatch):
         finally:
             session = getattr(device, "active_session", None)
             kernel()
-            if session is not None:
-                session.shutdown()
+            if isinstance(session, ruidasession.RuidaSession):
+                stop(session)
             build = runner._upload_driver if runner is not None else None
             halt(device.driver.controller if device is not None else None,
                  build.controller if build is not None else None)

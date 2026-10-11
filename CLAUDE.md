@@ -10,17 +10,67 @@ are repeated below.
 
 ## Pending hardware validation
 
-Steps 1–2 (Ruida connection repair and honest connection status) are **not yet validated
-on the physical controller**. Validate at home on the Ubuntu Docker host and Cisco
-switch: idle polling, explicit disconnect/reconnect, interrupted UDP, and upload without
-starting. Offline tests and UI work do not close this task.
+A Ruida is driven over **our own line**, not the engine's: `api/openkerf_api/ruida/`
+(transport, framing, session, monitor, link, encode) behind `MachineLink` in
+`api/openkerf_api/link.py`. Validated on the KH-5030 (RDC6442S, UDP, no other client on
+the controller), 11 October 2026:
+
+- connect and status: 96 of 96 memory reads answered within 3–5 ms over 20 s, one
+  probe; status words seen: idle 0 and 67072, moving 16975360, running 66561 and 66565,
+  paused 66563;
+- upload without starting: 433 bytes in one block, every packet acknowledged, the file
+  on the panel;
+- move, jog, frame and physical home; the panel agreed to 0.1 mm. The engine's jog
+  clamp had the X sign wrong and is repaired in `ruida/encode.py`;
+- burning: three squares on 3 mm plywood at 15 %, each whole;
+- a raster burn (filled 20 × 10 mm, 150 mm/s, 15 %): 12,177 bytes in 13 blocks of up
+  to 1010 bytes (the engine's block rule, `ruida/framing.py`), all acknowledged within
+  about 0.1 s, burn about 77 s, evenly light — so the first-layer speed repair
+  (`ruida_speed.py`) holds on the machine, and blocks just over 1000 bytes are
+  accepted. Streaming is not the bottleneck. "Done" came 0.6 s after the controller
+  read idle;
+- pause and resume during a job: no dark spot, no visible gap;
+- stop (`D8 01`) during a job: acknowledged in 6 ms, the burn ends there. It does
+  **not** stop a plain move, jog or frame already under way — a move to (200, 100) mm
+  ran on to the end after a stop acknowledged in 7 ms. For a move, the machine's own
+  stop is the stop, and the interface must not suggest otherwise.
+
+Not yet measured, and not to be claimed until it is:
+
+- focus (`D8 2E`): the distance is not encoded; it may start the controller's
+  autofocus routine;
+- a cable pulled mid-job, and mid-upload (the "N of M blocks" sentence on hardware);
+- the 3.9–4.6 s idle silences cited in `status.py` (`StatusReader.connection`) were
+  measured while a second client was probably on the controller. Re-measure with one
+  client before they stay as a property of the controller.
+
+## One program per Ruida controller
+
+Only one program may talk to a Ruida at a time: this OpenKerf, *or* another OpenKerf,
+LightBurn or MeerK40t — never two. Measured on the KH-5030 from the Mac while an older
+OpenKerf container on another host polled the same controller every 0.2 s: about 60 %
+of reads answered, 1 of 12 at a 2 s interval, ACKs taking 30–440 ms. With that container
+stopped: 32 of 32 reads on a bare socket and 96 of 96 through `RuidaLink`, ACK and
+answer within 3–5 ms. The symptom is acknowledged reads that never get their answer —
+not a dead line, so the session fails only that read (`ruida/session.py`), and
+`ruida/monitor.py` (`SecondClient`) turns it into a warning: 5 or more of the last 20
+acknowledged status reads unanswered raises `ruida.secondClient`, 1 or fewer clears it;
+reads without an ACK (homing) do not count. The status bar then reads "Connected, but
+not alone". Therefore a
+deploy stops the old container before the new one starts, and every measurement on the
+machine is taken with all other clients stopped.
 
 ## What this is
 
 A browser interface and an API layer **beside** the MeerK40t engine.
-OpenKerf loads through `meerk40t.extension`. The user-approved Ruida connection repair
-is maintained as `deploy/patches/ruida-session.patch` against engine `5f68a45`; Docker
-applies it before installation. Keep engine fixes reviewable for upstream submission.
+OpenKerf loads through `meerk40t.extension`, against the **unpatched** engine at the
+revision `deploy/Dockerfile` pins (`MEERK40T_REV`, `5f68a45`). The engine designs,
+plans and encodes. For a Ruida the bytes it makes go out over OpenKerf's own UDP line
+(`ruida/`, ports 50200/40200, a numeric IPv4 address only), and the engine's own Ruida
+session is replaced by an inert one at plugin register (`ruida/closed.py`) so it never
+opens the port. There is no switch per machine: a Ruida always uses our line, and every
+other laser runs through the engine as before (`EngineLink`). A Ruida over USB is not
+supported. Keep generic engine fixes reviewable for upstream submission.
 
 - `api/openkerf_api/` — FastAPI routes and the engine seam. Refusals are whole sentences
   with a code (`DesignError("...", code="draw.emptyText")`); the code travels in the
@@ -119,7 +169,7 @@ Generic fixes belong upstream as pull requests, not in this repository.
 | **Every pass becomes an extra layer in an RD file** | `core/cutplan.py` (`_blob_convert`) → `ruida/rdjob.py:1434` | In copy mode — which Ruida needs, since its driver never reads `cutobject.passes` — each pass gets its own settings dict, and the RD writer groups layers by that dict's identity. Measured on the real stream: a 4-cell board went from 4 layers to 8 with two passes; a 16-cell board from 17 to 33, and then the controller says "file invalid" and stands still. `CommandRunner._share_pass_settings` lets the copies share one dict after `blob`. |
 | **`save_job` writes a 4-byte file** | `ruida/device.py:603` → `ruida/rdjob.py:627` | The driver's commands land in the RDJob's own buffer, and that buffer is only drained when the RDJob itself is executed. `save_job` redirects `controller.write` to a file and never runs it. Measured on a 40×20 mm rectangle in a cut layer: 4 bytes through `controller.write`, 623 still in the buffer — a complete job, ending in `SET_FILE_SUM` and `END_OF_FILE`. |
 | **A Ruida cannot be handed a job to keep in memory** | `ruida/rdjob.py:2030` | `document_file_upload` exists and has **no callers** anywhere in the engine — the opcodes are there, the conversation is not. So "send the file, start it from the panel" is not available. |
-| **The Ruida's send thread writes on a closed connection** | `ruida/controller.py:128` | `_data_sender` drains its queue without checking the session, so a connection lost with data still queued kills the thread with `ConnectionError` in the user's log. The session patch now makes `_data_sender` await each packet completion and release its job lock on failure; `ApiServer.stop()` also retains its bounded idle wait. |
+| **The Ruida's send thread writes on a closed connection** | `ruida/controller.py:128` | `_data_sender` drains its queue without checking the session, so a connection lost with data still queued kills the thread with `ConnectionError` in the user's log. **No longer in our path:** a Ruida's bytes go over our own line (`ruida/session.py`: one worker owns the socket, every packet has a Future), and the engine's session is replaced by an inert one (`ruida/closed.py`), so its send thread never runs. |
 | **The coolant method "popup" blocks the laser thread on stdin** | `extra/coolant.py:275` → `kernel/kernel.py:4217` | Outside the wxPython GUI `kernel.yesno` is a plain `input()`. On a Ruida `popup` is the only claimable method, so setting air assist puts `coolant_on` in the plan and the spooler thread waits for a key nobody presses. `Drawing.LOZE_COOLANTS` refuses it. |
 | **`copy(op_node)` gives a layer with no children** | `core/node/` | Measured: one child before the copy, none after. A copied layer in a plan burns nothing, and you find that out on material. Putting the same node in the plan list twice does work — `blob` makes fresh cutcode per place — and that is the route our Z-step-per-pass uses. |
 | **Copied shapes keep the original's bounding box** | `core/elements/grid.py:240,360`; `core/elements/clipboard.py:127` | `copy(node)` followed by a raw `matrix *=` tells the node nothing, so `bounds` points at the old place while `as_geometry()` gives the new one: you click a copy, it gets its selection frame, and the handles appear around the original. We ask the nodes to forget their bounds (`generators.py:_recalculate_bounds`, `drawing.py:clipboard_paste`). |
@@ -139,8 +189,9 @@ Generic fixes belong upstream as pull requests, not in this repository.
 | **`path "<d>"` scales the d-string** | `core/elements/` | A `d` in Tats comes out about 725× too large. To place a path in real units, hang a `Geomstr` on `elem_branch` directly. |
 | **The grbl mock swallows every other move** | `grbl/mock_connection.py` + `grbl/controller.py` | With `interface = mock` the first move lands and the next snaps the position back to home, strictly alternating; after a few commands nothing moves at all. Usable to see whether a command arrives, not to replay a sequence of moves. |
 | **The font list remembers files that are gone** | `extra/hershey.py` | The list is built once and refreshed on request, so a deleted typeface stays in it. Our picker showed the row, fetched the file for a preview and got a 409. `drawing.fonts` drops rows whose absolute path does not exist — only absolute ones, because the engine's own Hershey fonts are listed as bare names. |
-| **Ruida session ownership and recovery (patched)** | `deploy/patches/ruida-session.patch` | The unpatched monitor and session could both reconnect/read, queue stale polls, and fail to retry UDP binds. The patch gives one worker ownership of transport I/O, explicit disconnect/reconnect, bounded poll traffic, and per-packet completion. Uploads wait for that completion and never purge unrelated commands. Missing ACKs fail uncertain writes without replay. UI connectivity is independent of local job state and has no eight-second masking. Hardware validation is still required. |
-| **Ruida UDP ACKs have no transaction identifier** | `ruida/ruidasession.py` | A very late duplicate ACK cannot be perfectly correlated with a new request. Offline tests prove ordering and failure handling, not exactly-once execution by a physical controller. Use the configured numeric controller IP to avoid hostname resolver delays. |
+| **The engine's Ruida session: two owners of one socket** | `ruida/ruidasession.py`, `ruida/controller.py` | The monitor and the session could both reconnect and read, stale polls queued up, UDP binds were not retried. We carried a 1,276-line patch for it until phase 6 of the own-line plan; now the engine runs **unpatched** and a Ruida never touches this code: `ruida/closed.py` swaps in an inert session at plugin register. Our own `ruida/session.py` keeps the patch's semantics — one worker owns all I/O, explicit disconnect stays disconnected, a Future per write, a NAK resent a bounded number of times, a missing ACK never replayed, a file pinned to one session generation. |
+| **Ruida UDP ACKs have no transaction identifier** | the protocol; `api/openkerf_api/ruida/session.py` | A very late duplicate ACK cannot be told from a fresh one. Our session keeps one packet in flight and throws away what is waiting before each new one; offline tests prove ordering and failure handling, not exactly-once execution by a physical controller. The address must be a numeric IPv4 (`ruida/transport.py` refuses a host name): no resolver on the worker that also owns shutdown. |
+| **A Ruida jog to the right from X = 0 disappears** | `ruida/driver.py:339-355` (`RuidaDriver.move_rel`, its `confined` clamp) | The clamp computes the new X as `x - dx` where `+dx` is `+X`. Measured on the KH-5030: at (0, 0) a +10 mm X jog became `C9 02` and no move; from (50, 30) the same jog took the panel from 49.9 to 59.9. Y is right. `ruida/encode.confine` repeats the clamp with the sign repaired; the engine's own path still has it. |
 
 Not the engine's bugs, but worth knowing:
 
@@ -163,7 +214,8 @@ mistake is found before the material is in the machine, and none of them touch t
 
 User chose native Mac operation and stopped Debian network investigation.
 Use the existing Mac KH-5030 profile and library; do not migrate Docker data.
-See docs/running-on-mac.md and Start OpenKerf.command. Structural session and
-Job sidebar changes are retained; experimental read retry stays separate.
-Steps 1/2 still need physical link interruption and upload-without-start checks.
+See docs/running-on-mac.md and Start OpenKerf.command. Its `.venv` holds the
+unpatched engine at the pinned revision; the Ruida line is OpenKerf's own (see
+"Pending hardware validation"). Mac and Docker host must not both be connected to
+the KH-5030 (see "One program per Ruida controller").
 Do not resume Debian experiments without a new request.

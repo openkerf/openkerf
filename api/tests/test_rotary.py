@@ -303,12 +303,32 @@ def test_a_wild_measurement_is_refused_with_its_numbers(client):
 # ------------------------------------------------------------------- safety
 
 
-def test_homing_is_refused_while_the_rotary_is_on(client, kernel):
+def test_homing_is_refused_while_the_rotary_is_on(kernel, tmp_path, monkeypatch):
     """
     With a chuck fitted, homing Y drives the head into it. The refusal sits in the API and
     not only in the interface: a second tab, a phone or a curl command comes straight past
     a greyed-out button.
+
+    A Ruida's home goes over our own line since phase 4; a link that records stands in
+    for it, so what is counted is which homes reached the line: the first and the forced
+    one, never the two refused.
     """
+    from openkerf_api import link as link_module
+
+    from test_machine_link import FakeLink
+
+    made = []
+    monkeypatch.setattr(
+        link_module.Links, "_make", lambda self, device: made.append(FakeLink(device)) or made[-1]
+    )
+    kernel.console("service device start ruida -i\n")
+    with TestClient(ApiServer(kernel, library_path=tmp_path / "o.db").build_app()) as client:
+        _homing_is_refused_while_the_rotary_is_on(client)
+    homes = [c for link in made for c in link.calls if c != "close"]
+    assert homes == [("home", False), ("home", False)]
+
+
+def _homing_is_refused_while_the_rotary_is_on(client):
     assert client.post("/api/machine/home", json={}).status_code == 200
 
     client.post(

@@ -109,6 +109,41 @@ def split(payload: bytes, limit: int = MAX_PAYLOAD) -> list[bytes]:
     return out
 
 
+#: The engine's threshold for a job block (`ruida/controller.py:88`, `total > 1000`).
+JOB_THRESHOLD = 1000
+
+
+def job_blocks(payload: bytes) -> list[bytes]:
+    """A job file in the blocks the engine streams it in, byte for byte.
+
+    `RuidaController.divide_data_into_queue` (`ruida/controller.py:84-95`), on the
+    commands `parse_commands` cuts — which, measured on the four golden files, are
+    exactly the entries of the engine's `RDJob.buffer` (171, 850, 70 and 59 of them,
+    one `write_command` per command). Its rule, reproduced with its quirk: it adds
+    each command's length to a running total; when the total passes 1000 the block
+    closes *before* that command, which opens the next block — and the total restarts
+    at 0, not at that command's length. So the first block is at most 1000 bytes and
+    every later one may run over by the length of its first command: the golden
+    raster file goes out as 1000, 1003, 1003 and 619 bytes, where `split` would make
+    1000, 1000, 995 and 630.
+
+    `split` keeps `ruida_upload`'s own rule for uploads; a job goes out as the engine
+    sent it. The one place we part from the engine: a first command over 1000 bytes
+    would make it queue an empty block (`get_contents(0, 0)`), which we leave out.
+    """
+    commands = [bytes(command) for command in parse_commands(payload)]
+    out: list[bytes] = []
+    last = total = 0
+    for index, command in enumerate(commands):
+        total += len(command)
+        if total > JOB_THRESHOLD:
+            out.append(b"".join(commands[last:index]))
+            last, total = index, 0
+    if last != len(commands):
+        out.append(b"".join(commands[last:]))
+    return [block for block in out if block]
+
+
 def memory_address(payload: bytes) -> bytes | None:
     """The two-byte address when `payload` is a memory read, else None.
 

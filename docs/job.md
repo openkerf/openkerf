@@ -222,23 +222,22 @@ another file of yours is already on its way to the same machine. "This machine i
 already being sent a file. Wait until that one is done and press again; nothing has
 been sent." Two at once interleave into one file made of two jobs.
 
-Sending holds the engine's status monitor off while the file is transferred. Existing
-commands are allowed to finish; the queue is never cleared to make room for a file.
-If the line cannot be claimed within two seconds, the request refuses before sending.
+While the file goes out, OpenKerf stops asking the machine for its status, so
+nothing of its own lands between two packets of the file. A command already on its
+way finishes first; nothing is thrown away to make room. If the line cannot be had
+within two seconds, the request refuses before anything is sent.
 
-Every UDP packet waits for the controller's acknowledgement before the next packet is
-submitted, including the final packet. USB has no equivalent ACK: there the engine
-confirms that its transport write completed. Neither result proves a physical burn.
-A missing acknowledgement stops the transfer and reports its uncertain outcome;
-the app does not resend that packet or continue the file after reconnecting.
+Each packet waits for the controller's acknowledgement before the next one goes,
+the last one included. An acknowledgement says the controller took the packet, not
+that anything burned. A packet that is not acknowledged stops the transfer, and the
+sentence says what is then on the panel; OpenKerf never sends that packet a second
+time, and never carries on with the rest of the file after reconnecting.
 
-A disconnected session is given up to eight seconds to reconnect before an upload
-begins. This does not hide the disconnection on screen. If it stays disconnected:
-"There is no connection to the machine, so the file cannot be sent. Connect first;
-nothing has been sent."
-
-Sending requires the bundled Ruida session update. An older engine refuses before
-sending any bytes instead of guessing whether its queue has drained.
+Sending needs a connected machine. A line that is reconnecting by itself — after a
+short silence of the controller — is waited for, up to eight seconds; a machine
+that is simply not connected is refused at once, because nothing is going to
+connect it: "There is no connection to the machine, so the file cannot be sent.
+Connect first; nothing has been sent." Press **Connect** and send again.
 
 The refusal for a job on the machine is written out as a whole sentence as well — "A
 job is on this machine — burning, or waiting in the queue to start. Wait until it is
@@ -289,22 +288,22 @@ the four you get but what actually went down the line:
 The first two both say "0 of 6 blocks" and ask for opposite things, which is why
 they are two sentences and not one.
 
-#### What has not been tried on a real machine yet
+#### What has been tried on a real machine
 
-Honest about the state of this: the whole conversation was built and measured
-against the engine's own Ruida emulator — the file arrives there byte for byte
-identical to the job OpenKerf built for it, with no parse failures. Two things
-that sentence is careful about. There is no `.rd` file to compare against:
-OpenKerf does not export one, and no button or route here writes one — what is
-compared is the bytes the app builds to send. And "identical" is minus one
-command: `SET_FILE_SUM`, which the emulator answers itself instead of putting in
-the job. Measured on one build: 5462 bytes sent, 5455 kept, the difference
-exactly that one command.
+On the KH-5030 (a Ruida RDC6442S on the network), with no other program connected
+to it: a 20 × 10 mm rectangle under the name `OKTEST` went over in one block of 433
+bytes, every packet acknowledged within 0.02 s, the laser did not start, and the
+panel listed the file under that name.
 
-What nobody has measured yet is a **real** Ruida controller: whether it accepts
-the file the same way, and what its panel makes of the name. If you are the first to try it,
-look at the panel before you burn: the name it lists, and whether the file it
-holds is the one you sent.
+Before that the conversation was built and measured against the engine's own Ruida
+emulator, where the file arrives byte for byte identical to the job OpenKerf built
+for it — minus `SET_FILE_SUM`, which the emulator answers itself instead of keeping:
+measured on one build, 5462 bytes sent and 5455 kept. There is no `.rd` file to
+compare against; OpenKerf does not export one.
+
+Not tried on the machine yet: a large file of many blocks, and a transfer cut off
+halfway by a pulled cable. Until then, the sentences under
+[When it stops halfway](#when-it-stops-halfway) are what the emulator showed.
 
 ### Nothing to burn
 
@@ -573,6 +572,48 @@ not depend on this.
   panel shows it as full and as **Done**, and the job stays in the queue until you
   clear it.
 
+### On a Ruida
+
+A job on a Ruida goes to the machine as one file, streamed over OpenKerf's own line,
+and the controller burns it as it arrives. That changes three things in the block
+above.
+
+- **No bar, no percentage, no time left.** The controller takes the file in faster
+  than it burns it, so the packets it has acknowledged say nothing about how far
+  the head has got: a percentage made of them would read 100 % over a burn with
+  minutes to go. The block shows the phase and leaves out what it cannot know.
+  For the same reason there is no alarm for a counter that stands still.
+- **Done means the machine said so.** A job counts as finished when the
+  controller reports that it is idle again, not when the last packet went out —
+  an acknowledged packet is not yet burned — and it does not linger in the queue
+  waiting to be cleared. After a job the KH-5030 drives the head back to 0,0 by
+  itself.
+- **A job that ends badly says why.** A transfer that breaks off, or a line that
+  goes while the machine has the job, ends the job with a sentence saying how many
+  packets went and what the machine may have burned; a notification says "The job
+  did not finish".
+
+A second job cannot start while one is on the machine: "A job is already on this
+machine. Wait until it is done, or stop it; nothing has been sent."
+
+#### What Stop does on a Ruida
+
+Measured on the KH-5030: **Stop ends a running job.** Burning a 40 × 40 mm square,
+a stop pressed 1.55 s in was acknowledged in 6 ms; the first side was whole, the
+second just begun, and then the head went to 0,0. The rest of the file is not sent.
+**Pause** and **Resume** in the middle of a 20 × 20 mm square left no dark spot and
+no visible gap.
+
+**Stop does not stop the head on a plain move.** A jog, a frame, **Go to a point** or
+**Home** that is already under way runs on to its end: a move to (200, 100) mm with
+Stop pressed 0.3 s in arrived at (200, 100) all the same. Stop does keep anything not
+yet sent from going, but for a head that is moving, the stop button on the machine
+is the stop.
+
+When the machine does not confirm a stop, the screen says so rather than assuming
+it: "Stopping was not confirmed by the machine. Press the stop button on the
+machine itself."
+
 ### Adjusting while it burns
 
 Some machines can be turned up or down mid-job. When yours can, **Adjust during
@@ -636,6 +677,15 @@ or power corrections are shown above the job, even while machine controls are cl
 with **Home** beside it. On a machine with a Z axis there are two more buttons in
 the same pad, **Z ↑** and **Z ↓**, for focusing. Every button follows the **Step
 size** below the pad: 0.1 mm, 1 mm, 10 mm or 50 mm.
+
+On a Ruida a move goes out over OpenKerf's own line and the machine's panel agrees
+with the screen to the tenth of a millimetre (measured: a move to 50, 30 mm reads
+49.9 / 29.9 on the panel). Two things to know there. The Stop button does not halt
+a move that is under way — see [What Stop does on a Ruida](#what-stop-does-on-a-ruida);
+keep a hand near the machine's own stop when you jog or frame. And **Z ↑** and
+**Z ↓** send the controller's focus command, which carries no distance: what a
+given controller does with it has not been measured yet, so try it the first time
+with nothing in the bed.
 
 **Unlock** releases the motors so you can push the head by hand, and **Hold** takes
 them back — the pair, so laying material down by hand does not end in homing the
@@ -772,26 +822,55 @@ The status bar reports the controller connection independently of the local job:
 - **Machine not connected** — the server is reachable but the controller is not confirmed connected.
 - **Connection unknown** — the driver does not report its connection.
 - **Connected to the laser** — the driver reports a confirmed connection.
+- **Connected, but not alone** — a Ruida that answers, while another program seems
+  to be talking to it as well; see below.
 
 Connection loss is shown immediately in the next status snapshot, even with a running
 or paused job. There is no eight-second green grace period. The job's progress and
 pause/stop controls remain separate; a local spooler entry is not proof of a working
 connection. Head coordinates are marked as last seen while the connection is unconfirmed.
 
-**Connect** asks the session worker to establish the connection. **Disconnect** keeps
-the repaired Ruida session disconnected until the user connects again. Its confirmation
-reads "Disconnect from the machine? Its physical state may change while disconnected;
-check it before reconnecting." Stop and inspect the machine itself if you cannot
-confirm its state through the connection.
+**Connect** opens the line to the machine. **Disconnect** closes it, and it stays
+closed until you press **Connect** again. Its confirmation reads "Disconnect from
+the machine? Its physical state may change while disconnected; check it before
+reconnecting." Stop and inspect the machine itself if you cannot confirm its state
+through the connection.
+
+**On a Ruida.** When OpenKerf starts and the active machine is a Ruida with an
+address, it tries to connect **once**, in the background. It does not try again: if
+the laser was off at that moment, the bar says the machine is not connected, and
+it stays that way until you switch the laser on and press **Connect**. Pressing it
+waits a few seconds for the controller's first answer; if none comes, the attempt
+is given up and the reason names the address that stayed silent. Once connected,
+a controller that goes quiet for a moment is reconnected by itself, but never
+after you disconnected on purpose.
+
+Only one program can talk to a Ruida at a time. If another OpenKerf, LightBurn or
+MeerK40t is connected to the same controller, the two lose each other's answers.
+OpenKerf notices that the controller acknowledges its status questions but leaves
+too many of them unanswered — 5 or more of the last 20 — and the status bar then
+reads **Connected, but not alone** instead of **Connected to the laser**, with a
+band under it: "Another program seems to be talking to this laser". Close the other
+program; the warning clears by itself a few seconds later, once 1 or fewer of the
+last 20 go unanswered. Questions the controller does not acknowledge at all, as
+while it homes, do not count. See
+[Running in Docker](running-in-docker.md#one-program-per-controller).
 
 **When it goes wrong.**
 
 - Some drivers open their own connection and have no button: "This device has no
   command to connect. Grbl, for instance, opens its connection itself as soon as
   work goes to it."
-- A failed attempt reports what the engine said, or, when it says nothing:
-  "Connecting did not work, and the engine does not say why. Is the machine on,
-  and is the address in the machine settings right?" The connection has not been confirmed.
+- A Ruida that does not answer: "Connecting to the Ruida did not work. Is the
+  machine on, and is the address in the machine settings right?" — or the same
+  opening followed by the reason, such as the address that stayed silent or an
+  address that is not a numeric IP. The address goes in the machine's settings as
+  digits, `192.168.0.4`; a Ruida is always reached over the network, so there is no
+  interface to choose.
+- On any other laser a failed attempt reports what the engine said, or, when it
+  says nothing: "Connecting did not work, and the engine does not say why. Is the
+  machine on, and is the address in the machine settings right?" The connection has
+  not been confirmed.
 - On the far right of the status bar, **Server connected** or **Server offline** — the
   line between this page and the server, which can break on its own.
 - If the server restarts while the page is open: "The server has restarted" and

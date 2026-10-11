@@ -47,7 +47,7 @@ if docker logs "$NAME" 2>&1 | grep -q smoke; then
   echo "   the token 'smoke' appears in docker logs"; exit 1
 fi
 
-echo "6. the patched Ruida completion API is installed"
-docker run --rm --entrypoint python "$IMAGE" -c "import inspect; from meerk40t.ruida.ruidasession import RuidaSession; assert RuidaSession.supports_write_completion; assert 'expected_generation' in inspect.signature(RuidaSession.write).parameters"
+echo "6. the engine's Ruida device can be kept closed (our own line talks to a Ruida)"
+docker run --rm --entrypoint python "$IMAGE" -c "from openkerf_api.ruida import closed; assert closed.install(); assert closed.installed()"
 
 echo "ok"

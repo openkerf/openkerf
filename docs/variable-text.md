@@ -500,9 +500,9 @@ the menu offers; only the matching is case-blind.
 Said plainly, because the alternative is finding out on material.
 
 - **Nobody has burned a series on real hardware.** Everything on this page is measured against
-  the engine, the cut plan and the cutcode the spooler is handed — which is as far as a
-  computer without a laser goes. Fifty plates is fifty jobs and therefore fifty handshakes on
-  a connection this handbook already describes as unpredictable, so make the first one **four
+  the engine and the cut plan — which is as far as a computer without a laser goes. Single
+  jobs have burned on a Ruida over OpenKerf's own line, but fifty plates is fifty jobs, each
+  a file sent to the machine, and that run has not been made. So make the first one **four
   rows on scrap**, watch the connection, and only then put customer stock in the machine.
 - **One plate per press, by design.** There is no unattended chaining and no queue of fifty.
 - **Burn order across pieces is not optimised.** One job per row means the pieces burn in row

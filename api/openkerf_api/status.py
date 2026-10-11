@@ -11,6 +11,11 @@ import time
 
 from meerk40t.core.units import UNITS_PER_MM, Length
 
+from .link import JOB_UNDER_WAY, is_ruida, job_on, link_for
+
+#: What `connection()` may answer; anything else from a link reads as "unknown".
+STATES = ("connected", "connecting", "disconnected", "unknown")
+
 #: Per machine, the reading last seen and the moment we first saw it.
 #:
 #: Keyed on the device's path, because `StatusReader` is built fresh for every
@@ -70,7 +75,7 @@ class StatusReader:
             "label": _attr(device, "label"),
             "path": _attr(device, "path"),
             "active": _attr(device, "path") == active_path,
-            "laser_status": _attr(device, "laser_status"),
+            "laser_status": self.laser_status(device),
             "paused": self.paused(device),
             "connection": self.connection(device),
             "line": self.line(device),
@@ -79,8 +84,25 @@ class StatusReader:
             "spooler": self.spooler_snapshot(device),
         }
 
-    @staticmethod
-    def paused(device):
+    #: A Ruida's `machine_state()` in the words the engine's families put in
+    #: `laser_status`, which is what the interface reads (`machineState` in `api.ts`).
+    _LASER_STATUS = {"idle": "idle", "moving": "active", "running": "active",
+                     "paused": "paused"}
+
+    def laser_status(self, device):
+        """
+        The engine families set `device.laser_status` from their controllers (grbl,
+        newly, balor). The engine's Ruida never does, and its driver no longer runs
+        anything since phase 4, so a Ruida answers from our own line; "unknown" there
+        is `None` here.
+        """
+        if is_ruida(device):
+            link = _safe(lambda: link_for(self.kernel, device), None)
+            state = _safe(link.machine_state, "unknown") if link is not None else "unknown"
+            return self._LASER_STATUS.get(state)
+        return _attr(device, "laser_status")
+
+    def paused(self, device):
         """
         Staat de machine stil op verzoek?
 
@@ -96,7 +118,18 @@ class StatusReader:
         lihuiyu/driver.py:325, ruida/driver.py:494, grbl/driver.py:869. No driver or no flag =
         `None`, because claiming "not paused" about a device that does not tell us is the same
         guess we already refuse to make about the connection.
+
+        A Ruida answers from our own line instead: the engine's driver no longer pauses
+        it, so its flag would say False through every pause. `machine_state()` is what
+        the controller last reported; "unknown" there is `None` here, for the same
+        reason as above.
         """
+        if is_ruida(device):
+            link = _safe(lambda: link_for(self.kernel, device), None)
+            state = _safe(link.machine_state, "unknown") if link is not None else "unknown"
+            if state == "unknown":
+                return None
+            return state == "paused"
         driver = _attr(device, "driver")
         if driver is None:
             return None
@@ -117,7 +150,8 @@ class StatusReader:
         somewhere else, and where no source exists at all we say "unknown" instead of
         guessing. A guess at "connected" is the very fault we are repairing.
 
-        `state` is er één van: "connected", "disconnected", "unknown".
+        `state` is er één van: "connected", "disconnected", "unknown" — and, for a
+        Ruida on our own link, "connecting" between asking and knowing.
 
         And it says how long it has read that way, because one reading is not
         enough to tell a machine that is off from one that is between two
@@ -136,44 +170,23 @@ class StatusReader:
         That is the honest thing it can say from here, and it is enough for the
         question it is asked.
         """
-        # Ruida (our target machine) has an explicit property; it is bound to the session
-        # layer and therefore the most reliable source there is.
-        ruida = _attr(device, "connected")
-        if isinstance(ruida, bool):
-            return self._aged(
-                device,
-                {
-                    "state": "connected" if ruida else "disconnected",
-                    "detail": None,
-                },
-            )
-
-        # Lihuiyu (K40 boards): the controller keeps a connection and a readable state
-        # ("connected", "Not Connected", "Unknown"...).
-        controller = _attr(device, "controller")
-        if controller is not None:
-            link = _attr(controller, "connection")
-            if link is not None and hasattr(link, "is_connected"):
-                open_ = _safe(link.is_connected)
-                if isinstance(open_, bool):
-                    return self._aged(
-                        device,
-                        {
-                            "state": "connected" if open_ else "disconnected",
-                            "detail": _attr(controller, "state"),
-                        },
-                    )
-            # Geen verbindingsobject = nog nooit geopend.
-            if hasattr(controller, "connection"):
-                return self._aged(
-                    device,
-                    {
-                        "state": "disconnected",
-                        "detail": _attr(controller, "state"),
-                    },
-                )
-
-        return self._aged(device, {"state": "unknown", "detail": None})
+        # A Ruida from our own link (`link.py`); every other laser from where its family
+        # keeps it, which `EngineLink.connection` reads exactly as this method used to.
+        link = _safe(lambda: link_for(self.kernel, device), None)
+        reading = _safe(link.connection, None) if link is not None else None
+        if not isinstance(reading, dict) or reading.get("state") not in STATES:
+            reading = {"state": "unknown", "detail": None}
+        aged = self._aged(
+            device, {"state": reading["state"], "detail": reading.get("detail")}
+        )
+        # A link may add a warning beside a working line — a Ruida with a second
+        # program talking to it (`ruida/monitor.py`, `SecondClient`). Present only
+        # while it stands, and only whole: a code and a sentence.
+        warning = reading.get("warning")
+        if (isinstance(warning, dict) and isinstance(warning.get("code"), str)
+                and isinstance(warning.get("message"), str)):
+            aged["warning"] = dict(warning)
+        return aged
 
     @staticmethod
     def _aged(device, reading: dict) -> dict:
@@ -196,13 +209,16 @@ class StatusReader:
         different faults: packets still queued, or a flag left standing. From
         outside the process they are indistinguishable — twice in one afternoon a
         cause was reasoned out from the symptom here and twice it was wrong. These
-        are the exact fields `RuidaUpload._line_is_busy` decides on, plus the
+        are the fields the upload's flow control decided on (for a Ruida now
+        `session.busy`, which `RuidaLink.send_file` waits on), plus the
         counters the engine already keeps and calls "Stats for test and debug"
         (`ruida/ruidasession.py:64`), so a measurement can replace the reasoning.
 
         Reading only, and defensively: this is a live object of the engine's, on a
         thread of its own, and a snapshot may never raise.
         """
+        if is_ruida(device):
+            return self._our_line(device)
         session = _attr(device, "active_session")
         if session is None:
             return None
@@ -218,6 +234,32 @@ class StatusReader:
             "replies": _attr(session, "replies"),
             "enqs": _attr(session, "enqs"),
             "dropped": _attr(session, "dropped_packets"),
+        }
+
+    def _our_line(self, device) -> dict | None:
+        """
+        The same fields off our own session (`ruida/session.py`), for a Ruida.
+
+        The engine's session on that device is `ClosedSession` and has nothing to say.
+        Ours keeps the counters under the same names, except `probes` for the engine's
+        `enqs` and `dropped` for its `dropped_packets`; its ACK and reply flags are not
+        exposed, so those two read `None`. `None` as a whole while nothing is open.
+        """
+        link = _safe(lambda: link_for(self.kernel, device), None)
+        session = _attr(link, "session")
+        if session is None:
+            return None
+        return {
+            "busy": _attr(session, "busy"),
+            "queued": _attr(session, "queued"),
+            "ack_pending": None,
+            "reply_pending": None,
+            "sends": _attr(session, "sends"),
+            "acks": _attr(session, "acks"),
+            "naks": _attr(session, "naks"),
+            "replies": _attr(session, "replies"),
+            "enqs": _attr(session, "probes"),
+            "dropped": _attr(session, "dropped"),
         }
 
     def bed(self, device) -> dict:
@@ -243,6 +285,19 @@ class StatusReader:
         guaranteed driver method and supplies the state flags; it returns
         ((native_x, native_y), state_major, state_minor).
         """
+        if is_ruida(device):
+            # From our own monitor, in the controller's micrometres — the units
+            # `device.native` gives for the engine's Ruida driver — so the device's own
+            # view turns it into millimetres as before. Not `device.current`: that is the
+            # engine driver's idea of the head, and the engine no longer moves it.
+            link = _safe(lambda: link_for(self.kernel, device), None)
+            native = self._as_pair(_safe(link.position) if link is not None else None)
+            return {
+                "native": native,
+                "mm": self._to_mm(device, native),
+                "state": None,
+            }
+
         native = self._as_pair(_attr(device, "native"))
         scene = self._as_pair(_attr(device, "current"))
         state = None
@@ -287,9 +342,13 @@ class StatusReader:
         return [scene[0] / UNITS_PER_MM, scene[1] / UNITS_PER_MM]
 
     def spooler_snapshot(self, device) -> dict:
+        link = _safe(lambda: link_for(self.kernel, device), None)
+        if _attr(link, "carries_jobs", False):
+            return self._line_snapshot(device, link)
         spooler = _attr(device, "spooler")
         if spooler is None:
-            return {"present": False, "idle": None, "queue_length": 0, "jobs": []}
+            return {"present": False, "idle": None, "queue_length": 0, "jobs": [],
+                    "ended": None}
 
         queue = _safe(lambda: list(spooler.queue), []) or []
         # The pause sits on the driver, not on the job (see `paused`). Passing it along here
@@ -299,6 +358,9 @@ class StatusReader:
         return {
             "present": True,
             "idle": _safe(lambda: bool(spooler.is_idle)),
+            # Only a link that carries jobs knows how its last job ended; the engine's
+            # spooler drops a job when it is through, whichever way.
+            "ended": None,
             "queue_length": len(queue),
             # Only the first in the queue is the job the driver is working on; what is
             # behind it is waiting its turn and is not paused.
@@ -306,6 +368,77 @@ class StatusReader:
                 self.job_snapshot(job, paused if index == 0 else False)
                 for index, job in enumerate(queue)
             ],
+        }
+
+    def _line_snapshot(self, device, link) -> dict:
+        """
+        The spooler's shape, read off a link that carries jobs (a Ruida, phase 5).
+
+        In the same fields so that every surface keeps reading one thing: `currentJob`,
+        `jobPhase` and the watchdog in the interface do not learn a second source. The
+        engine drops a job from its queue once it is through, so a link's job is listed
+        only while it is on the line (`JOB_UNDER_WAY`); how it ended is `ended`, for
+        "stopped" and "failed" with the link's sentence, so the interface can say why
+        a burn ended without a "done".
+        """
+        job = job_on(link) or {}
+        phase = job.get("phase")
+        ended = None
+        if phase in ("stopped", "failed"):
+            ended = {
+                "name": job.get("name"),
+                "phase": phase,
+                "detail": job.get("detail"),
+                "finished": job.get("finished"),
+            }
+        if phase not in JOB_UNDER_WAY:
+            return {"present": True, "idle": True, "queue_length": 0, "jobs": [],
+                    "ended": ended}
+        return {
+            "present": True,
+            "idle": False,
+            "queue_length": 1,
+            "jobs": [self.line_job_snapshot(job, self.paused(device))],
+            "ended": None,
+        }
+
+    #: A link's phase in the words `LaserJob.status` uses, which `jobStatusLabel` reads.
+    _LINE_STATUS = {"sending": "Running", "running": "Running", "paused": "Paused"}
+
+    def line_job_snapshot(self, job: dict, device_paused=None) -> dict:
+        """
+        `job_snapshot`'s fields for a link's `job()`.
+
+        `steps_done`/`steps_total` are the file's packets the controller confirmed —
+        what the line can count. `progress` stays `None`: a Ruida burns the file as it
+        arrives and takes it in faster than it burns it, so packets on the line are not
+        work on the material, and a percentage made of them would read 100 % over a
+        burn that has minutes to go. With `None` the interface says nothing rather than
+        something false, and the watchdog does not take a burn whose packets are all in
+        for one that stopped moving. No estimate either: the engine's lives on a
+        `LaserJob`, and this job never becomes one.
+        """
+        phase = job.get("phase")
+        started = job.get("started")
+        end = job.get("finished") or time.time()
+        elapsed = (
+            max(0.0, end - started) if isinstance(started, (int, float)) else None
+        )
+        paused = phase == "paused" or device_paused is True
+        return {
+            "label": job.get("name") or "",
+            "type": "RuidaJob",
+            "status": "Paused" if paused else self._LINE_STATUS.get(phase),
+            "priority": 0,
+            "running": phase in ("sending", "running") and not paused,
+            "paused": paused,
+            "steps_done": job.get("sent"),
+            "steps_total": job.get("total"),
+            "progress": None,
+            "loops_executed": None,
+            "loops": 1,
+            "elapsed_seconds": elapsed,
+            "estimate_seconds": None,
         }
 
     def job_snapshot(self, job, device_paused=None) -> dict:

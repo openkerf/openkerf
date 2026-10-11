@@ -14,19 +14,22 @@ side, in `ruida/emulator.py`, and that is where this module has it from:
 What does *not* happen here: starting. That you do on the machine's own panel.
 The app stays outside the one handling that burns; there is deliberately no
 route in this module that begins a job.
+
+The packets go down our own line, `MachineLink.send_file` (`link.py`, on a Ruida
+`RuidaLink`): one generation for the whole file, one packet confirmed before the
+next, the status monitor held off for the length of it. This module builds the
+packets, decides whether to send at all, and turns where the line stopped into
+the "N of M blocks" sentence; the line itself is the link's.
 """
 
-from concurrent.futures import Future, TimeoutError as ReceiptTimeout
 import time
-from contextlib import contextmanager
 
 from meerk40t.ruida.rdjob import parse_commands
-from meerk40t.ruida.ruidatransport import TransportError, TransportTimeout
 
 from .busy import sending_a_file, the_line_is_in_use
 from .commands import CommandRunner
 from .edits import DesignError
-from .status import _attr
+from .link import LineTaken, SendInterrupted, link_for
 
 #: The way the engine chops its own jobs (`ruida/controller.py:83`,
 #: `divide_data_into_queue`, which fills a block up to 1000 bytes and always cuts
@@ -158,16 +161,21 @@ class RuidaUpload:
             )
         return device
 
-    def _session(self):
+    def _link(self):
+        """The line to the active machine, once it is connected.
+
+        A link that is reconnecting on its own ("connecting": a Ruida riding out one of
+        its silences) is waited for, up to `line_gap_seconds`; one that is not open at
+        all is refused at once, because nothing is going to open it.
+        """
         device = self._device()
+        link = link_for(self.kernel, device)
         deadline = time.monotonic() + self.line_gap_seconds
         while True:
-            session = getattr(device, "active_session", None)
-            if session is None:
-                break
-            if getattr(session, "connected", False):
-                return session
-            if time.monotonic() > deadline:
+            state = link.connection().get("state")
+            if state == "connected":
+                return link
+            if state != "connecting" or time.monotonic() > deadline:
                 break
             time.sleep(self.poll_seconds)
         raise DesignError(
@@ -175,9 +183,6 @@ class RuidaUpload:
             "sent. Connect first; nothing has been sent.",
             code="upload.notConnected",
         )
-
-    def _write(self, data: bytes, *, session, generation) -> Future:
-        return session.write(data, expected_generation=generation)
 
     def _interrupted(
         self, sent: int, chunks: int, why: str, code: str, announced: bool
@@ -211,63 +216,6 @@ class RuidaUpload:
             values={"sent": sent, "chunks": chunks, "announced": announced},
         )
 
-    def _line_is_busy(self, session) -> bool:
-        # Admission only. Completion is proved by the Future, never this snapshot.
-        pending = getattr(session, "send_q", None)
-        return (pending is not None and not pending.empty()) or bool(session.is_busy)
-
-    @contextmanager
-    def _the_line_to_ourselves(self, session):
-        """Pause new status polls; let existing commands finish without deleting them."""
-        controller = _attr(_attr(self._device(), "driver"), "controller")
-        lock = _attr(controller, "_job_lock")
-        if lock is None:
-            yield
-            return
-        if not lock.acquire(timeout=self.line_claim_seconds):
-            raise DesignError(
-                "This machine is already being sent something on this line. Wait "
-                "until that is done and press again; nothing has been sent.",
-                code="upload.lineInUse",
-            )
-        try:
-            yield
-        finally:
-            lock.release()
-
-    def _wait_for_the_line(
-        self, session, sent: int, chunks: int, announced: bool
-    ) -> None:
-        deadline = time.monotonic() + self.per_chunk_seconds
-        gap_started = None
-        while True:
-            now = time.monotonic()
-            if not getattr(session, "connected", True):
-                if sent or announced or now > deadline:
-                    raise self._interrupted(
-                        sent, chunks, "stopped answering",
-                        code="upload.interrupted", announced=announced,
-                    )
-                if gap_started is None:
-                    gap_started = now
-                elif now - gap_started > self.line_gap_seconds:
-                    raise self._interrupted(
-                        sent, chunks, "stopped answering",
-                        code="upload.interrupted", announced=announced,
-                    )
-                time.sleep(self.poll_seconds)
-                continue
-            if gap_started is not None:
-                gap_started = None
-            if not self._line_is_busy(session):
-                return
-            if now > deadline:
-                raise self._interrupted(
-                    sent, chunks, "stopped taking the file",
-                    code="upload.stalled", announced=announced,
-                )
-            time.sleep(self.poll_seconds)
-
     def upload(self, name: str) -> dict:
         with sending_a_file(self.kernel) as claimed:
             if not claimed:
@@ -286,12 +234,15 @@ class RuidaUpload:
                 "the same connection that job uses. Nothing has been sent.",
                 code="upload.whileBurning",
             )
-        session = self._session()
-        if not getattr(session, "supports_write_completion", False):
+        link = self._link()
+        if not getattr(link, "carries_files", False):
+            # A Ruida always has `RuidaLink`, the one link that carries files; any
+            # other machine that is connected gets here, and is refused the way the
+            # build would refuse it (`CommandRunner.build_job_bytes`), before a byte
+            # is built or sent.
             raise DesignError(
-                "This engine cannot confirm packet delivery. Install the Ruida session "
-                "update before sending files; nothing has been sent.",
-                code="upload.engineUpgrade",
+                "This machine does not keep files in memory; that is a Ruida thing.",
+                code="upload.notRuida",
             )
         short = _checked_name(name)
         payload = self.runner.build_job_bytes()
@@ -312,40 +263,36 @@ class RuidaUpload:
                 code="upload.commandTooLong",
                 values={"block": oversized, "limit": CHUNK},
             )
-        with self._the_line_to_ourselves(session):
-            return self._send(session, packets, chunks, short, payload)
+        return self._send(link, packets, chunks, short, payload)
 
-    def _send(self, session, packets, chunks, short, payload) -> dict:
-        generation = session.generation
-        for index, packet in enumerate(packets):
-            sent = max(0, index - 2)
-            announced = index >= 2
-            self._wait_for_the_line(session, sent, chunks, announced)
-            try:
-                receipt = self._write(packet, session=session, generation=generation)
-            except (ConnectionError, OSError, TransportError, TransportTimeout) as exc:
+    def _send(self, link, packets, chunks, short, payload) -> dict:
+        """The packets down the link, and where it stopped as the "N of M" refusal.
+
+        `sent` counts blocks handed to the line, the two headers not among them: the
+        packet the link stopped at counts when it went out (its acknowledgement then
+        missing or late) and not when it never left. `announced` is whether the name
+        (packet 1) went out.
+        """
+        try:
+            link.send_file(packets, packet_seconds=self.per_chunk_seconds,
+                           claim_seconds=self.line_claim_seconds)
+        except LineTaken as exc:
+            raise DesignError(
+                "This machine is already being sent something on this line. Wait "
+                "until that is done and press again; nothing has been sent.",
+                code="upload.lineInUse",
+            ) from exc
+        except SendInterrupted as exc:
+            last = exc.index if exc.on_line else exc.index - 1
+            sent, announced = max(0, last - 1), last >= 1
+            # Each code written out where it is raised: `i18n.test.ts` finds them there.
+            if exc.stalled:
                 raise self._interrupted(
-                    sent, chunks, "stopped answering",
-                    code="upload.interrupted", announced=announced,
+                    sent, chunks, "stopped taking the file",
+                    code="upload.stalled", announced=announced,
                 ) from exc
-            if not isinstance(receipt, Future):
-                raise self._interrupted(
-                    max(0, index - 1), chunks, "did not confirm delivery",
-                    code="upload.interrupted", announced=index >= 1,
-                )
-            try:
-                receipt.result(timeout=self.per_chunk_seconds)
-            except ReceiptTimeout as exc:
-                # Cancel an unsent packet; never replay one whose ACK may be lost.
-                cancelled = receipt.cancel()
-                raise self._interrupted(
-                    sent if cancelled else max(0, index - 1), chunks,
-                    "stopped taking the file", code="upload.stalled",
-                    announced=announced if cancelled else index >= 1,
-                ) from exc
-            except (ConnectionError, OSError, TransportError, TransportTimeout) as exc:
-                raise self._interrupted(
-                    max(0, index - 1), chunks, "stopped answering",
-                    code="upload.interrupted", announced=index >= 1,
-                ) from exc
+            raise self._interrupted(
+                sent, chunks, "stopped answering",
+                code="upload.interrupted", announced=announced,
+            ) from exc
         return {"name": short, "bytes": len(payload), "chunks": chunks}
