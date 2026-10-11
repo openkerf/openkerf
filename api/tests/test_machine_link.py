@@ -334,15 +334,15 @@ def test_the_ruida_settings_sheet_has_no_interface(client):
     assert refused.status_code == 409, refused.text
 
 
-# ------------------------------------------- what the line does not carry yet
+# ------------------------------------------------------------ burning on a Ruida
 
 
-def test_burning_a_ruida_is_refused_until_the_line_carries_it(client, kernel):
-    """Phase 5 is the burn; until then a start is refused and nothing reaches the line."""
+def test_an_empty_bed_on_a_ruida_is_refused_before_the_line(client, kernel):
+    """Burning goes over our line since phase 5 (`test_job_link.py`); nothing to burn stops it first."""
     path = a_ruida(client)
     answer = client.post("/api/job/start")
     assert answer.status_code == 409, answer.text
-    assert answer.headers["X-OpenKerf-Error"] == "machine.notOnTheLineYet"
+    assert answer.headers["X-OpenKerf-Error"] == "job.nothingToBurn"
     assert [c for c in link_of(kernel, path).calls if c != "close"] == []
 
 

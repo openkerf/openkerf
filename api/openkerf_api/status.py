@@ -11,7 +11,7 @@ import time
 
 from meerk40t.core.units import UNITS_PER_MM, Length
 
-from .link import is_ruida, link_for
+from .link import JOB_UNDER_WAY, is_ruida, job_on, link_for
 
 #: What `connection()` may answer; anything else from a link reads as "unknown".
 STATES = ("connected", "connecting", "disconnected", "unknown")
@@ -334,9 +334,13 @@ class StatusReader:
         return [scene[0] / UNITS_PER_MM, scene[1] / UNITS_PER_MM]
 
     def spooler_snapshot(self, device) -> dict:
+        link = _safe(lambda: link_for(self.kernel, device), None)
+        if _attr(link, "carries_jobs", False):
+            return self._line_snapshot(device, link)
         spooler = _attr(device, "spooler")
         if spooler is None:
-            return {"present": False, "idle": None, "queue_length": 0, "jobs": []}
+            return {"present": False, "idle": None, "queue_length": 0, "jobs": [],
+                    "ended": None}
 
         queue = _safe(lambda: list(spooler.queue), []) or []
         # The pause sits on the driver, not on the job (see `paused`). Passing it along here
@@ -346,6 +350,9 @@ class StatusReader:
         return {
             "present": True,
             "idle": _safe(lambda: bool(spooler.is_idle)),
+            # Only a link that carries jobs knows how its last job ended; the engine's
+            # spooler drops a job when it is through, whichever way.
+            "ended": None,
             "queue_length": len(queue),
             # Only the first in the queue is the job the driver is working on; what is
             # behind it is waiting its turn and is not paused.
@@ -353,6 +360,77 @@ class StatusReader:
                 self.job_snapshot(job, paused if index == 0 else False)
                 for index, job in enumerate(queue)
             ],
+        }
+
+    def _line_snapshot(self, device, link) -> dict:
+        """
+        The spooler's shape, read off a link that carries jobs (a Ruida, phase 5).
+
+        In the same fields so that every surface keeps reading one thing: `currentJob`,
+        `jobPhase` and the watchdog in the interface do not learn a second source. The
+        engine drops a job from its queue once it is through, so a link's job is listed
+        only while it is on the line (`JOB_UNDER_WAY`); how it ended is `ended`, for
+        "stopped" and "failed" with the link's sentence, so the interface can say why
+        a burn ended without a "done".
+        """
+        job = job_on(link) or {}
+        phase = job.get("phase")
+        ended = None
+        if phase in ("stopped", "failed"):
+            ended = {
+                "name": job.get("name"),
+                "phase": phase,
+                "detail": job.get("detail"),
+                "finished": job.get("finished"),
+            }
+        if phase not in JOB_UNDER_WAY:
+            return {"present": True, "idle": True, "queue_length": 0, "jobs": [],
+                    "ended": ended}
+        return {
+            "present": True,
+            "idle": False,
+            "queue_length": 1,
+            "jobs": [self.line_job_snapshot(job, self.paused(device))],
+            "ended": None,
+        }
+
+    #: A link's phase in the words `LaserJob.status` uses, which `jobStatusLabel` reads.
+    _LINE_STATUS = {"sending": "Running", "running": "Running", "paused": "Paused"}
+
+    def line_job_snapshot(self, job: dict, device_paused=None) -> dict:
+        """
+        `job_snapshot`'s fields for a link's `job()`.
+
+        `steps_done`/`steps_total` are the file's packets the controller confirmed —
+        what the line can count. `progress` stays `None`: a Ruida burns the file as it
+        arrives and takes it in faster than it burns it, so packets on the line are not
+        work on the material, and a percentage made of them would read 100 % over a
+        burn that has minutes to go. With `None` the interface says nothing rather than
+        something false, and the watchdog does not take a burn whose packets are all in
+        for one that stopped moving. No estimate either: the engine's lives on a
+        `LaserJob`, and this job never becomes one.
+        """
+        phase = job.get("phase")
+        started = job.get("started")
+        end = job.get("finished") or time.time()
+        elapsed = (
+            max(0.0, end - started) if isinstance(started, (int, float)) else None
+        )
+        paused = phase == "paused" or device_paused is True
+        return {
+            "label": job.get("name") or "",
+            "type": "RuidaJob",
+            "status": "Paused" if paused else self._LINE_STATUS.get(phase),
+            "priority": 0,
+            "running": phase in ("sending", "running") and not paused,
+            "paused": paused,
+            "steps_done": job.get("sent"),
+            "steps_total": job.get("total"),
+            "progress": None,
+            "loops_executed": None,
+            "loops": 1,
+            "elapsed_seconds": elapsed,
+            "estimate_seconds": None,
         }
 
     def job_snapshot(self, job, device_paused=None) -> dict:

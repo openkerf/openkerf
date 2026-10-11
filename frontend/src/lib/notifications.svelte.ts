@@ -347,6 +347,40 @@ export class Watchdog {
 
 	#doneTimer: ReturnType<typeof setTimeout> | null = null;
 
+	/** The `finished` of the last ending already handled, so each says its piece once. */
+	#endedSeen: number | null = null;
+
+	/**
+	 * A job that ended without a "done" (`spooler.ended`, a Ruida's line).
+	 *
+	 * Failed is an alarm, with the line's own sentence as its evidence: the job is not
+	 * on the material, and a "Job done" in its place would be the worst thing to read on
+	 * a phone. Stopped is what the stop button does, so it is no alarm — but no "done"
+	 * either. Only for a job this tab saw run (`#ran`): an ending from before the page
+	 * was opened is old news.
+	 */
+	#ending(device: Device | null) {
+		const ended = device?.spooler?.ended;
+		if (!ended || ended.finished === null || ended.finished === this.#endedSeen) return;
+		this.#endedSeen = ended.finished;
+		if (!this.#ran) return;
+		this.#ran = false;
+		this.#stallReported = false;
+		this.#clear('stall');
+		if (this.#doneTimer) {
+			clearTimeout(this.#doneTimer);
+			this.#doneTimer = null;
+		}
+		if (ended.phase !== 'failed') return;
+		this.#set({
+			code: `job:failed:${ended.finished}`,
+			title: t('notify.job.failed'),
+			body: t('notify.job.failedBody', { name: jobName(ended.name) }),
+			advice: t('notify.job.failedAdvice'),
+			source: ended.detail ?? undefined
+		});
+	}
+
 	#sendDone() {
 		this.#notifications.notify(
 			t('notify.job.done'),
@@ -385,6 +419,8 @@ export class Watchdog {
 			return;
 		}
 
+		this.#ending(device);
+
 		const job = currentJob(device);
 		if (!job) {
 			// Safety net beside `spooler;completed`: that signal is the fast route,
@@ -409,6 +445,10 @@ export class Watchdog {
 			return;
 		}
 		if (!this.#positionSince) this.#positionSince = now;
+		// Only a job that reports progress can be seen to stop making it. A Ruida's
+		// says `null` (`StatusReader.line_job_snapshot`): it takes the whole file in long
+		// before the burn is through, so its counts stand still over a healthy burn.
+		if (job.progress === null) return;
 		if (!this.#stallReported && job.running && now - this.#positionSince > STILL_MS) {
 			this.#stallReported = true;
 			this.#set({

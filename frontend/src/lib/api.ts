@@ -33,11 +33,26 @@ export type Job = {
 	estimate_seconds: number | null;
 };
 
+/**
+ * How the last job on a line that carries jobs (a Ruida, phase 5) ended, when it ended
+ * without a "done". The engine's spooler drops a job once it is through, whichever way,
+ * so for every other laser this is `null`. `detail` is the line's own sentence, in
+ * English: it says what happened on that attempt, not a constant of ours.
+ */
+export type JobEnded = {
+	name: string | null;
+	phase: 'stopped' | 'failed';
+	detail: string | null;
+	/** `time.time()` on the server, seconds; what tells one ending from the next. */
+	finished: number | null;
+};
+
 export type Spooler = {
 	present: boolean;
 	idle: boolean | null;
 	queue_length: number;
 	jobs: Job[];
+	ended?: JobEnded | null;
 };
 
 export type Bed = { width_mm: number | null; height_mm: number | null };

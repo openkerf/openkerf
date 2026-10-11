@@ -1039,6 +1039,9 @@ export const nl: Catalogue = {
 	'notify.job.done': 'Job klaar',
 	'notify.job.doneBody': '{name} — {time} gebrand.',
 	'notify.job.endedBody': '{name} is afgelopen.',
+	'notify.job.failed': 'De job is niet afgemaakt',
+	'notify.job.failedBody': '{name} is opgehouden voordat hij klaar was.',
+	'notify.job.failedAdvice': 'Kijk naar het materiaal voordat je opnieuw brandt: een deel van de job kan er al op staan.',
 	'notify.lost.title': 'De verbinding viel weg tijdens een job',
 	'notify.lost.body': 'OpenKerf kan de server niet meer bereiken terwijl er gebrand werd. De machine loopt waarschijnlijk door; stoppen kan alleen op de machine zelf.',
 	'notify.stalled.title': 'De job komt niet vooruit',
@@ -2571,8 +2574,9 @@ export const nl: Catalogue = {
 		'Er loopt een job. Stop die eerst: de motoren loslaten tijdens een brand haalt de aandrijving weg onder een kop die een pad volgt, en de job is verloren.',
 	'api.machine.sendingAFile':
 		'Er wordt een bestand naar de machine gestuurd. Wacht tot het er staat en probeer het dan opnieuw: wat er nu heen gaat belandt midden in dat bestand, en de machine laat daar niets van merken.',
-	'api.machine.notOnTheLineYet':
-		'Dit bereikt een Ruida nog niet. OpenKerf houdt de lijn naar de controller nu zelf, en branden over die lijn wordt nog gebouwd. Er is niets verstuurd.',
+	'api.job.alreadyOnTheMachine':
+		'Er staat al een job op deze machine. Wacht tot die klaar is, of stop hem; er is niets verstuurd.',
+	'api.job.notStarted': 'De machine heeft de job niet aangenomen: {detail}',
 	'api.machine.notConnected':
 		'Er is geen werkende lijn naar de machine, dus dit heeft haar niet bereikt. Maak eerst verbinding en probeer het dan opnieuw.',
 	'api.machine.unconfirmed':

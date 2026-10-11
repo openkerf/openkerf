@@ -37,19 +37,49 @@ device's own `view`:
   cuts short a move waiting for the head.
 - **A line that is not up** refuses at once with `ConnectionError` and the link's own
   sentence (`connection()["detail"]`); nothing is queued for later.
+
+Phase 5, burning, streams a whole RD file (`CommandRunner.build_job_bytes()`) the way
+the engine did: no start opcode, no file name, no upload command — the file is the
+job. `RuidaDriver.plot_start` writes the header (with its `D8 00` start-process,
+`rdjob.py:1414`) and tail into an `RDJob` buffer and ends on
+`controller.stop_record()` (`driver.py:300-301`), which is `start_sending()`
+(`controller.py:327-328`): `divide_data_into_queue` cuts the buffer into blocks
+(`:84-95`, `framing.job_blocks`) and `_data_sender` writes them one by one, each
+waiting for its ACK, with the status monitor held off by `_job_lock` (`:116-135`).
+The controller burns as the blocks come in. What `start_record` sends first
+(`:323-325`) is only a card-id read, which our monitor does anyway.
+
+- **`start_job` takes the file lock** and holds it until the job has ended (done,
+  stopped or failed), so an upload, a move or a second job cannot weave into it or
+  run under a burning head; each refuses at once with its own sentence.
+- **One generation** for the whole stream, as `send_file`: a reconnect fails the job
+  ("failed", "N of M" in the detail) and nothing is ever resumed. A missing ACK fails
+  it the same way; the session never resends that block.
+- **The monitor is paused while blocks go out** (as the engine's `_job_lock` did) and
+  runs again after the last one: completion is read from the status word, never from
+  the last ACK — an acknowledged block is not a burned one. See `_watch` for the rule.
+- **`stop()`** cuts the stream as for `send_file`, sends `D8 01` ahead of everything,
+  and ends the job "stopped" with a sentence that says the machine's own stop is the
+  sure one: on the KH-5030 `D8 01` did not stop a rapid move, and nobody has measured
+  yet what it does to a running job. `pause()` and `resume()` go in the priority lane
+  during a job as at any other time.
 """
 
 import concurrent.futures
 import threading
 import time
 
-from meerk40t.ruida.rdjob import MEM_CURRENT_X, MEM_CURRENT_Y
+import logging
+
+from meerk40t.ruida.rdjob import MEM_CURRENT_X, MEM_CURRENT_Y, MEM_MACHINE_STATUS
 
 from ..link import LineTaken, SendInterrupted
 from . import encode, framing
 from .monitor import Monitor, machine_state
 from .session import RuidaSession
 from .transport import LISTEN_PORT, SEND_PORT, UdpTransport
+
+log = logging.getLogger(__name__)
 
 #: Before the first `connect()`, and after a `close()`.
 NOT_OPENED = "The line to the Ruida is not open."
@@ -68,6 +98,89 @@ NO_RAIL_LOCK = ("A Ruida has no command to lock or release the motors. Nothing w
 FILE_STOPPED = "The file was stopped; nothing after this packet was sent."
 #: A frame or a move waiting for the head that `stop()` cut short.
 MOTION_STOPPED = "Stopped; the rest of the movement was not sent."
+
+# -- phase 5: the refusals of `start_job`, and what the others say during a job --------
+
+#: `start_job` while another job holds the line.
+JOB_ON_LINE = ("The Ruida is already burning a job; another cannot start until it is "
+               "done or stopped. Nothing was sent.")
+#: `start_job` while `send_file` holds the line.
+FILE_BEFORE_JOB = ("A file is being sent to the Ruida; a job cannot start until it has "
+                   "gone out. Nothing was sent.")
+#: `start_job` while a motion verb holds the line.
+MOTION_BEFORE_JOB = ("The head is being moved; a job cannot start until the move has "
+                     "been sent. Nothing was sent.")
+#: A motion verb while a job holds the line.
+BURNING = ("The Ruida is burning a job; the head is not moved until it is done or "
+           "stopped. Nothing was sent.")
+#: `send_file` while a job holds the line (as `LineTaken`).
+JOB_HOLDS_LINE = "The Ruida is burning a job on this line."
+EMPTY_JOB = "The job file is empty. Nothing was sent."
+OVERSIZED_JOB = ("A command in the job file is too long for one packet to the Ruida. "
+                 "Nothing was sent.")
+#: "done" without the controller ever having been seen at work (see `_watch`).
+NEVER_SEEN_RUNNING = ("The Ruida took the whole job but was never seen running; whether "
+                      "it burned is not known from here.")
+#: "failed" when `close()` lets go of a job the controller has.
+LET_GO = ("OpenKerf let go of the line while the Ruida had the job; what the machine "
+          "did after that is not known from here.")
+
+_ACTIVE = ("sending", "running", "paused")
+_FINAL = ("done", "stopped", "failed")
+
+
+def _broke_off(sent: int, total: int, why: str) -> str:
+    why = why.strip() or "The line to the Ruida failed."
+    if not why.endswith("."):
+        why += "."
+    return (f"The job broke off after {sent} of {total} packets: {why} Nothing after "
+            "that was sent and nothing was sent twice. The machine may burn the part "
+            "it received; if the head keeps moving, the machine's own stop is the sure "
+            "stop.")
+
+
+def _stopped(job, error: Exception | None) -> str:
+    if error is not None:
+        why = str(error).strip()
+        if why and not why.endswith("."):
+            why += "."
+        cut = ("The rest of the job was not sent, but" if job.sent < job.total
+               else "The")
+        return (f"{cut} the stop command did not reach the Ruida: {why} Use the "
+                "machine's own stop.")
+    if job.sent < job.total:
+        return (f"Stopped after {job.sent} of {job.total} packets; the rest of the job "
+                "was not sent. The Ruida acknowledged the stop command, but if the head "
+                "keeps moving, the machine's own stop is the sure stop.")
+    return ("Stopped; the Ruida acknowledged the stop command. Whether that halts a "
+            "running job on this machine has not been measured yet: if the head keeps "
+            "moving, the machine's own stop is the sure stop.")
+
+
+class _Job:
+    """One streamed job; every field is read and written under `RuidaLink._lock`."""
+
+    def __init__(self, name: str | None, total: int):
+        self.name = name
+        self.phase = "sending"
+        self.sent = 0
+        self.total = total
+        self.detail: str | None = None
+        self.started = time.time()
+        self.finished: float | None = None
+        #: `time.monotonic()` when the last block was confirmed.
+        self.acked_at: float | None = None
+        #: Set by `stop()` before it sends; nothing else may end the job after that.
+        self.stopping = False
+        #: The worker has left the stream (all confirmed, or broken off).
+        self.streamed = threading.Event()
+        #: A final phase has been set.
+        self.ended = threading.Event()
+
+    def snapshot(self) -> dict:
+        return {"name": self.name, "phase": self.phase, "sent": self.sent,
+                "total": self.total, "detail": self.detail, "started": self.started,
+                "finished": self.finished}
 
 
 class RuidaLink:
@@ -104,6 +217,9 @@ class RuidaLink:
         self._target_at = 0.0
         #: Counts `stop()` calls; a wait that sees it change gives up.
         self._stops = 0
+        #: The last job started, kept until the next; and the thread that carries it.
+        self._job: _Job | None = None
+        self._job_thread: threading.Thread | None = None
 
     # -- the engine's settings ----------------------------------------------
 
@@ -222,7 +338,14 @@ class RuidaLink:
         return machine_state(monitor.status_word)
 
     def line_in_use(self) -> str | None:
+        job = self._job
+        if job is not None and job.phase in _ACTIVE:
+            return "burning"
         return "uploading" if self._uploading else None
+
+    def _job_active(self) -> bool:
+        job = self._job
+        return job is not None and job.phase in _ACTIVE
 
     carries_files = True
 
@@ -267,7 +390,11 @@ class RuidaLink:
           on it is let finish, within `packet_seconds`; otherwise the file stalls at
           packet 0 with nothing sent.
         """
+        if self._job_active():
+            raise LineTaken(JOB_HOLDS_LINE)
         if not self._file.acquire(timeout=claim_seconds):
+            if self._job_active():
+                raise LineTaken(JOB_HOLDS_LINE)
             raise LineTaken("Another file is being sent on this line.")
         stopped = threading.Event()
         try:
@@ -472,7 +599,10 @@ class RuidaLink:
         `D8 01` ahead of everything queued, without waiting for the file lock.
 
         A file going out ends at the packet on the line (see `send_file`); a frame or
-        a move waiting for the head gives up; the remembered target is dropped.
+        a move waiting for the head gives up; the remembered target is dropped. A job
+        ends "stopped": the rest of its stream is not sent, and its detail says the
+        machine's own stop is the sure one — or, when the stop itself could not be
+        sent, that it did not reach the Ruida (and this raises, as for any verb).
 
         What it does *not* do, measured on the KH-5030 (RDC6442S): stop a rapid move that
         is already under way. A move from (20, 20) to (200, 100) mm with this stop sent
@@ -489,7 +619,207 @@ class RuidaLink:
                 stopping.set()
             if receipt is not None:
                 receipt.cancel()
-        self._send(encode.stop(), priority=True)
+            job = self._job
+            if job is not None and job.phase in _ACTIVE and not job.stopping:
+                job.stopping = True
+            else:
+                job = None
+        error = None
+        try:
+            self._send(encode.stop(), priority=True)
+        except (ConnectionError, TimeoutError) as failure:
+            error = failure
+        if job is not None:
+            # The block on the line finishes first (one in flight); after the stop's
+            # own ACK the stream has normally left already, so `sent` is final.
+            job.streamed.wait(self.reply_seconds + 1)
+            with self._lock:
+                detail = _stopped(job, error)
+            self._end(job, "stopped", detail)
+        if error is not None:
+            raise error
+
+    # -- phase 5: burning -----------------------------------------------------------
+
+    carries_jobs = True
+
+    #: The bound on one block's confirmation, as `send_file`'s default.
+    JOB_PACKET_SECONDS = 10.0
+    #: Fresh idle status words in a row, after the controller has been seen at work,
+    #: that make a job "done". Not measured: two, so one odd word cannot end a job.
+    IDLE_READINGS = 2
+    #: How long after the last block a controller that was never seen at work may
+    #: read idle before the job is called done anyway (with `NEVER_SEEN_RUNNING`).
+    #: Not measured; the first burn has to say how long a KH-5030 takes to begin.
+    START_SECONDS = 10.0
+    #: How often the watcher looks at the monitor's newest status word.
+    WATCH_SECONDS = 0.05
+
+    def start_job(self, rd: bytes, name: str | None = None) -> None:
+        """
+        The `MachineLink` contract: stream `rd` on a worker of our own and return as
+        soon as it has started. Refused with `ConnectionError` — nothing sent — when
+        the line is not up, when a job, a file or a move holds it, or when the file
+        is empty or has a command too long for one datagram.
+        """
+        blocks = framing.job_blocks(bytes(rd))
+        if not blocks:
+            raise ConnectionError(EMPTY_JOB)
+        if any(len(block) > framing.DATAGRAM_LIMIT - 2 for block in blocks):
+            raise ConnectionError(OVERSIZED_JOB)
+        self._refuse_unless_connected()
+        if not self._file.acquire(blocking=False):
+            raise ConnectionError(self._taken())
+        try:
+            with self._lock:
+                session, monitor = self._session, self._monitor
+                if session is None or not self._wanted or not session.connected:
+                    raise ConnectionError(self.connection()["detail"]
+                                          or "Not connected to the Ruida controller.")
+                generation = session.generation
+                stopped = threading.Event()
+                self._file_stop = stopped
+                job = _Job(name, len(blocks))
+                self._job = job
+                thread = threading.Thread(
+                    target=self._carry, name="ruida-job", daemon=True,
+                    args=(job, session, monitor, generation, blocks, stopped))
+                self._job_thread = thread
+            thread.start()
+        except BaseException:
+            with self._lock:
+                if self._file_stop is not None and self._job_thread is None:
+                    self._file_stop = None
+            self._file.release()
+            raise
+
+    def job(self) -> dict | None:
+        try:
+            with self._lock:
+                job = self._job
+                return None if job is None else job.snapshot()
+        except Exception:  # never raises, by the Protocol
+            return None
+
+    def _taken(self) -> str:
+        if self._job_active():
+            return JOB_ON_LINE
+        return FILE_BEFORE_JOB if self._uploading else MOTION_BEFORE_JOB
+
+    def _end(self, job: _Job, phase: str, detail: str | None) -> bool:
+        """The job's final phase; the first caller wins, later ones change nothing."""
+        with self._lock:
+            if job.phase in _FINAL:
+                return False
+            job.phase = phase
+            job.detail = detail
+            job.finished = time.time()
+        job.ended.set()
+        return True
+
+    def _phase(self, job: _Job, phase: str) -> None:
+        with self._lock:
+            if job.phase in _ACTIVE and not job.stopping:
+                job.phase = phase
+
+    def _carry(self, job, session, monitor, generation, blocks, stopped) -> None:
+        """The worker: the stream, then the watch; the file lock goes with it."""
+        try:
+            if self._stream(job, session, monitor, generation, blocks, stopped):
+                self._watch(job)
+        except Exception as error:
+            log.exception("Ruida job worker failed")
+            with self._lock:
+                stopping, sent = job.stopping, job.sent
+            if not stopping:
+                self._end(job, "failed", _broke_off(sent, job.total, str(error)))
+        finally:
+            job.streamed.set()
+            with self._lock:
+                if self._job_thread is threading.current_thread():
+                    self._job_thread = None
+            self._file.release()
+
+    def _stream(self, job, session, monitor, generation, blocks, stopped) -> bool:
+        """Every block in order, each confirmed before the next; True when all were."""
+        if monitor is not None:
+            monitor.pause()
+        try:
+            for index, block in enumerate(blocks):
+                if stopped.is_set():
+                    raise SendInterrupted(index, on_line=False, stalled=False,
+                                          why=FILE_STOPPED)
+                self._until_clear(session, index, self.JOB_PACKET_SECONDS, stopped)
+                self._send_one(session, index, block, generation,
+                               self.JOB_PACKET_SECONDS, stopped)
+                with self._lock:
+                    job.sent = index + 1
+        except SendInterrupted as error:
+            with self._lock:
+                stopping, sent = job.stopping or stopped.is_set(), job.sent
+            if not stopping:
+                self._end(job, "failed", _broke_off(sent, job.total, str(error)))
+            return False
+        finally:
+            with self._lock:
+                if self._file_stop is stopped:
+                    self._file_stop = None
+                self._receipt = None
+                if job.sent == job.total:
+                    job.acked_at = time.monotonic()
+            if monitor is not None:
+                monitor.resume()
+            job.streamed.set()
+        self._phase(job, "running")
+        return True
+
+    def _watch(self, job: _Job) -> None:
+        """
+        From the last ACK to the end of the job, on the status word alone.
+
+        The rule, built to contradict none of the words we know (`monitor.machine_state`;
+        KH-5030 idle 0 and 67072, moving 16975360; the emulator 22/21/23; Ruida Bridge
+        1025 running and 1027 paused) and to survive what we do not know yet:
+
+        - **Only fresh words count**: read after the last block was confirmed (the
+          monitor was paused during the stream, so every word after it is new), and
+          each word once, by the time it was read.
+        - **"running" or "moving" → phase "running"; "paused" → "paused"**, and either
+          means the controller has been seen at work.
+        - **"done" takes `IDLE_READINGS` idle words in a row after it was seen at
+          work.** An idle word before that is not the end — a controller may read idle
+          for a moment before it begins — and one odd idle word does not end it.
+        - **Never seen at work**: a job shorter than the time between two status reads
+          could finish unseen. After `START_SECONDS` from the last ACK, with at least
+          `IDLE_READINGS` idle words, it is "done" with `NEVER_SEEN_RUNNING` as the
+          detail rather than a line held forever.
+        - **No words, no verdict.** A silent controller or a closed line leaves the
+          phase where it is; `stop()` and `close()` end it.
+        """
+        busy_seen = False
+        idle = 0
+        with self._lock:
+            since = job.acked_at or time.monotonic()
+        last = since
+        while not job.ended.wait(self.WATCH_SECONDS):
+            monitor = self._monitor
+            reading = None if monitor is None else monitor.reading(MEM_MACHINE_STATUS)
+            if reading is None or reading.at <= last:
+                continue
+            last = reading.at
+            state = machine_state(reading.value)
+            if state in ("running", "moving", "paused"):
+                busy_seen = True
+                idle = 0
+                self._phase(job, "paused" if state == "paused" else "running")
+            elif state == "idle":
+                idle += 1
+                waited = time.monotonic() - since >= self.START_SECONDS
+                if idle >= self.IDLE_READINGS and (busy_seen or waited):
+                    with self._lock:
+                        if job.stopping:
+                            continue
+                    self._end(job, "done", None if busy_seen else NEVER_SEEN_RUNNING)
 
     # -- motion, inside ------------------------------------------------------------
 
@@ -507,7 +837,7 @@ class RuidaLink:
     def _claim_line(self) -> None:
         """The file lock without waiting, or the refusal; then a connected line."""
         if not self._file.acquire(blocking=False):
-            raise ConnectionError(FILE_GOING_OUT)
+            raise ConnectionError(BURNING if self._job_active() else FILE_GOING_OUT)
         try:
             self._refuse_unless_connected()
         except BaseException:
@@ -595,9 +925,21 @@ class RuidaLink:
 
     def close(self) -> None:
         with self._lock:
+            job, thread = self._job, self._job_thread
+            if job is not None and job.phase in _ACTIVE and not job.stopping:
+                detail = (_broke_off(job.sent, job.total,
+                                     "The line to the Ruida was closed.")
+                          if job.phase == "sending" else LET_GO)
+            else:
+                detail = None
+        if detail is not None:
+            self._end(job, "failed", detail)
+        with self._lock:
             self._wanted = False
             self._detail = None
             self._release()
+        if thread is not None and thread is not threading.current_thread():
+            thread.join(self.reply_seconds + 2)
         self._notify()
 
     # -- inside ------------------------------------------------------------------

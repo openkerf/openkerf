@@ -3,13 +3,13 @@ What our modules ask of the line to a machine, in one place.
 
 A Ruida goes through our own transport (`ruida/`); every other laser goes through the
 engine's device, spooler and console as before. The modules that talk to a machine —
-`machine.py`, `status.py`, `busy.py`, `ruida_upload.py`, and later `commands.py` — ask
-a `MachineLink` and do not care which one answers. See the plan in the working record,
+`machine.py`, `status.py`, `busy.py`, `ruida_upload.py` and `commands.py` — ask a
+`MachineLink` and do not care which one answers. See the plan in the working record,
 `plannen/2026-10-11-eigen-ruida-verbinding.md`.
 
 Phase 2 is connecting and status, phase 3 a file into the controller's memory
-(`send_file`), phase 4 moving the head and the realtime verbs (pause, resume, stop).
-Sending a job comes in phase 5.
+(`send_file`), phase 4 moving the head and the realtime verbs (pause, resume, stop),
+phase 5 burning (`start_job`, `job`).
 """
 
 from __future__ import annotations
@@ -160,6 +160,37 @@ class MachineLink(Protocol):
         """
 
 
+#: The phases of `MachineLink.job()` in which the job is still on the line: the machine
+#: is burning it, or holding it on a pause. One tuple, read by `busy.py`, `status.py`
+#: and `commands.py`, so "is a job on this Ruida" has one answer.
+JOB_UNDER_WAY = ("sending", "running", "paused")
+
+
+def job_on(link) -> dict | None:
+    """
+    `link.job()` for a link that carries jobs, `None` for any other; never raises.
+
+    `EngineLink` says `carries_jobs = False`: its jobs are the spooler's, read where they
+    always were. A link whose `job()` breaks reads as no job, the same rule as a spooler
+    that cannot answer in `busy.a_job_is_running`.
+    """
+    if not _attr(link, "carries_jobs", False):
+        return None
+    try:
+        job = link.job()
+    except Exception:
+        return None
+    return job if isinstance(job, dict) else None
+
+
+def job_under_way(link) -> dict | None:
+    """The link's job while it is still on the line (`JOB_UNDER_WAY`), else `None`."""
+    job = job_on(link)
+    if job is not None and job.get("phase") in JOB_UNDER_WAY:
+        return job
+    return None
+
+
 # ------------------------------------------------------------------ which link
 
 
@@ -306,6 +337,18 @@ class EngineLink:
         raise SendInterrupted(
             0, on_line=False, stalled=False,
             why="The engine's line does not carry files; nothing has been sent.")
+
+    #: A K40, a GRBL and every other engine laser burn through `CommandRunner`'s plan and
+    #: spool, exactly as before phase 5; their job is the spooler's, read by `status.py`.
+    carries_jobs = False
+
+    def start_job(self, rd: bytes, name: str | None = None) -> None:
+        raise ConnectionError(
+            "The engine's line does not take an RD file; this machine burns through "
+            "the spooler. Nothing has been sent.")
+
+    def job(self) -> dict | None:
+        return None
 
     def close(self) -> None:
         pass
@@ -586,26 +629,3 @@ def link_for(kernel, device=None, runner=None):
     if device is None:
         device = _attr(kernel, "device")
     return links_for(kernel).for_device(device, runner)
-
-
-def refuse_what_the_link_does_not_carry_yet(kernel) -> None:
-    """
-    Burning on a Ruida, until our line carries it (phase 5).
-
-    The engine's Ruida device is kept closed (`ruida/closed.py`), so a burn would go
-    through the engine into nothing. Measured before this refusal, with the session
-    closed: a jog, a home and a move each answered as if done, their bytes refused by
-    `ClosedSession.write` 19 times between them, and the move's job stood in the
-    spooler as Running for more than 6 s with the burn queued behind it. A press that
-    seems to work and moves nothing is the one answer a laser must not give. Moving
-    the head, pausing, resuming and stopping go over our own line since phase 4.
-    """
-    from .edits import DesignError
-
-    if is_ruida(_attr(kernel, "device")):
-        raise DesignError(
-            "This does not reach a Ruida yet. OpenKerf now keeps the line to the "
-            "controller itself, and burning over that line is still being built. "
-            "Nothing has been sent.",
-            code="machine.notOnTheLineYet",
-        )

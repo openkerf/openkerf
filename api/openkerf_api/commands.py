@@ -12,9 +12,9 @@ from contextlib import contextmanager
 
 from .busy import refuse_while_a_file_is_being_sent
 from .link import (
+    job_under_way,
     link_for,
     on_the_line,
-    refuse_what_the_link_does_not_carry_yet,
     stop_on_the_line,
 )
 
@@ -263,7 +263,7 @@ class CommandRunner:
 
     def start_job(self, name: str | None = None, mutators=()) -> list[str]:
         """
-        Building the plan and sending it to the spooler.
+        Building the plan and sending it to the machine.
 
         First look at *whether* there is anything to burn. An empty design ran cheerfully
         through here and reported "succeeded": the user presses start, the app says yes, and
@@ -271,20 +271,67 @@ class CommandRunner:
         state beside it waiting.
 
         `mutators` are operations on the copied plan (tiles, Z steps). See `_plan_and_spool`.
+
+        Two roads from here, chosen by the machine's link (`link.py`). A link that
+        `carries_jobs` — a Ruida over our own line — gets the job as one RD file,
+        built by `build_job_bytes` with the same mutators, rotary and claim on the plan
+        the spooler's road applies, and streams it on a worker of its own. Every other
+        laser plans and spools exactly as before.
         """
         # Not while a file is going out: the spooler would pick this up and the
         # driver write it down the line the upload is using. In the runner and not
         # in the route, so the tile burn (`tilerun.py:734`) and the series burn
         # (`series.py:2278`) — the other two callers of this method — are covered by
         # the same line.
-        # A Ruida's line is ours now and does not carry a burn yet (phase 5); the
-        # engine's device is closed and would take the job into nothing. See `link.py`.
         refuse_while_a_file_is_being_sent(self.kernel)
-        refuse_what_the_link_does_not_carry_yet(self.kernel)
+        link = self.link()
+        if getattr(link, "carries_jobs", False):
+            return self._start_on_the_line(link, name, mutators)
         burnable = self._require_something_to_burn()
         output = self._plan_and_spool(mutators)
         self._name_job(name, burnable)
         return output
+
+    def _start_on_the_line(self, link, name, mutators) -> list[str]:
+        """
+        `start_job` for a link that carries jobs: the RD file, then `link.start_job`.
+
+        The refusals that cost nothing come before the build, which plans the whole
+        job: nothing to burn, a job still on the line, no line at all. What the link
+        itself says no to afterwards — it went away while we built, or something took
+        the line meanwhile — is its `ConnectionError`, turned into a sentence here.
+
+        No `wordlist advance` either, where `spool` runs one inside itself
+        (`core/spoolers.py:57`): a series primes the list itself before every burn and
+        reads that advance as drift to undo (`Series._ensure_primed`).
+        """
+        from .edits import DesignError
+
+        burnable = self._require_something_to_burn()
+        if job_under_way(link) is not None:
+            raise DesignError(
+                "A job is already on this machine. Wait until it is done, or stop it; "
+                "nothing has been sent.",
+                code="job.alreadyOnTheMachine",
+            )
+        if (link.connection() or {}).get("state") != "connected":
+            raise DesignError(
+                "There is no working line to the machine, so this did not reach it. "
+                "Connect first, then try again.",
+                code="machine.notConnected",
+            )
+        rd = self.build_job_bytes(mutators)
+        title = self._job_title(name, burnable)
+        try:
+            link.start_job(rd, title)
+        except (ConnectionError, TimeoutError) as error:
+            detail = str(error).strip()
+            raise DesignError(
+                f"The machine did not take the job: {detail}",
+                code="job.notStarted",
+                values={"detail": detail},
+            ) from error
+        return [f"Sent {title} ({len(rd)} bytes) to the machine."]
 
     def _require_something_to_burn(self) -> int:
         """The count `start_job` does too, split out so both read it."""
@@ -998,9 +1045,7 @@ class CommandRunner:
         rename the job after it is in the queue. Only when the engine knew nothing itself: if
         you have loaded a file, that name is better than ours.
         """
-        title = (name or "").strip()
-        if not title:
-            title = f"{burnable} operation" + ("" if burnable == 1 else "en")
+        title = self._job_title(name, burnable)
         try:
             queue = list(self.kernel.device.spooler.queue)
         except Exception:
@@ -1015,6 +1060,14 @@ class CommandRunner:
             job.label = title
         except Exception:  # pragma: no cover - the engine must not break us
             pass
+
+    @staticmethod
+    def _job_title(name, burnable: int) -> str:
+        """The sheet's name, or a count of what burns; for the spooler and for a link."""
+        title = (name or "").strip()
+        if not title:
+            title = f"{burnable} operation" + ("" if burnable == 1 else "en")
+        return title
 
     def link(self):
         """The active machine's link (`link.py`), with this runner as its console."""

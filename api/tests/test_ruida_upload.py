@@ -2000,6 +2000,28 @@ def test_the_numbers_of_a_broken_upload_reach_the_client(
     assert values == {"sent": 0, "chunks": blocks, "announced": False}
 
 
+def a_job_on_the_line(kernel, monkeypatch, phase="running"):
+    """Put a job in `phase` on the Ruida's own line, the way phase 5 burns.
+
+    A burn on a Ruida no longer goes through the engine's spooler: `start_job`
+    streams the RD file over our link, and the link's `job()` is what says a job
+    is on it (`link.job_under_way`). Patched on the very link `link_for` hands
+    back for this kernel, so nothing is sent and no socket opens.
+    """
+    from openkerf_api.link import link_for
+
+    link = link_for(kernel)
+    monkeypatch.setattr(link, "carries_jobs", True, raising=False)
+    monkeypatch.setattr(
+        link,
+        "job",
+        lambda: {"name": "Sheet 1", "phase": phase, "sent": 3, "total": 9,
+                 "detail": None, "started": 1.0, "finished": None},
+        raising=False,
+    )
+    return link
+
+
 class _BurningSpooler:
     """A spooler with a job that says it is running.
 
@@ -2017,7 +2039,6 @@ class _BurningSpooler:
         self.queue = [self._Job()]
 
 
-@pytest.mark.xfail(strict=True, reason="phase 5: a burn on a Ruida moves to RuidaLink, which answers line_in_use; the engine spooler no longer counts")
 def test_an_upload_while_a_job_is_burning_is_refused(ruida, monkeypatch):
     """
     The same rule as moving the head, for the same reason, one module along.
@@ -2046,7 +2067,7 @@ def test_an_upload_while_a_job_is_burning_is_refused(ruida, monkeypatch):
     a_rectangle(ruida)
     upload = RuidaUpload(ruida)
     session = a_fake_session(upload, monkeypatch)
-    monkeypatch.setattr(ruida.device, "spooler", _BurningSpooler(), raising=False)
+    a_job_on_the_line(ruida, monkeypatch)
 
     with pytest.raises(DesignError) as error:
         upload.upload("BORD")
@@ -2056,7 +2077,6 @@ def test_an_upload_while_a_job_is_burning_is_refused(ruida, monkeypatch):
     assert not session.written, "blocks went out while the machine was burning"
 
 
-@pytest.mark.xfail(strict=True, reason="phase 5: a burn on a Ruida moves to RuidaLink, which answers line_in_use; the engine spooler no longer counts")
 def test_the_route_refuses_an_upload_while_a_job_is_burning(
     ruida, tmp_path, monkeypatch
 ):
@@ -2069,7 +2089,7 @@ def test_the_route_refuses_an_upload_while_a_job_is_burning(
 
     a_rectangle(ruida)
     server, session = a_server_with_a_fake_line(ruida, tmp_path, monkeypatch)
-    monkeypatch.setattr(ruida.device, "spooler", _BurningSpooler(), raising=False)
+    a_job_on_the_line(ruida, monkeypatch, phase="paused")
     with TestClient(server.build_app()) as client:
         response = client.post("/api/machine/upload", json={"name": "BORD"})
 
@@ -2642,7 +2662,6 @@ class _QueuedSpooler:
         self.queue = [self._Job()]
 
 
-@pytest.mark.xfail(strict=True, reason="phase 5: a burn on a Ruida moves to RuidaLink, which answers line_in_use; the engine spooler no longer counts")
 def test_the_line_says_which_of_the_three_things_is_on_it(ruida, monkeypatch):
     """
     The one question, and the four answers every caller reads.
@@ -2661,9 +2680,23 @@ def test_the_line_says_which_of_the_three_things_is_on_it(ruida, monkeypatch):
         assert the_line_is_in_use(ruida) == "uploading"
     assert the_line_is_in_use(ruida) is None, "the claim outlived the block"
 
+    # A Ruida has no queue: its burn is the link's job, and the engine's spooler —
+    # which nothing of ours fills for it any more — does not count.
+    monkeypatch.setattr(ruida.device, "spooler", _BurningSpooler(), raising=False)
+    a_job_on_the_line(ruida, monkeypatch, phase="done")
+    assert the_line_is_in_use(ruida) is None, "the engine's spooler still counted"
+
+    for phase in ("sending", "running", "paused"):
+        a_job_on_the_line(ruida, monkeypatch, phase=phase)
+        assert the_line_is_in_use(ruida) == "burning", phase
+    for phase in ("done", "stopped", "failed"):
+        a_job_on_the_line(ruida, monkeypatch, phase=phase)
+        assert the_line_is_in_use(ruida) is None, phase
+
+    # And "queued" is still the engine's word, for every other laser.
+    ruida.console("service device start dummy -i\n")
     monkeypatch.setattr(ruida.device, "spooler", _QueuedSpooler(), raising=False)
     assert the_line_is_in_use(ruida) == "queued"
-
     monkeypatch.setattr(ruida.device, "spooler", _BurningSpooler(), raising=False)
     assert the_line_is_in_use(ruida) == "burning"
 
@@ -2759,7 +2792,10 @@ def test_the_motors_are_not_released_while_a_job_is_burning(ruida, monkeypatch, 
     motion = MachineControl(ruida)
     reached = []
     monkeypatch.setattr(motion.runner, "run", lambda *a, **kw: reached.append(a) or [])
-    monkeypatch.setattr(ruida.device, "spooler", _BurningSpooler(), raising=False)
+    # A Ruida burns over our own line since phase 5, so the job is the link's.
+    link = a_job_on_the_line(ruida, monkeypatch)
+    monkeypatch.setattr(link, "unlock", lambda: reached.append("unlock"))
+    monkeypatch.setattr(link, "lock", lambda: reached.append("lock"))
 
     with pytest.raises(DesignError) as error:
         getattr(motion, verb)()

@@ -1096,6 +1096,10 @@ export const en = {
 	'notify.job.done': 'Job done',
 	'notify.job.doneBody': '{name} — {time} of burning.',
 	'notify.job.endedBody': '{name} has finished.',
+	// A job on a Ruida's line that ended in failure; the line's sentence is the evidence.
+	'notify.job.failed': 'The job did not finish',
+	'notify.job.failedBody': '{name} ended before it was through.',
+	'notify.job.failedAdvice': 'Look at the material before you burn it again: part of the job may already be on it.',
 	'notify.lost.title': 'The connection dropped during a job',
 	'notify.lost.body': 'OpenKerf can no longer reach the server while it was burning. The machine is probably still going; stopping is only possible on the machine itself.',
 	'notify.stalled.title': 'The job is not making progress',
@@ -2769,11 +2773,12 @@ export const en = {
 		'A job is running. Stop it first: releasing the motors during a burn takes the drive out from under a head that is following a path, and the job is lost.',
 	'api.machine.sendingAFile':
 		'A file is being sent to the machine. Wait until it is there and then try again: anything sent now lands in the middle of that file, and the machine gives no sign of it.',
-	// A Ruida's line is OpenKerf's own now (`api/openkerf_api/link.py`). Until it carries
-	// a burn (phase 5), that is refused rather than sent into the engine's closed device,
-	// where it would seem to work and burn nothing.
-	'api.machine.notOnTheLineYet':
-		'This does not reach a Ruida yet. OpenKerf now keeps the line to the controller itself, and burning over that line is still being built. Nothing has been sent.',
+	// Burning on a Ruida (phase 5): `CommandRunner.start_job` hands the RD file to our own
+	// line. A job still on it is refused before the build; `{detail}` in the second is
+	// the line's own sentence, in English, as with `ruidaConnectFailed` below.
+	'api.job.alreadyOnTheMachine':
+		'A job is already on this machine. Wait until it is done, or stop it; nothing has been sent.',
+	'api.job.notStarted': 'The machine did not take the job: {detail}',
 	// A phase 4 verb (move, home, frame, focus, lock, pause, resume) that the line to the
 	// machine did not carry (`link.on_the_line`): a lost or refusing line, or no
 	// acknowledgement in time. Stop has its own sentence, because "try again" is the

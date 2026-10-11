@@ -216,3 +216,51 @@ test('known disconnected machine blocks execution without blocking unknown drive
     assert.equal(machineDisconnected(null), false);
     assert.equal(machineDisconnected({} as NonNullable<Parameters<typeof machineDisconnected>[0]>), false);
 });
+
+// A Ruida burns over OpenKerf's own line (phase 5) and the API puts the link's job in
+// the spooler's shape (`StatusReader.line_job_snapshot`): listed only while it is on
+// the line, `progress` always null — packets on the line are not work on the material.
+test('a Ruida job in the spooler shape reads the same phases as a spooled one', async () => {
+	const { currentJob, remainingSeconds } = await import('../src/lib/api.ts');
+	const ruidaJob = (phase: 'sending' | 'running' | 'paused') =>
+		job({
+			label: 'Keyrings',
+			type: 'RuidaJob',
+			status: phase === 'paused' ? 'Paused' : 'Running',
+			running: phase !== 'paused',
+			paused: phase === 'paused',
+			steps_done: 3,
+			steps_total: 9,
+			progress: null,
+			loops_executed: null,
+			loops: 1,
+			elapsed_seconds: 12,
+			estimate_seconds: null
+		});
+	const device = (jobs: ReturnType<typeof job>[], ended: unknown = null) =>
+		({
+			paused: jobs[0]?.paused ?? false,
+			laser_status: null,
+			spooler: { present: true, idle: jobs.length === 0, queue_length: jobs.length, jobs, ended }
+		}) as unknown as NonNullable<Parameters<typeof jobPhase>[0]>;
+
+	for (const [phase, expected] of [
+		['sending', 'burning'],
+		['running', 'burning'],
+		['paused', 'paused']
+	] as const) {
+		const d = device([ruidaJob(phase)]);
+		const current = currentJob(d);
+		assert.ok(current, phase);
+		assert.equal(jobPhase(d, current, false), expected, phase);
+		assert.equal(jobBusy(jobPhase(d, current, false)), true, phase);
+		assert.equal(remainingSeconds(current), null, 'no number that is not measured');
+	}
+
+	// Done, stopped and failed all leave the list; the bed is ready again.
+	for (const ended of [null, { name: 'Keyrings', phase: 'failed', detail: 'x', finished: 1 }]) {
+		const d = device([], ended);
+		assert.equal(currentJob(d), null);
+		assert.equal(jobPhase(d, currentJob(d), false), 'ready');
+	}
+});
