@@ -152,9 +152,8 @@ def _stopped(job, error: Exception | None) -> str:
         return (f"Stopped after {job.sent} of {job.total} packets; the rest of the job "
                 "was not sent. The Ruida acknowledged the stop command, but if the head "
                 "keeps moving, the machine's own stop is the sure stop.")
-    return ("Stopped; the Ruida acknowledged the stop command. Whether that halts a "
-            "running job on this machine has not been measured yet: if the head keeps "
-            "moving, the machine's own stop is the sure stop.")
+    return ("Stopped; the Ruida acknowledged the stop command and ends the job where "
+            "the head is. If the head keeps moving, use the machine's own stop.")
 
 
 class _Job:
@@ -607,9 +606,13 @@ class RuidaLink:
         What it does *not* do, measured on the KH-5030 (RDC6442S): stop a rapid move that
         is already under way. A move from (20, 20) to (200, 100) mm with this stop sent
         0.3 s in — acknowledged in 7 ms — ran on to (200.0, 100.0) and arrived 1.2 s
-        after the move was sent. Ruida Bridge uses the same `D8 01` as its "stop job"
-        for a job run from the controller's memory; whether it halts a running job here
-        is for the first burn to measure. Until then the machine's own stop is the stop.
+        after the move was sent. For a move, the machine's own stop is the stop.
+
+        What it does do, measured on the same machine burning a 40 × 40 mm square at
+        50 mm/s and 15 %: stop sent 1.55 s in, acknowledged in 6 ms; the wood shows the
+        first side whole and the second side just begun, and the controller then took
+        the head to (0, 0) as it does at the end of a job. Ruida Bridge uses the same
+        `D8 01` as its "stop job".
         """
         with self._lock:
             self._stops += 1
@@ -646,11 +649,15 @@ class RuidaLink:
     #: The bound on one block's confirmation, as `send_file`'s default.
     JOB_PACKET_SECONDS = 10.0
     #: Fresh idle status words in a row, after the controller has been seen at work,
-    #: that make a job "done". Not measured: two, so one odd word cannot end a job.
+    #: that make a job "done"; two, so one odd word cannot end a job. Measured on the
+    #: KH-5030 over three burns: the words went running (66561, 66565; 66563 paused;
+    #: 8455169 just after a resume) straight to idle (67072) with no idle word in
+    #: between, and two idle readings put "done" 0.4–0.7 s after the head stood still.
     IDLE_READINGS = 2
     #: How long after the last block a controller that was never seen at work may
     #: read idle before the job is called done anyway (with `NEVER_SEEN_RUNNING`).
-    #: Not measured; the first burn has to say how long a KH-5030 takes to begin.
+    #: Measured on the KH-5030: the first running word came 0.17–0.22 s after the
+    #: start, so 10 s is far beyond what that machine needs.
     START_SECONDS = 10.0
     #: How often the watcher looks at the monitor's newest status word.
     WATCH_SECONDS = 0.05

@@ -333,8 +333,8 @@ def test_stop_while_it_burns(line, peer):
     line.stop()
     job = line.job()
     assert job["phase"] == "stopped"
-    assert "has not been measured yet" in job["detail"]
-    assert "machine's own stop is the sure stop" in job["detail"]
+    assert "ends the job where the head is" in job["detail"]
+    assert "use the machine's own stop" in job["detail"]
     assert commands(peer, start)[-1] == b"\xd8\x01"
     assert line.line_in_use() is None
     peer.state = "idle"
