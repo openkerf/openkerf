@@ -34,6 +34,9 @@ The peer records every datagram it receives (`received`) and every answer it sen
 (`replies`), and can be told to misbehave once: `nak_next()` rejects the next packet
 without processing it, `drop_ack_next()` processes the next packet but loses its ACK
 (any reply data still goes out), and `ignore_next()` loses the next packet altogether.
+`swallow_replies(pattern)` stands in for a second program on the controller: memory
+reads are acknowledged as ever, and for each read whose turn in the cycled `pattern` is
+`True` the answer after the ACK is lost (recorded with `sent=False`).
 
 Nothing the emulator decodes reaches a machine: it is given a stand-in device whose
 driver records calls and whose spooler takes jobs and runs none. `status()` on that
@@ -144,6 +147,8 @@ class RuidaPeer:
         self.replies: list[Reply] = []
 
         self._nak = self._drop_ack = self._ignore = 0
+        self._swallow: tuple[bool, ...] = ()
+        self._reads = 0
         self._changed = threading.Condition()
         self._current = None
 
@@ -193,6 +198,13 @@ class RuidaPeer:
         """Lose the next `count` packets: no processing, no answer."""
         with self._changed:
             self._ignore += count
+
+    def swallow_replies(self, pattern=()):
+        """ACK every memory read but lose the answer where the cycled `pattern` says
+        `True`; `()` answers everything again."""
+        with self._changed:
+            self._swallow = tuple(bool(p) for p in pattern)
+            self._reads = 0
 
     def wait_for(self, count, timeout=2.0) -> list[Received]:
         """Block until at least `count` datagrams have arrived; return them."""
@@ -251,8 +263,15 @@ class RuidaPeer:
             return
         if drop_ack and checksum_ok:
             entry.action = "ack-dropped"
+        swallow = False
+        if checksum_ok and payload[:2] == bytes([0xDA, 0x00]):
+            with self._changed:
+                if self._swallow:
+                    swallow = self._swallow[self._reads % len(self._swallow)]
+                    self._reads += 1
         self._record(entry)
-        self._current = {"destination": destination, "drop_ack": drop_ack, "first": True}
+        self._current = {"destination": destination, "drop_ack": drop_ack, "first": True,
+                         "swallow": swallow}
         try:
             self.emulator.checksum_write(packet)
         finally:
@@ -266,6 +285,8 @@ class RuidaPeer:
         sent = True
         if current is not None:
             if current["first"] and current["drop_ack"] and data == ACK:
+                sent = False
+            if not current["first"] and current.get("swallow"):
                 sent = False
             current["first"] = False
         if sent:

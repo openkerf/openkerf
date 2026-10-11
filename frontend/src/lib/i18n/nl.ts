@@ -95,7 +95,7 @@ export const nl: Catalogue = {
 	'transport.stop.onMachine': 'Stop op de machine',
 	'transport.stop.now': 'Job direct afbreken ({key})',
 	'transport.stop.armed':
-		'Er loopt nu niets — dit breekt een job af zodra er een loopt ({key})',
+		'Er loopt nu niets ({key})',
 	'transport.noServer': 'Geen verbinding met OpenKerf — deze knop komt niet aan.',
 	'transport.noServer.stop': 'Stoppen kan nu alleen met de noodstop op de machine.',
 	'transport.noServer.pause': 'Pauzeren kan nu alleen met de knop op de machine.',
@@ -147,6 +147,12 @@ export const nl: Catalogue = {
 	'status.machine.connected': 'Verbonden met de laser',
 	'status.machine.connectionUnknown.hint':
 		'De engine draait, maar deze driver meldt niet of er een machine aan hangt. Bij de eerste job merk je het: die blijft in de wachtrij staan als er niets luistert.',
+	'status.machine.connectedShared': 'Verbonden, maar niet alleen',
+	'status.machine.secondClient.title': 'Er lijkt een ander programma met deze laser te praten',
+	'status.machine.secondClient.body':
+		'Van de laatste {asked} statusvragen zijn er {unanswered} bevestigd maar niet beantwoord. Sluit het andere programma — twee programma’s op één controller raken elkaars antwoorden kwijt.',
+	'status.machine.secondClient.ack':
+		'De controller deed {ms} ms over een bevestiging; als er maar één programma mee praat, is dat een paar milliseconden.',
 	'status.connect': 'Verbinden',
 	'status.connect.busy': 'Verbinden…',
 	'status.connect.title': 'De verbinding met de machine opzetten. Dit beweegt niets.',
@@ -1754,7 +1760,7 @@ export const nl: Catalogue = {
 	'setup.gone.noPath': 'Er stond geen machine in het adres.',
 	'setup.gone.bookmark': 'Waarschijnlijk ben je hier via een oude bladwijzer beland.',
 	'setup.toYourMachines': 'Naar je machines',
-	'setup.firstJob': 'Verbinding met de laser wordt pas gelegd bij de eerste job. Doe die eerste keer met de deksel open en zonder werkstuk — dan zie je of de kop beweegt zoals je verwacht zonder dat er iets kan branden.',
+	'setup.firstJob': 'Doe de eerste job met de deksel open en zonder werkstuk — dan zie je of de kop beweegt zoals je verwacht zonder dat er iets kan branden.',
 	'setup.sheetFits': 'Gaat je vel mee naar dit bed?',
 	'setup.sheetFits.body': 'Je vel is {sheet}, het bed van {machine} is {bed}.',
 	'setup.sheetFits.thisMachine': 'deze machine',
@@ -2596,7 +2602,6 @@ export const nl: Catalogue = {
 		'Er staat een job op deze machine — hij brandt, of hij wacht in de rij om te beginnen. Wacht tot die klaar is, of stop hem: het bestand zou over dezelfde verbinding gaan die die job gebruikt. Er is niets verstuurd.',
 	'api.upload.busy':
 		'Naar deze machine wordt al een bestand gestuurd. Wacht tot dat klaar is en druk opnieuw; er is niets verstuurd.',
-	'api.upload.engineUpgrade': 'Deze engine kan de aflevering van pakketten niet bevestigen. Installeer de Ruida-sessie-update voordat je bestanden verstuurt; er is niets verzonden.',
 	'api.upload.lineInUse':
 		'Naar deze machine gaat al iets over deze lijn. Wacht tot dat klaar is en druk opnieuw; er is niets verstuurd.',
 	'api.upload.emptyFile':

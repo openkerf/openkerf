@@ -34,10 +34,15 @@ once; the bed size the engine also reads is a setting here, not a reading.
   no read is queued; one already queued is cancelled, one already on the line is let
   finish. `resume()` lets it read again. The thread keeps running throughout, so a
   `start()` from a `connect()` in between changes nothing.
+- **A second program on the controller is said, not suffered.** Every read the
+  controller acknowledged goes into `SecondClient`, answered or not; see there for the
+  rule and the numbers it rests on.
 """
 
+import collections
 import concurrent.futures
 import logging
+import statistics
 import threading
 import time
 from dataclasses import dataclass
@@ -113,6 +118,94 @@ def card_label(card_id: int) -> str:
     return f"{CID_LUT.get(card_id, 'Unknown card.')}: (0x{card_id:08X})"
 
 
+#: The code beside the sentence, so the interface can say it in the reader's language.
+SECOND_CLIENT = "ruida.secondClient"
+
+
+class SecondClient:
+    """
+    Does somebody else talk to this controller? Judged from our own reads.
+
+    Measured on a KH-5030 (RDC6442S, UDP) on 11 October: with an older OpenKerf on
+    another host polling the same controller every 0.2 s, about 40 % of our reads were
+    acknowledged and never answered at 0.2 s (11 of 12 at a 2 s cadence), and ACKs took
+    30–440 ms. With that program stopped: 96 of 96 answered, ACK and answer in 3–5 ms.
+    The tell is the *combination*: an ACK proves the line and the controller are there,
+    and the answer that should follow it went somewhere else.
+
+    The rule, over the last `WINDOW` reads that were acknowledged:
+
+    - **Raised** at `RAISE` or more of them unanswered — a quarter. Alone that was 0 in
+      96; shared it was about 8 in 20. One lost datagram is 1 in 20, and even a line
+      losing 5 % of its datagrams reaches 5 of 20 about 0.3 % of the time.
+    - **Cleared** at `CLEAR` or fewer — so it does not flicker on the edge, and goes
+      once the window holds at most one stray loss: with answers back at 0.2 s that is
+      about four seconds after the other program closes.
+    - **A read with no ACK does not count**, either way. The controller going quiet —
+      measured during a physical home on the same machine, when ACKs stopped too and
+      the session reconnected twice — is a silence, the session's business, and not a
+      second client. Such reads are left out of the window rather than emptying it, so
+      a second client that also costs an ACK now and then is still seen.
+
+    ACK latency is kept beside it (`ack_ms`, the median of the window) and told, not
+    judged: 30–440 ms against 3–5 ms is telling on the KH-5030, but a slow switch or
+    Wi-Fi gives slow ACKs with every answer arriving, and the unanswered share alone
+    already separates the two cases that were measured.
+    """
+
+    WINDOW = 20
+    RAISE = 5
+    CLEAR = 1
+
+    def __init__(self, window: int = WINDOW, raise_at: int = RAISE, clear_at: int = CLEAR):
+        self.raise_at = raise_at
+        self.clear_at = clear_at
+        self._lock = threading.Lock()
+        #: (answered, ack seconds or None) per acknowledged read, newest last.
+        self._reads: collections.deque = collections.deque(maxlen=window)
+        self._raised = False
+
+    def reset(self) -> None:
+        with self._lock:
+            self._reads.clear()
+            self._raised = False
+
+    def note(self, answered: bool, ack_seconds: float | None) -> None:
+        """One read the controller acknowledged; `answered` whether its answer came."""
+        with self._lock:
+            self._reads.append((answered, ack_seconds))
+            unanswered = sum(1 for done, _ in self._reads if not done)
+            if not self._raised and unanswered >= self.raise_at:
+                self._raised = True
+                log.warning("Ruida: %d of the last %d acknowledged reads went "
+                            "unanswered; a second client is suspected.",
+                            unanswered, len(self._reads))
+            elif self._raised and unanswered <= self.clear_at:
+                self._raised = False
+                log.info("Ruida: answers are back; second-client warning cleared.")
+
+    def warning(self) -> dict | None:
+        """The warning while it stands, else None."""
+        with self._lock:
+            if not self._raised:
+                return None
+            asked = len(self._reads)
+            unanswered = sum(1 for done, _ in self._reads if not done)
+            acks = [s for _, s in self._reads if s is not None]
+        ack_ms = round(statistics.median(acks) * 1000) if acks else None
+        return {
+            "code": SECOND_CLIENT,
+            "message": (
+                "Another program seems to be talking to this Ruida: "
+                f"{unanswered} of the last {asked} status questions were acknowledged "
+                "but not answered. Close the other program — two programs on one "
+                "controller lose each other's answers."),
+            "unanswered": unanswered,
+            "asked": asked,
+            "ack_ms": ack_ms,
+        }
+
+
 @dataclass(frozen=True)
 class Reading:
     value: int
@@ -142,6 +235,9 @@ class Monitor:
         self._next = 0
         self._card_due = True
         self.polls = self.answers = self.failures = 0
+        #: Acknowledged reads that got no answer; counted in `failures` as well.
+        self.unanswered = 0
+        self.second_client = SecondClient()
 
     # -- what the owner sees -----------------------------------------------
 
@@ -184,6 +280,8 @@ class Monitor:
             self._thread.join(self.SLICE_SECONDS + self.poll_seconds + 1)
         if self.running:
             return
+        # A new connection is a new question: what the last one saw does not carry over.
+        self.second_client.reset()
         self._stop.clear()
         self._thread = threading.Thread(target=self._run, name="ruida-monitor",
                                         daemon=True)
@@ -233,10 +331,19 @@ class Monitor:
         while not (self._stop.is_set() or self._paused.is_set()):
             done, _ = concurrent.futures.wait([future], timeout=self.SLICE_SECONDS)
             if done:
+                ack = getattr(future, "ack_seconds", None)
                 try:
-                    return future.result()
+                    reply = future.result()
+                except TimeoutError:
+                    # Acknowledged, not answered (`session._Unanswered`).
+                    self.unanswered += 1
+                    self.second_client.note(False, ack)
+                    return None
                 except (ConnectionError, OSError, concurrent.futures.CancelledError):
                     return None
+                if reply is not None:
+                    self.second_client.note(True, ack)
+                return reply
         future.cancel()
         return None
 

@@ -1,9 +1,10 @@
 """
 One conversation with one Ruida: a worker that owns the line, and a Future per packet.
 
-The semantics are the session patch's (`deploy/patches/ruida-session.patch`,
-`ruida/ruidasession.py` once applied), rewritten without the engine's kernel,
-channels or signals; `test_ruida_session_own.py` ports its thirty tests.
+The semantics are those of the session patch OpenKerf kept against the engine until
+this line replaced it (`deploy/patches/ruida-session.patch`, removed; it is in the git
+history), rewritten without the engine's kernel, channels or signals;
+`test_ruida_session_own.py` ports its thirty tests.
 
 - **One worker owns every byte of transport I/O**, opening and closing
   included. Callers only queue and wait; `open()` from four threads at once still
@@ -27,7 +28,9 @@ channels or signals; `test_ruida_session_own.py` ports its thirty tests.
   and reconnected: 12 probes and 11 unanswered reads in 20 s, not one status
   word. So it is a `TimeoutError` on that Future, no new generation, no
   reconnect. With the other program stopped: 96 of 96 reads answered, ACK and
-  answer within 3–5 ms, one probe, generation 0.
+  answer within 3–5 ms, one probe, generation 0. Every Future of a packet that was
+  acknowledged also carries `ack_seconds`, send to ACK, so the monitor can say
+  what it saw (`monitor.SecondClient`).
 - **The generation pins a transfer.** It moves on every close, shutdown and
   failure; a write that names an older one is refused, so a reconnect can never
   quietly carry on with the second half of a file.
@@ -124,6 +127,8 @@ class RuidaSession:
         self._responding = False
         self._generation = 0
         self._ack_pending = self._reply_pending = False
+        #: Send to ACK of the packet on the line; None until its ACK came.
+        self._ack_seconds: float | None = None
         self._reported: tuple[str, str] | None = None
         self.detail = ""
         self.sends = self.acks = self.naks = self.replies = self.probes = 0
@@ -325,7 +330,9 @@ class RuidaSession:
         self.drained += self._transport.drain()
         self._ack_pending = True
         self._reply_pending = address is not None
-        deadline = time.monotonic() + self.reply_seconds
+        self._ack_seconds = None
+        sent_at = time.monotonic()
+        deadline = sent_at + self.reply_seconds
         naks = 0
         reply = None
         try:
@@ -349,6 +356,7 @@ class RuidaSession:
                     if self._ack_pending:
                         self.acks += 1
                         self._ack_pending = False
+                        self._ack_seconds = time.monotonic() - sent_at
                     data = data[1:]
                     if not data:
                         continue
@@ -410,6 +418,7 @@ class RuidaSession:
                     with self._cond:
                         self._check(queued)
                         self._pending.discard(future)
+                        future.ack_seconds = self._ack_seconds
                         if not future.done():
                             future.set_result(reply)
                         self._cond.notify_all()
@@ -418,6 +427,7 @@ class RuidaSession:
                 except _Unanswered as error:
                     with self._cond:
                         self._pending.discard(future)
+                        future.ack_seconds = self._ack_seconds
                         if not future.done():
                             future.set_exception(TimeoutError(str(error)))
                         self._cond.notify_all()

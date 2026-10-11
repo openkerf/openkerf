@@ -102,7 +102,7 @@ export const en = {
 	'transport.stop.onMachine': 'Stop on the machine',
 	'transport.stop.now': 'Abort the job right away ({key})',
 	'transport.stop.armed':
-		'Nothing is running — this aborts a job the moment one starts ({key})',
+		'Nothing is running right now ({key})',
 	'transport.noServer': 'No connection to OpenKerf — this button will not arrive.',
 	'transport.noServer.stop': 'Stopping is only possible with the emergency stop on the machine now.',
 	'transport.noServer.pause': 'Pausing is only possible with the button on the machine now.',
@@ -154,6 +154,12 @@ export const en = {
 	'status.machine.connected': 'Connected to the laser',
 	'status.machine.connectionUnknown.hint':
 		'The engine is running, but this driver does not report whether a machine is attached. Check the machine before starting.',
+	'status.machine.connectedShared': 'Connected, but not alone',
+	'status.machine.secondClient.title': 'Another program seems to be talking to this laser',
+	'status.machine.secondClient.body':
+		"{unanswered} of the last {asked} status questions were acknowledged but not answered. Close the other program — two programs on one controller lose each other's answers.",
+	'status.machine.secondClient.ack':
+		'The controller took {ms} ms to acknowledge; with one program talking to it, that takes a few milliseconds.',
 	'status.connect': 'Connect',
 	'status.connect.busy': 'Connecting…',
 	'status.connect.title': 'Open the connection to the machine. This moves nothing.',
@@ -1851,7 +1857,7 @@ export const en = {
 	'setup.gone.noPath': 'There was no machine in the address.',
 	'setup.gone.bookmark': 'You have probably ended up here via an old bookmark.',
 	'setup.toYourMachines': 'To your machines',
-	'setup.firstJob': 'The connection to the laser is only made at the first job. Do that first time with the lid open and without a workpiece — then you see whether the head moves as you expect without anything being able to burn.',
+	'setup.firstJob': 'Do the first job with the lid open and without a workpiece — then you see whether the head moves as you expect without anything being able to burn.',
 	'setup.sheetFits': 'Does your sheet come along to this bed?',
 	'setup.sheetFits.body': 'Your sheet is {sheet}, the bed of {machine} is {bed}.',
 	'setup.sheetFits.thisMachine': 'this machine',
@@ -2807,7 +2813,6 @@ export const en = {
 		'A job is on this machine — burning, or waiting in the queue to start. Wait until it is done, or stop it: the file would go down the same connection that job uses. Nothing has been sent.',
 	'api.upload.busy':
 		'This machine is already being sent a file. Wait until that one is done and press again; nothing has been sent.',
-	'api.upload.engineUpgrade': 'This engine cannot confirm packet delivery. Install the Ruida session update before sending files; nothing has been sent.',
 	'api.upload.lineInUse':
 		'This machine is already being sent something on this line. Wait until that is done and press again; nothing has been sent.',
 	'api.upload.emptyFile': 'The job came out empty, so there is nothing to send. Nothing has been sent.',

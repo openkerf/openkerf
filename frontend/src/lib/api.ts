@@ -69,6 +69,21 @@ export type Connection = {
 	/** How long this reading has read the same, in milliseconds. Absent from a server
 	 *  older than the field. Diagnostic only; it does not hide connection loss. */
 	held_ms?: number;
+	/** Beside a working line: something is wrong with it that the state does not say.
+	 *  Present only while it stands (`api/openkerf_api/ruida/monitor.py`, `SecondClient`). */
+	warning?: ConnectionWarning;
+};
+
+/** A warning about a working line, with the code that says it in the reader's language. */
+export type ConnectionWarning = {
+	/** 'ruida.secondClient': another program talks to the same controller. */
+	code: string;
+	/** The server's English sentence, said as it is for a code this page does not know. */
+	message: string;
+	unanswered?: number;
+	asked?: number;
+	/** Median ACK time over the same reads, in milliseconds; null before any. */
+	ack_ms?: number | null;
 };
 
 export type Device = {
@@ -201,6 +216,42 @@ export function machineConnection(device: Device | null, serverConnected: boolea
 	if (device.connection?.state === 'connected') return 'connected';
 	if (device.connection?.state === 'disconnected') return 'unplugged';
 	return 'unknown';
+}
+
+/**
+ * The warning about the line to the machine, as sentences for the screen; null without one.
+ *
+ * Only while the server is there and the line reads connected: over a line that is down
+ * the state already says more than this would. A code this page knows is said in the
+ * reader's language with its numbers through `Intl`; any other code keeps the server's
+ * English sentence rather than nothing.
+ */
+export function connectionWarning(
+	device: Device | null,
+	serverConnected: boolean
+): { title: string | null; body: string; ack: string | null } | null {
+	if (!serverConnected || !device) return null;
+	const reading = device.connection;
+	const warning = reading?.warning;
+	if (!warning || reading?.state !== 'connected') return null;
+	if (
+		warning.code === 'ruida.secondClient' &&
+		typeof warning.unanswered === 'number' &&
+		typeof warning.asked === 'number'
+	) {
+		return {
+			title: t('status.machine.secondClient.title'),
+			body: t('status.machine.secondClient.body', {
+				unanswered: number(warning.unanswered),
+				asked: number(warning.asked)
+			}),
+			ack:
+				typeof warning.ack_ms === 'number'
+					? t('status.machine.secondClient.ack', { ms: number(warning.ack_ms) })
+					: null
+		};
+	}
+	return { title: null, body: warning.message, ack: null };
 }
 
 /** The machine badge prioritises reachability; jobPhase keeps the job's own state. */

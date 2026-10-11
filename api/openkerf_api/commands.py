@@ -78,56 +78,6 @@ class CommandError(RuntimeError):
         self.output = output
 
 
-class _AlwaysConnected:
-    """
-    Reports a Ruida service as always connected and never busy, to keep its
-    status-monitor thread from redialling the machine.
-
-    `RuidaController.__init__` unconditionally starts a daemon thread
-    (`ruida/controller.py:50`); its loop (`:162`) sleeps 3 s and then, every 0.2 s
-    forever, calls `service.connect()` whenever
-    `service.connected and not service.is_busy` is false (`:172`, `:189`) — five
-    times a second, for as long as the service reports itself not connected.
-    Measured against a `build_job_bytes` driver, isolated from the live driver's
-    own identical thread (see `task-1-report-fix-4.md`): 6 calls in a 4.2 s wait
-    that started right after construction — the first roughly 3 s of that window
-    is the startup sleep, so this is 5/s over the ~1.2 s of it that is actually
-    active — before this wrapper existed; 0 in the same window with it. A build
-    driver that lived for the rest of the process would otherwise have this app
-    quietly redialling a laser that is off or unplugged, forever, once per build.
-
-    Both halves matter: reporting only `connected` as true and leaving `is_busy`
-    proxied through to the real, shared device left a real gap — the device's
-    `is_busy` reads a session shared with the live driver, and a build that leaves
-    it transiently true (measured: right at job completion) still sent the thread
-    down the "keep dialling" branch on its very next check, once, before the busy
-    state cleared. Overriding both closes it regardless of that shared state.
-
-    With both true, the thread instead takes the *other* branch of that `if`,
-    which only calls `job.get_setting(..., output=self.write)` (our own no-op) —
-    harmless, and it never reaches `connect()`. That branch acquires and releases
-    `_job_lock` each time (`:173`/`:182`), the same lock every `_data_sender`
-    started by a later build's `stop_record()` (`ruida/driver.py:301`) needs; see
-    `_upload_driver_for` for why that lock has to be released once, up front.
-    Wraps rather than patches the real service, so everything else it is asked
-    for (`setting`, `channel`, ...) still reaches the genuine object.
-    """
-
-    def __init__(self, service):
-        self._service = service
-
-    @property
-    def connected(self):
-        return True
-
-    @property
-    def is_busy(self):
-        return False
-
-    def __getattr__(self, name):
-        return getattr(self._service, name)
-
-
 class CommandRunner:
     def __init__(self, kernel, document=None):
         self.kernel = kernel
@@ -372,10 +322,9 @@ class CommandRunner:
         `RDJob` buffer — no connection, no send thread reaching the machine.
 
         `_upload_driver_for` builds that driver once per device and reuses it: a
-        fresh `RuidaController` per call starts a daemon thread that, unless parked,
-        redials the machine forever (see `_AlwaysConnected`) — ten calls to this
-        method must not leave ten such threads running. Its buffer is cleared before
-        every build instead.
+        fresh `RuidaController` per call starts a status thread that never ends — ten
+        calls to this method must not leave ten such threads running. Its buffer is
+        cleared before every build instead.
 
         Why not `save_job` itself: it sets `controller.write` to `f.write` and then
         *executes* the RDJob, while the bytes we want are the ones that land in the
@@ -420,9 +369,12 @@ class CommandRunner:
         The `build_job_bytes` driver for `device`, made once and reused.
 
         `RuidaController.__init__` unconditionally starts a daemon thread
-        (`ruida/controller.py:50`) that, left alone, redials the machine forever —
-        see `_AlwaysConnected`. A fresh `RuidaDriver` per call would leave one more
-        such thread behind every time somebody builds a file: measured, 10 calls to
+        (`ruida/controller.py:50`) whose loop has no way out. While the device is not
+        connected — and the engine's Ruida device never is: its session is
+        `ClosedSession` (`ruida/closed.py`) — that loop only calls
+        `service.connect()`, which `ClosedSession` turns into nothing. A fresh
+        `RuidaDriver` per call would still leave one more such thread behind every
+        time somebody builds a file: measured, 10 calls to
         `build_job_bytes` before this method existed left 20 extra threads running
         (a status monitor and a `_data_sender` per call, `task-1-report-fix-3.md`).
         One driver per device instead, emptied (`controller.job.buffer.clear()`)
@@ -449,18 +401,14 @@ class CommandRunner:
             # channel (`ruida/driver.py:47,48`) — the same channel the live
             # driver's own controller watches. A build driver never needs an
             # answer (it talks to a no-op `write` and only ever assembles bytes),
-            # but a real reply arriving while this driver still exists would be
+            # but a reply on that channel while this driver still exists would be
             # decoded twice: `update_x`/`update_y` (`ruida/controller.py:259-277`)
-            # write `self.service.driver.native_x/native_y` — through
-            # `_AlwaysConnected.__getattr__` that is still `device.driver`, the
+            # write `self.service.driver.native_x/native_y` — `device.driver`, the
             # *live* driver, so the same value would land there a second time for
             # no reason. No path toward the machine either way, but there is
             # nothing this watcher is for, so it comes straight off.
             driver.recv.unwatch(driver.controller.recv)
-            # Neutralise the thread before anything else — the 3 s startup sleep
-            # (`ruida/controller.py:170`) is slack, not something to rely on.
-            driver.controller.service = _AlwaysConnected(device)
-            # Nothing from here may reach a socket either.
+            # The bytes stay in `controller.job`; nothing is written anywhere.
             driver.controller.write = lambda data: None
             # `__init__` acquires `_job_lock` and never releases it
             # (`ruida/controller.py:49`) — meant to hold the status thread until
@@ -473,28 +421,6 @@ class CommandRunner:
             # once here lets the status thread and every `_data_sender` take turns
             # on it normally instead.
             driver.controller.resume_monitor()
-            # `wait_idle` (`ruida/controller.py:401`) is
-            # `while not self._idle and self.service.connected: sleep(...)` — with
-            # `_AlwaysConnected` the second half is always true, so once anything
-            # ever sets `_idle` false (`:212-218`, on a home or move step; nothing
-            # today's plain cut layer produces reaches that) this would spin
-            # forever instead of returning once real status updates stop arriving.
-            # Its caller `sync` (`:407`) then calls
-            # `self.service.active_session.close()` — through `__getattr__`, so the
-            # *real*, shared session. Screened off rather than merely explained:
-            # this controller is never asked to wait for or resync anything.
-            driver.controller.wait_idle = lambda: None
-            driver.controller.sync = lambda: None
-            # `physical_home` (`ruida/driver.py:392`) calls `sync` and, either
-            # side of it, `gross_timeout`/`normal_timeout` (`ruida/controller.py
-            # :108,115`) — both just `self.service.set_timeout(...)`, which
-            # through `__getattr__` reaches `RuidaDevice.set_timeout`
-            # (`ruida/device.py:689`) and so `active_session.set_timeout(...)`
-            # on the *real*, shared session. Same neighbourhood as `sync`, same
-            # reason: this controller is never asked to home, so screened off
-            # rather than left to reach a session it has no business touching.
-            driver.controller.gross_timeout = lambda: None
-            driver.controller.normal_timeout = lambda: None
             self._upload_driver = driver
             self._upload_device = device
         driver = self._upload_driver

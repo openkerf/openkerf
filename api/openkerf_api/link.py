@@ -15,7 +15,6 @@ phase 5 burning (`start_job`, `job`).
 from __future__ import annotations
 
 import threading
-import time
 import weakref
 from typing import Literal, Protocol
 
@@ -63,7 +62,11 @@ class MachineLink(Protocol):
         """Close the line and keep it closed until `connect()`; returns `connection()`."""
 
     def connection(self) -> dict:
-        """`{"state": ConnectionState, "detail": str | None}` — never raises."""
+        """
+        `{"state": ConnectionState, "detail": str | None}` — never raises. A `RuidaLink`
+        adds `"warning"` (`{"code", "message", ...}`) only while one stands: today
+        `ruida.secondClient`, another program on the same controller (`ruida/monitor.py`).
+        """
 
     def position(self) -> tuple[float, float] | None:
         """
@@ -262,17 +265,7 @@ class EngineLink:
 
     def connect(self) -> dict:
         self._run(CONNECTS)
-        state = self.connection()
-        session = _attr(self.device, "active_session")
-        if getattr(session, "supports_write_completion", False):
-            # The patched engine session's `open()` only asks its worker for the
-            # handshake. No engine device reaches here with one today — a Ruida takes
-            # `RuidaLink` — but the wait is the engine's behaviour and stays with it.
-            deadline = time.monotonic() + 3.0
-            while state["state"] == "disconnected" and time.monotonic() < deadline:
-                time.sleep(0.02)
-                state = self.connection()
-        return state
+        return self.connection()
 
     def disconnect(self) -> dict:
         self._run(DISCONNECTS)

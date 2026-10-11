@@ -2,11 +2,11 @@
 The emulator as a UDP peer: does it answer the engine the way the engine expects?
 
 Every packet here is framed by the engine itself — `RuidaSession._package` for checksum
-and swizzle (`ruida/ruidasession.py:170-172`), `RDJob` for the commands and for reading
+and swizzle (`ruida/ruidasession.py:197-202`), `RDJob` for the commands and for reading
 the answers back (`ruida/rdjob.py:1332-1366`) — and the round-trip tests go further and
-let the engine's own `RuidaSession` and `UDPTransport` do the talking, ports aside. If
-the peer and the engine disagreed about a single byte of the wire format, the session
-would never report itself connected.
+let our own `RuidaSession` and `UdpTransport` (`openkerf_api/ruida/`) do the talking,
+ports aside. If the peer and the framing disagreed about a single byte of the wire
+format, the session would never report itself connected.
 
 Measured against `ruida_peer()` on 127.0.0.1 (magic 0x88):
 
@@ -27,7 +27,6 @@ import time
 from types import SimpleNamespace
 
 import pytest
-import meerk40t.ruida.udp_transport as udp
 from meerk40t.ruida.rdjob import (
     ACK,
     ENQ,
@@ -41,8 +40,10 @@ from meerk40t.ruida.rdjob import (
     NAK,
     RDJob,
 )
-from meerk40t.ruida.ruidasession import RuidaSession
+from meerk40t.ruida.ruidasession import RuidaSession as EngineSession
 
+from openkerf_api.ruida.session import RuidaSession
+from openkerf_api.ruida.transport import UdpTransport
 from ruida_peer import ruida_peer
 
 LOCALHOST = "127.0.0.1"
@@ -79,7 +80,7 @@ def client():
 
 def frame(job, data):
     """The engine's UDP framing — `RuidaSession._package` — without a session thread."""
-    return RuidaSession._package(SimpleNamespace(swizzle=job.swizzle, interface="udp"), data)
+    return EngineSession._package(SimpleNamespace(swizzle=job.swizzle, interface="udp"), data)
 
 
 def answers(sock, job):
@@ -115,7 +116,7 @@ def test_a_packet_is_acknowledged_from_the_port_it_was_sent_to(job, client):
 
 def test_a_memory_read_of_the_machine_status_is_answered_after_the_ack(job, client):
     """ACK, then nine bytes `da 01 04 00 <value:5>` — the shape the session waits for
-    (`ruida/ruidasession.py:262-263`) — and `RDJob.decode_reply`, which the controller's
+    (`openkerf_api/ruida/framing.py`, `is_reply_to`) — and `RDJob.decode_reply`, which the controller's
     `recv` uses (`ruida/controller.py:308`), reads it as the status word."""
     with ruida_peer() as peer:
         client.sendto(frame(job, GET_SETTING + MEM_MACHINE_STATUS), (LOCALHOST, peer.send_port))
@@ -211,71 +212,47 @@ def test_a_fixed_reply_port_answers_there_and_not_to_the_source(job, client):
 
 
 # ---------------------------------------------------------------------------
-# The engine's own session and transport, against the peer.
-
-
-class _LoopbackTransport(udp.UDPTransport):
-    """`UDPTransport` with the two things a test must change: the peer's port instead of
-    50200, and a socket bound to 127.0.0.1 on a free port instead of `("", 40200)`
-    (`ruida/udp_transport.py:18-19,40`). Everything else is the engine's."""
-
-    peer_port = None
-
-    def __init__(self, service):
-        super().__init__(service)
-        self.send_port = self.peer_port
-        self.listen_port = 0
-
-    def open(self):
-        if self.is_open:
-            return
-        self._peer = socket.gethostbyname(self.send_address)
-        self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.socket.settimeout(self._s_to)
-        self.socket.bind((LOCALHOST, self.listen_port))
+# Our own session and transport (`openkerf_api/ruida/`), against the peer.
+#
+# These three were asked of the engine's `RuidaSession` while OpenKerf shipped a patch
+# for it (`deploy/patches/ruida-session.patch`, its write returning a Future). Every
+# Ruida now talks through our own session and the engine's is never constructed
+# (`ruida/closed.py`), so the same questions go to the session that does the talking.
 
 
 @pytest.fixture
-def engine_session(monkeypatch, job):
-    """A `RuidaSession` whose transport talks to a fresh peer; yields both."""
+def engine_session(job):
+    """Our `RuidaSession` over real UDP on 127.0.0.1 to a fresh peer; yields both."""
     with ruida_peer() as peer:
-        transport = type("T", (_LoopbackTransport,), {"peer_port": peer.send_port})
-        monkeypatch.setattr("meerk40t.ruida.ruidasession.udp.UDPTransport", transport)
-        replies = []
-
-        def channel(name, **kwargs):
-            return replies.append if name.endswith("/recv") else (lambda *a: None)
-
-        service = SimpleNamespace(
-            interface="udp", safe_label="peer", name="peer", address=LOCALHOST,
-            channel=channel, signal=lambda *a: None)
-        session = RuidaSession(service)
-        session.set_swizzles(job.swizzle, job.unswizzle)
+        session = RuidaSession(
+            lambda: UdpTransport(LOCALHOST, send_port=peer.send_port, listen_port=0,
+                                 bind_host=LOCALHOST),
+            magic=0x88, reply_seconds=0.5, receive_seconds=0.02, retry_seconds=0.05)
         session.open()
         try:
             deadline = time.monotonic() + 2
             while not session.connected:
                 assert time.monotonic() < deadline, "the session never connected"
                 time.sleep(0.005)
-            yield session, peer, replies
+            yield session, peer
         finally:
             session.shutdown()
 
 
-def test_the_engine_session_connects_and_reads_the_status(engine_session):
-    """ENQ, ACK, connected; a status read resolves its Future and the reply reaches the
-    recv channel, nine bytes the controller can decode."""
-    session, peer, replies = engine_session
+def test_the_session_connects_and_reads_the_status(engine_session):
+    """ENQ, ACK, connected; a status read resolves its Future with the nine bytes the
+    controller can decode."""
+    session, peer = engine_session
     assert peer.received[0].payload == ENQ
-    session.write(GET_SETTING + MEM_MACHINE_STATUS).result(2)
-    assert session.replies == 1 and len(replies) == 1
-    assert RDJob().decode_reply(replies[0])[:2] == (MEM_MACHINE_STATUS, 22)
+    reply = session.read_memory(MEM_MACHINE_STATUS).result(2)
+    assert session.replies == 1
+    assert RDJob().decode_reply(reply)[:2] == (MEM_MACHINE_STATUS, 22)
 
 
-def test_the_engine_session_resends_after_an_injected_nak(engine_session, job):
-    """NAK: the session sends the same packet once more (`ruida/ruidasession.py:253-261`)
-    and the second copy is acknowledged."""
-    session, peer, _ = engine_session
+def test_the_session_resends_after_an_injected_nak(engine_session, job):
+    """NAK: the session sends the same packet once more and the second copy is
+    acknowledged."""
+    session, peer = engine_session
     move = a_move(job)
     peer.nak_next()
     session.write(move).result(2)
@@ -285,11 +262,10 @@ def test_the_engine_session_resends_after_an_injected_nak(engine_session, job):
     assert session.naks == 1
 
 
-def test_the_engine_session_does_not_resend_after_a_dropped_ack(engine_session, job):
-    """Lost ACK: the Future fails after the timeout and the block is *not* sent again
-    (`ruida/ruidasession.py:237-240`) — the controller may well have taken it."""
-    session, peer, _ = engine_session
-    session._tries = 2  # 0.5 s instead of 1 s before the session gives up.
+def test_the_session_does_not_resend_after_a_dropped_ack(engine_session, job):
+    """Lost ACK: the Future fails after the timeout and the block is *not* sent again —
+    the controller may well have taken it."""
+    session, peer = engine_session
     move = a_move(job)
     peer.drop_ack_next()
     with pytest.raises(ConnectionError):

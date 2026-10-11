@@ -12,7 +12,7 @@ import time
 
 import pytest
 
-from openkerf_api.commands import CommandRunner, _AlwaysConnected
+from openkerf_api.commands import CommandRunner
 from openkerf_api.edits import DesignError
 from openkerf_api.ruida.link import RuidaLink
 from openkerf_api.ruida.monitor import Monitor
@@ -94,33 +94,18 @@ def a_parked_driver(device):
     """
     A `RuidaDriver` built for a test to inspect, not to build anything with.
 
-    A bare `RuidaDriver(device)` starts a status thread that tries
-    `service.connect()` five times a second for the rest of the run
-    (`ruida/controller.py:50,162,189` — the construction `CLAUDE.md`'s own row
-    warns against leaving unguarded). Measured against the `ruida` fixture
-    (`interface` `usb`, `address` `localhost`, `connected` `False`):
-    `RuidaDevice.connect` reaches `active_session.connect()` -> `_open()`,
-    which fails locally and reaches no real machine today — but a kernel
-    pointed at a real UDP address would send actual packets from that same
-    line, and a test has no business depending on today's harmlessness.
-
-    Unlike `_upload_driver_for`, this does *not* call `resume_monitor()` — and
-    that omission, not the `_AlwaysConnected` wrap, is what actually parks the
-    thread here. `__init__` acquires `_job_lock` and this driver never releases
-    it, so once the status thread's first check takes the "connected and idle"
-    branch (`_AlwaysConnected` makes sure it does), its own
-    `self._job_lock.acquire()` (`ruida/controller.py:173`) blocks forever —
-    measured: `Thread-3 (_status_monitor)` still alive 3.6 s later, never
-    having reached `connect()` or anything past that first acquire. Adding
-    `resume_monitor()` "for parity" with `_upload_driver_for` would let that
-    thread through to real work — including, eventually, writing on the real
-    `<device>/send` channel — for a driver this helper promises is inert. It
+    A bare `RuidaDriver(device)` starts a status thread whose loop never ends
+    (`ruida/controller.py:50,162`). On the engine's Ruida device it can reach nothing:
+    the device's session is `ClosedSession` (`openkerf_api/ruida/closed.py`), so the
+    thread only ever takes the not-connected branch and its `service.connect()` is a
+    no-op. Unlike `_upload_driver_for`, this does *not* call `resume_monitor()`:
+    `_job_lock` stays held, so nothing that waits on it — a `_data_sender`, or the
+    status thread should the device ever report itself connected — gets past it. It
     stays out on purpose.
     """
     from meerk40t.ruida.driver import RuidaDriver
 
     driver = RuidaDriver(device)
-    driver.controller.service = _AlwaysConnected(device)
     driver.recv.unwatch(driver.controller.recv)
     return driver
 
@@ -394,46 +379,48 @@ def test_building_the_bytes_restores_the_merge_settings(ruida):
     )
 
 
-def test_building_the_bytes_does_not_pile_up_connect_attempts(ruida):
+def test_building_the_bytes_reaches_nothing(ruida, monkeypatch):
     """
     `RuidaController.__init__` starts a daemon thread unconditionally
     (`ruida/controller.py:50`); its loop sleeps 3 s and then, every 0.2 s forever,
-    calls `service.connect()` on a service that reports itself not connected and
-    not busy (`:172`, `:189`) — five times a second, for as long as it does.
-    Before `_AlwaysConnected` existed, a `build_job_bytes` driver on this same
-    test kernel took that branch: measured, 5 calls in the 4 s this test waits
-    (the first ~3 s of that wait is the startup sleep; the calls land in the ~1 s
-    left, at the 0.2 s cadence), isolated from the live driver's own identical
-    thread, which does the same thing independently of this feature — see
-    CLAUDE.md's row on the Ruida's connection lifecycle. With `_AlwaysConnected`:
-    0 in the same 4 s.
-
-    The live driver's own thread is neutralised the same way here, on purpose:
-    without that, this test would still see calls from a thread this feature does
-    not control, and "assert none" would be false regardless of what
-    `build_job_bytes` does.
+    calls `service.connect()` while the service reports itself not connected
+    (`:172`, `:189`). For the build driver that is the engine's Ruida device, whose
+    session is `ClosedSession`: the calls arrive and reach nothing. Measured over the
+    4 s after a build, past the 3 s start-up sleep: no socket bound, nothing written
+    to the closed session, and the session still the closed one. (Until phase 6 a
+    wrapper, `_AlwaysConnected`, kept that thread from calling `connect()` at all;
+    with the session closed there is nothing left for it to keep away from.)
 
     Slow on purpose (a bit over 4 s) — that is the price of proving a thread
-    never dials, rather than assuming it from the code.
+    reaches nothing, rather than assuming it from the code.
     """
+    import socket
+
+    from openkerf_api.ruida.closed import ClosedSession
+
     a_rectangle(ruida)
-    ruida.device.driver.controller.service = _AlwaysConnected(ruida.device)
-    calls = []
-    ruida.device.connect = lambda *a, **kw: calls.append(True)
+    session = ruida.device.active_session
+    assert type(session) is ClosedSession
+    binds = []
+    real_bind = socket.socket.bind
+    monkeypatch.setattr(socket.socket, "bind",
+                        lambda sock, address: binds.append(address) or real_bind(sock, address))
+    writes = session.writes
     runner = CommandRunner(ruida)
 
     runner.build_job_bytes()
     time.sleep(4)
 
-    assert not calls, f"{len(calls)} connect() call(s) in the 4s after building"
+    assert binds == []
+    assert session.writes == writes
+    assert ruida.device.active_session is session
 
 
 def test_ten_builds_do_not_leave_ten_threads(ruida):
     """
     A fresh `RuidaDriver` per call — the state before `_upload_driver_for` reused
     one — left two threads behind per build: a status monitor
-    (`ruida/controller.py:50`) and, once `_AlwaysConnected` closed the connect
-    storm, a `_data_sender` (`ruida/driver.py:301` → `controller.py:76`) blocked
+    (`ruida/controller.py:50`) and a `_data_sender` (`ruida/driver.py:301` → `controller.py:76`) blocked
     forever on `_job_lock`, never released. Measured on that code: `before=5`,
     `after one build=7`, `after ten builds=25` — climbing by two every call, still
     all alive 3 s later.
@@ -593,8 +580,8 @@ def test_a_reply_on_the_shared_channel_writes_the_live_driver_only_once(ruida, m
     """
     Measured what staying on the channel would cost: `update_x`
     (`ruida/controller.py:259-268`) writes `self.service.driver.native_x` — and
-    `self.service` for a build controller is `_AlwaysConnected`, whose
-    `__getattr__` still resolves `.driver` to `device.driver`, the *live* driver.
+    `self.service` for a build controller is the device itself, so `.driver` is
+    `device.driver`, the *live* driver.
     So a build controller left on the shared channel writes the live driver's
     position a second time for every reply that arrives while it exists — not a
     path toward the machine, but a needless second write to state the app reads
@@ -2872,15 +2859,19 @@ def test_claiming_upload_line_preserves_queued_commands(ruida):
     assert not session.written
 
 
-def test_engine_without_receipts_refuses_before_any_bytes(ruida, monkeypatch):
+def test_a_link_that_carries_no_files_refuses_before_any_bytes(ruida, monkeypatch):
+    """A connected line that is not a Ruida's (`EngineLink.carries_files` is false)
+    gets the build's own `upload.notRuida`, before anything is built or written."""
     a_rectangle(ruida)
     upload = RuidaUpload(ruida)
     session = a_fake_session(upload, monkeypatch)
     session.link.carries_files = False
+    built = []
+    monkeypatch.setattr(upload.runner, "build_job_bytes", lambda: built.append(1) or b"x")
     with pytest.raises(DesignError) as error:
         upload.upload("TEST")
-    assert error.value.code == "upload.engineUpgrade"
-    assert not session.written
+    assert error.value.code == "upload.notRuida"
+    assert not session.written and not built
 
 
 def test_upload_pins_session_generation_across_packets(ruida, monkeypatch):

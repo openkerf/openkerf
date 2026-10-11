@@ -176,9 +176,17 @@ class StatusReader:
         reading = _safe(link.connection, None) if link is not None else None
         if not isinstance(reading, dict) or reading.get("state") not in STATES:
             reading = {"state": "unknown", "detail": None}
-        return self._aged(
+        aged = self._aged(
             device, {"state": reading["state"], "detail": reading.get("detail")}
         )
+        # A link may add a warning beside a working line — a Ruida with a second
+        # program talking to it (`ruida/monitor.py`, `SecondClient`). Present only
+        # while it stands, and only whole: a code and a sentence.
+        warning = reading.get("warning")
+        if (isinstance(warning, dict) and isinstance(warning.get("code"), str)
+                and isinstance(warning.get("message"), str)):
+            aged["warning"] = dict(warning)
+        return aged
 
     @staticmethod
     def _aged(device, reading: dict) -> dict:

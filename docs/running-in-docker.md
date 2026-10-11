@@ -138,23 +138,47 @@ against PyPI 0.9.9100, 193 of 1625 API tests fail. The revision is the `MEERK40T
 build argument in `deploy/Dockerfile`. Bumping it is a deliberate step taken together
 with this repository's working copy, not something to do on its own.
 
-The build applies `deploy/patches/ruida-session.patch` to that exact engine revision
-before installing it. This fixes Ruida transport ownership, reconnect and per-packet
-completion. It includes the offline regression tests for review/upstream submission.
-An incompatible base fails the build at `git apply --check`; no unpatched fallback is
-installed. A local engine checkout is still excluded from the image.
+The engine is installed as it is upstream, **without a patch**. Until October 2026
+the build applied a patch to the engine's Ruida session; that is gone, because a Ruida
+no longer goes through the engine's connection at all.
 
-For exact local installation commands, see [the patch README](../deploy/patches/README.md).
-Use a clean checkout of `5f68a45`, apply the same
-patch with `git apply`, then install that checkout before `pip install -e api`.
-Do not apply it twice to an already patched checkout. File upload explicitly refuses
-an engine without completion tracking.
+**The line to a Ruida is OpenKerf's own.** The engine still designs, plans and turns a
+job into the controller's bytes; OpenKerf sends them, over UDP — it sends to port
+50200 on the controller and listens on 40200 — and reads the machine's state back
+the same way. The engine's own Ruida connection is switched off when OpenKerf loads, so
+it never opens those ports. Every other kind of laser is still driven by the engine.
+Two consequences for the machine settings:
 
-Before using a new image beside the machine, keep the old image digest for rollback.
-Verify idle status, explicit disconnect/reconnect, and sending a file without starting
-it. Delayed or missing controller acknowledgements stop the transfer; inspect the file
-on the machine if its completion was not confirmed. These are required hardware checks,
-not claims made by the offline test suite.
+- **The address is a numeric IP**, such as `192.168.0.4`. A host name is not looked
+  up: connecting refuses it and says the address must be a numeric IPv4 address.
+- **There is no interface to choose.** A Ruida is always reached over the network; a
+  Ruida on USB is not supported.
+
+At start-up OpenKerf makes **one** attempt to connect, in the background, when the
+active machine is a Ruida with an address. If the laser was off at that moment the
+status bar says the machine is not connected, and it stays that way: press
+**Connect** once the laser is on. See [Burning](job.md#connect-and-disconnect).
+
+## One program per controller
+
+A Ruida can only talk to one program at a time. Before you start this container,
+stop everything else that may be connected to the same controller: another OpenKerf
+(an older container, a copy on a laptop), LightBurn, MeerK40t.
+
+What two of them do to each other was measured on the KH-5030: with an older
+OpenKerf container on another host polling the same controller, only about 60 % of
+the questions got an answer, and every acknowledgement took 30 to 440 ms. With that
+container stopped, 96 of 96 were answered, each within 3 to 5 ms. OpenKerf watches for
+this: when 5 or more of its last 20 acknowledged status questions go unanswered, the
+status bar reads **Connected, but not alone**, with a band underneath saying "Another
+program seems to be talking to this laser" and to close the other program. The
+warning goes by itself a few seconds after the other program lets go.
+
+Before using a new image beside the machine, keep the old image's digest so you can
+go back to it. Then check, with the lid open and no material in the bed: the status
+bar stays connected while the machine idles, Disconnect and Connect do what they
+say, a move goes where you sent it, and a file sent to the machine's memory arrives
+on its panel without starting.
 
 ## Updating
 
@@ -162,6 +186,16 @@ not claims made by the offline test suite.
 docker compose pull
 docker compose up -d
 ```
+
+`up -d` replaces the running container with one from the new image; the old one is
+stopped before the new one starts, and the volume carries over. Two things to watch,
+both because of [one program per controller](#one-program-per-controller):
+
+- If the new image runs under another container or project name — a second compose
+  folder, a test image beside the real one — the old container is *not* replaced and
+  keeps talking to the laser. Stop it first: `docker stop <name>`.
+- After the update the new container connects once at start-up. If the laser was off,
+  press **Connect** in the interface.
 
 The image is rebuilt on every change to `main`; `latest` is only published after the
 build has proved that the interface, the API and OpenCV are inside it. A tagged
@@ -186,4 +220,5 @@ The Linux box beside the laser is the setup this page is for.
 
 **A laser over USB is not covered in this version.** The compose file has the line
 that would hand the USB bus to the container, commented out, and it has not been tested.
-A Ruida over the network is what this image has run against.
+A Ruida over the network is what this image has run against, and the only way
+OpenKerf reaches a Ruida: a Ruida on USB is not supported, in Docker or outside it.

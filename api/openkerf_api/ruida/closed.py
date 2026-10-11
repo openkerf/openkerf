@@ -25,15 +25,18 @@ class ClosedSession:
 
     It carries what the device, the controller and our own layer read off
     `active_session` — `interface` (compared by `interface_update`, `device.py:401`),
-    `connected`, `is_connecting`, `is_busy`, `supports_write_completion`, `set_timeout`,
-    `location` — and every verb the device calls on it is a no-op. `write` raises
-    `ConnectionError` rather than returning quietly, because that is the one exception
-    `RDJob.__call__` drops (`rdjob.py:579`) and the patched `_data_sender` reports
-    (`controller.py:134`): bytes that reach it went nowhere, and nothing may pretend
-    otherwise.
+    `connected`, `is_connecting`, `is_busy`, `set_timeout`, `location` — and every verb
+    the device calls on it is a no-op. `write` raises `ConnectionError` rather than
+    returning quietly, as the engine's own session does when it is not connected
+    (`ruidasession.py:182-186`): bytes that reach it went nowhere, and nothing may
+    pretend otherwise. `RDJob.__call__` drops exactly that exception (`rdjob.py:579`),
+    so a realtime verb on the engine's console is a quiet no-op. The controller's
+    `_data_sender` does not catch it (`controller.py:125-132`): a job spooled to the
+    engine's Ruida driver ends its send thread on it, having sent nothing. No route of
+    ours spools to a Ruida — its jobs go down our own line (`CommandRunner`,
+    `carries_jobs`).
     """
 
-    supports_write_completion = True
     connected = False
     is_connecting = False
     is_busy = False
@@ -72,7 +75,7 @@ class ClosedSession:
     def location(self):
         return "closed"
 
-    def write(self, data, *, expected_generation=None):
+    def write(self, data):
         self.writes += 1
         raise ConnectionError("The engine's Ruida device does not talk to the machine.")
 

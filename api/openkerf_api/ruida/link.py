@@ -18,6 +18,9 @@ Ruida session is not opened by anything in here.
   in `test_a_five_second_silence_ends_connected_without_asking`.
 - **`disconnect()` stays disconnected** until `connect()`: the session's own rule,
   and the monitor stops too, so not one packet leaves.
+- **A second program on the same controller** is said in `connection()["warning"]`
+  (code `ruida.secondClient`) while the state stays "connected": the line works, our
+  answers are being lost. The rule is `monitor.SecondClient`'s; it clears itself.
 - **A host name is refused** before anything is opened, with the transport's own
   sentence, because the engine's resolver on the shutdown path is what the session
   patch had to work around (`ruida/transport.py`).
@@ -317,12 +320,19 @@ class RuidaLink:
                             "detail": refusal or self._detail or NOT_OPENED}
                 state = session.state
                 if state == "connected":
-                    return {"state": "connected", "detail": None}
-                if state == "connecting":
-                    return {"state": "connecting",
-                            "detail": session.detail
-                            or f"Connecting to the Ruida at {self._settings[0]}."}
-                return {"state": "disconnected", "detail": self._detail or CLOSED}
+                    reading = {"state": "connected", "detail": None}
+                elif state == "connecting":
+                    reading = {"state": "connecting",
+                               "detail": session.detail
+                               or f"Connecting to the Ruida at {self._settings[0]}."}
+                else:
+                    return {"state": "disconnected", "detail": self._detail or CLOSED}
+                # Only while it stands, so a reading without one keeps its old shape.
+                monitor = self._monitor
+                warning = monitor.second_client.warning() if monitor is not None else None
+                if warning is not None:
+                    reading["warning"] = warning
+                return reading
         except Exception as error:  # never raises, by the Protocol
             return {"state": "unknown", "detail": f"The Ruida line could not be read: {error}."}
 

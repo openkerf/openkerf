@@ -1,5 +1,6 @@
 <script lang="ts">
 	import {
+		connectionWarning,
 		formatDuration,
 		machineConnection,
 		formatMm,
@@ -83,11 +84,16 @@
 	let link = $derived(machineConnection(device, connected));
 	let fresh = $derived(link === 'connected');
 	let unknown = $derived(link === 'unknown');
+	// A line that works and loses our answers anyway: another program on the same
+	// controller (`connectionWarning`). Said, not suffered — the bar alone used to
+	// stay "Connected" while the head's position quietly stopped coming in.
+	let waarschuwing = $derived(connectionWarning(device, connected));
 	let verbindingstekst = $derived(
 		link === 'offline' ? t('status.machine.unknown')
 			: link === 'unplugged' ? t('status.machine.notConnected')
 				: unknown ? t('status.machine.connectionUnknown')
-					: t('status.machine.connected')
+					: waarschuwing ? t('status.machine.connectedShared')
+						: t('status.machine.connected')
 	);
 	// Keep controller connection actions independent of the local job status.
 	let hangt = $derived(device?.connection?.state === 'connected');
@@ -124,6 +130,17 @@
 			</p>
 		</div>
 		<button class="btn primary" onclick={() => location.reload()}>{t('status.restart.reload')}</button>
+	</div>
+{/if}
+<!-- The same band as the restart above, and never both at once: after a restart
+     everything this page knows is stale anyway. -->
+{#if waarschuwing && !connection.restarted}
+	<div class="restarted secondclient" role="status" aria-live="polite">
+		<div class="text">
+			{#if waarschuwing.title}<strong>{waarschuwing.title}</strong>{/if}
+			<p>{waarschuwing.body}</p>
+			{#if waarschuwing.ack}<p class="ack">{waarschuwing.ack}</p>{/if}
+		</div>
 	</div>
 {/if}
 <!-- Errors from write actions are not really at home here, but this is the only
@@ -188,9 +205,9 @@
 	     whether the laser is listening, not whether a socket is open. -->
 	<span
 		class:offline={!connected}
-		class:onthecht={link === 'unplugged'}
+		class:onthecht={link === 'unplugged' || Boolean(waarschuwing)}
 		class:afwachtend={Boolean(verbindingsuitleg)}
-		title={verbindingsuitleg}
+		title={verbindingsuitleg ?? waarschuwing?.body}
 	>
 		{verbindingstekst}
 	</span>
@@ -280,6 +297,7 @@
 	.restarted .text { min-width: 0; }
 	.restarted strong { display: block; font-size: var(--text-sm); }
 	.restarted p { margin: 0; color: var(--text-1); }
+	.restarted .ack { color: var(--text-2); }
 	/* The shared primary; this gets touched on a tablet beside the machine too, so it
 	   keeps the 44px it always had. */
 	.restarted .btn {

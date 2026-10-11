@@ -47,7 +47,7 @@ order or looked up when you need them.
 | [The material library](library.md) | Keeping those presets: where a number came from and how far to trust it, applying one to a layer, renaming, merging and removing what is in the library, machine profiles, moving a library between computers, and taking a starting point from the catalogue other people share. |
 | [Plates larger than the bed](tiling.md) | Burning a plate that does not fit, in tiles: alignment marks, sliding the plate along, and the two taps that tell the machine where it now lies. |
 | [Reference](reference.md) | Every keyboard shortcut, every operation in the menus and the action bar, every reason a button is greyed out, and the app-wide settings — language, notifications, the token and the camera. |
-| [Running in Docker](running-in-docker.md) | One compose file for a Linux box beside the laser: the image, the token, the data volume, the camera, updating, and the two limits — no machine discovery on Docker Desktop, and no laser over USB in this version. |
+| [Running in Docker](running-in-docker.md) | One compose file for a Linux box beside the laser: the image, the token, the data volume, the camera, the engine and OpenKerf's own line to a Ruida, one program per controller, updating, and the two limits — no machine discovery on Docker Desktop, and no laser over USB in this version. |
 
 ## How to update these pages
 

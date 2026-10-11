@@ -8,6 +8,7 @@ workshop/
 frontend/build/
 frontend/.svelte-kit/
 **/.venv/
+**/.venv-clean/
 **/__pycache__/
 **/*.egg-info/
 # Not needed to run.

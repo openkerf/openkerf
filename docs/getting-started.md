@@ -60,6 +60,10 @@ answered by itself."), **Probably** ("Recognised by the control chip, but the
 device said nothing back.") or **Guess** ("This chip sits on more than one kind of
 machine. Check the model yourself.") — each with an **Add this one** button.
 
+A Ruida is only ever found on the network: OpenKerf talks to a Ruida over the
+network and not over USB, so one on a USB cable is not offered, and is not
+supported.
+
 > **When nothing is found.** The screen says "Nothing found" and then "Is the
 > machine on and the cable in? Otherwise pick it below yourself — that works just
 > as well." Picking the kind by hand is not a fallback; it is the same road.
@@ -128,9 +132,15 @@ machine", holds the engine's own fields; you only need those for a mirrored or
 rotated machine. **Skip** and **Save and finish** both go on.
 
 **Done.** The last screen says "<machine> is ready." and then the sentence worth
-following literally: "The connection to the laser is only made at the first job.
-Do that first time with the lid open and without a workpiece — then you see whether
-the head moves as you expect without anything being able to burn."
+following literally: "Do the first job with the lid open and without a workpiece —
+then you see whether the head moves as you expect without anything being able to
+burn."
+
+When the line to the laser is opened depends on the machine. A Ruida is not connected
+by a job: OpenKerf tries once when it starts, and otherwise when you press **Connect**
+(see [Burning](job.md#connect-and-disconnect)), and a job on a Ruida that is not
+connected is refused rather than connecting it. Other lasers open their line when
+work first goes to them.
 
 If the sheet you have does not match the new bed, it asks "Does your sheet come
 along to this bed?" with **Leave it** or **Set the sheet to the bed size**. Why the two
@@ -381,8 +391,8 @@ screen to read.
 
 **Stop** is in the top bar the whole time, running or not, and it answers to the
 keyboard as well: ⌘ + . on a Mac, Ctrl + . elsewhere. Pressed with nothing
-running it does not go to waste — its tooltip then reads "Nothing is running —
-this aborts a job the moment one starts". Those keys work anywhere in the app, as
+running its tooltip reads "Nothing is running right now". On a Ruida a stop pressed
+then is not held over for the next job. Those keys work anywhere in the app, as
 long as this window is in front. Learn where that button is before you press
 **Start now**.
 
@@ -418,6 +428,13 @@ way. Then it is not a link, and says so: "The machine is burning. The setup open
 once the job is done — the stop button stays here." The setup screens carry no
 stop button and no shortcut, so leaving the work area during a job would take both
 off the screen at the one moment you might need them.
+
+A Ruida is connected **once**, when OpenKerf starts, if it has an address. If the
+laser was off then, nothing tries again by itself: switch the laser on and press
+**Connect** (see [Burning](job.md#connect-and-disconnect)). A Ruida talks to one program at a time. When the status bar reads **Connected,
+but not alone**, another program — a second OpenKerf, LightBurn, MeerK40t — is
+connected to the same controller; close it (see
+[Burning](job.md#connect-and-disconnect)).
 
 You can arm the pre-flight with **Prepare job** while disconnected. Final start
 is disabled when the driver reports a disconnected machine: "Machine disconnected.

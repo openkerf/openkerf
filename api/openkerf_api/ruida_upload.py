@@ -236,13 +236,13 @@ class RuidaUpload:
             )
         link = self._link()
         if not getattr(link, "carries_files", False):
-            # Not reached by any machine today: a Ruida always has `RuidaLink`, and
-            # every other machine is refused as `upload.notRuida` by the build. The
-            # guard stays for a link that cannot confirm what it sends.
+            # A Ruida always has `RuidaLink`, the one link that carries files; any
+            # other machine that is connected gets here, and is refused the way the
+            # build would refuse it (`CommandRunner.build_job_bytes`), before a byte
+            # is built or sent.
             raise DesignError(
-                "This engine cannot confirm packet delivery. Install the Ruida session "
-                "update before sending files; nothing has been sent.",
-                code="upload.engineUpgrade",
+                "This machine does not keep files in memory; that is a Ruida thing.",
+                code="upload.notRuida",
             )
         short = _checked_name(name)
         payload = self.runner.build_job_bytes()
