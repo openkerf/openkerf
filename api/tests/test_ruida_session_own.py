@@ -336,13 +336,48 @@ def test_missing_ack_fails_queue_without_resending_file(session, transport):
 
 
 def test_reply_timeout_clears_busy_and_recovers(session, transport):
-    """Patch: test_reply_timeout_clears_busy_and_recovers."""
+    """
+    Patch: test_reply_timeout_clears_busy_and_recovers — with one deliberate change.
+
+    The patch reconnected after an acknowledged read went unanswered. On a KH-5030 that
+    is a loop: the first read on a fresh socket is acknowledged and never answered, so
+    every reconnect made the next read a first read again (see the module docstring).
+    Now only that read fails, as a `TimeoutError`; the line stays up, same generation.
+    """
+    generation = session.generation
     future = session.write(STATUS_READ)
-    with pytest.raises(ConnectionError):
+    with pytest.raises(TimeoutError, match="did not answer"):
         future.result(2)
     assert not session.busy
-    wait_for(lambda: session.connected)
+    assert session.connected
+    assert session.generation == generation
     session.write(b"later block").result(2)
+
+
+def test_the_first_read_on_a_socket_goes_unanswered_and_the_line_stays(session, transport):
+    """
+    The KH-5030's pattern, measured over UDP: the first memory read on a fresh socket is
+    acknowledged and never answered; every read after it is answered after its ACK.
+    The status must come through on the second read, without a reconnect in between.
+    """
+    answer = framing.SETTING_REPLY + MEM_MACHINE_STATUS + b"\x00" * 5
+    reads = []
+
+    def respond(data):
+        if data != framed(STATUS_READ):
+            return [ACK]
+        reads.append(data)
+        return [ACK] if len(reads) == 1 else [ACK, answer]
+
+    transport.respond = respond
+    probes, generation = session.probes, session.generation
+
+    first = session.write(STATUS_READ)
+    with pytest.raises(TimeoutError):
+        first.result(2)
+    assert session.write(STATUS_READ).result(2) == answer
+    assert (session.probes, session.generation) == (probes, generation)
+    assert session.connected
 
 
 def test_nak_is_bounded(transport):
