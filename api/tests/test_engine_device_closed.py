@@ -57,7 +57,7 @@ writes in 3.6 s (it only polls while `connected`, `controller.py:177`). A realti
 
 `build_job_bytes` never used the live session: it builds through its own `RuidaDriver`
 (`commands.py`, `_upload_driver_for`) whose `write` is a no-op. On a 20×30 mm
-rectangle in a cut layer: 433 bytes ending `e5 05 … d7` (`SET_FILE_SUM`, `END_OF_FILE`),
+rectangle in a cut layer: 440 bytes (433 before `ruida_speed`) ending `e5 05 … d7` (`SET_FILE_SUM`, `END_OF_FILE`),
 byte-identical with and without the closed session; `move_abs_xy`, `home_xy` and
 `pause_process` with `output=` are identical too (`88…`, `d8 2a`, `d8 02`).
 
@@ -364,7 +364,9 @@ def test_a_closed_session_keeps_the_device_closed(monkeypatch):
 
 def test_build_job_bytes_and_the_encoders_are_unchanged(monkeypatch):
     """The same rectangle built twice, first with today's session and then with the
-    closed one: 433 bytes both times, byte for byte equal, and so are the encoders.
+    closed one: 440 bytes both times, byte for byte equal, and so are the encoders.
+    (433 before the first-layer speed repair in `ruida_speed`, which adds the layer's own
+    `Speed Laser 1` after the first jump: 7 bytes.)
     With the session closed the build opens nothing and starts no session."""
     opens = Opens(monkeypatch, refuse=False)
     results = {}
@@ -402,7 +404,7 @@ def test_build_job_bytes_and_the_encoders_are_unchanged(monkeypatch):
                  build.controller if build is not None else None)
 
     data, commands = results["closed"]
-    assert len(data) == 433
+    assert len(data) == 440
     assert data.endswith(END_OF_FILE) and SET_FILE_SUM in data
     assert data == results["today"][0]
     assert commands == results["today"][1]
