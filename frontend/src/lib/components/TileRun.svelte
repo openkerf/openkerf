@@ -13,6 +13,8 @@
 	 */
 	import { i18n, t } from '$lib/i18n/index.svelte';
 	import type { TilingStore } from '$lib/tiling.svelte';
+	import Icon from './Icon.svelte';
+	import Notice from './Notice.svelte';
 
 	// No `device` prop any more: since the two-sources bug the head position comes
 	// from the server via `tiling.liveHead()`, not from the status snapshot.
@@ -109,20 +111,20 @@
 	<!-- Outside `{#if run}`: a failed start (the offer on the canvas, say, before
 	     a run exists) has to be visible when there is no tile yet either.
 	     Otherwise a button that 409s looks like it does nothing. -->
-	<p class="notice" role="alert">{tiling.error}</p>
+	<div class="failure"><Notice tone="danger" live>{tiling.error}</Notice></div>
 {/if}
 
 {#if run}
-	<section class="tiles" aria-label={t('tiles.aria')}>
+	<section class="tiles card" aria-label={t('tiles.aria')}>
 		<header>
 			<div>
 				<strong>{t('tiles.current', { n: run.current + 1, total: run.tiles })}</strong>
 				<!-- The assumption you cannot see as a user: during a tile run the
 				     marks decide where the burning happens, not the zero point set
 				     for the sheet. -->
-				<p class="origin">{t('tiles.originIgnored')}</p>
+				<p class="help origin">{t('tiles.originIgnored')}</p>
 			</div>
-			<button class="btn subtle" type="button" onclick={() => tiling.cancel()}>
+			<button class="btn ghost mini stop" type="button" onclick={() => tiling.cancel()}>
 				{t('tiles.stop')}
 			</button>
 		</header>
@@ -133,13 +135,13 @@
 			<ol class="progressPart" aria-label={t('tiles.progressAria')}>
 				{#each Array(run.tiles) as _, i (i)}
 					<li class:ready={run.done.includes(i)} class:now={i === run.current}>
-						{i + 1}{#if run.done.includes(i)}&nbsp;✓{/if}
+						<span class="mono">{i + 1}</span>{#if run.done.includes(i)}<Icon name="check" />{/if}
 					</li>
 				{/each}
 			</ol>
 
 		{#if run.stale}
-			<p class="notice stale" role="alert">{run.message}</p>
+			<Notice tone="warn" live>{run.message}</Notice>
 		{:else if !run.aligned}
 			<p>
 				{#if first}
@@ -167,7 +169,7 @@
 				<!-- The tapped marks live only in this page's memory; a refresh does
 				     not know them any more. The geometry itself is not at risk, but
 				     someone who just set a tap should not silently end up back at 0. -->
-				<p class="origin">{t('tiles.refreshWarning')}</p>
+				<p class="help warn">{t('tiles.refreshWarning')}</p>
 			{/if}
 		{:else}
 			<p class="uitgelijnd">
@@ -195,18 +197,19 @@
 		{/if}
 
 		{#if localError}
-			<p class="notice" role="alert">{localError}</p>
+			<Notice tone="danger" live>{localError}</Notice>
 		{/if}
 	</section>
 {/if}
 
 <style>
+	.failure {
+		margin-bottom: var(--space-2);
+	}
 	.tiles {
 		display: grid;
 		gap: var(--space-2);
 		padding: var(--space-3);
-		border: 1px solid var(--line);
-		border-radius: var(--radius-card);
 		margin-bottom: var(--space-4);
 	}
 	header {
@@ -216,12 +219,14 @@
 		gap: var(--space-2);
 	}
 	.origin {
-		margin: 2px 0 0;
-		font-size: var(--text-xs);
-		color: var(--text-2);
+		margin-top: 2px;
+	}
+	.stop {
+		flex: none;
 	}
 	.progressPart {
 		display: flex;
+		flex-wrap: wrap;
 		gap: var(--space-2);
 		list-style: none;
 		margin: 0;
@@ -229,14 +234,23 @@
 		font-size: var(--text-xs);
 		color: var(--text-2);
 	}
+	.progressPart li {
+		display: inline-flex;
+		align-items: center;
+		gap: 2px;
+	}
+	/* Done and up next are states, so ink and weight rather than the accent. */
 	.progressPart .ready {
-		color: var(--text-1);
+		color: var(--ok);
 	}
 	.progressPart .now {
-		color: var(--accent);
+		color: var(--text-1);
 		font-weight: 600;
+		text-decoration: underline;
+		text-underline-offset: 3px;
 	}
 	.uitgelijnd {
+		margin: 0;
 		color: var(--text-1);
 	}
 	.actions {
@@ -244,27 +258,8 @@
 		gap: var(--space-2);
 		flex-wrap: wrap;
 	}
-	.notice {
-		color: var(--danger);
-		margin: 0;
-	}
-	.notice.stale {
-		color: var(--warn);
-	}
 	.btn.warn {
-		border-color: var(--warn);
+		border-color: var(--warn-edge);
 		color: var(--warn);
-	}
-	.btn.subtle {
-		flex: none;
-		font-size: var(--text-xs);
-		color: var(--text-2);
-		background: none;
-		border: none;
-		padding: 4px 8px;
-	}
-	.btn.subtle:hover:not(:disabled) {
-		background: var(--surface-2);
-		color: var(--text-1);
 	}
 </style>

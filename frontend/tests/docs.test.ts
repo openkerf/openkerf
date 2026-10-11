@@ -384,7 +384,7 @@ test('every link between the pages resolves', () => {
  * Quoting each message on its own is both what the guard can check and what a reader
  * of the alt text actually hears, so that is what those pages do now.
  *
- * The ninth was worth the whole exercise: the alt text of the phone picture described
+ * The ninth was worth the whole exercise: the alt text of one picture described
  * a screen that is not in the picture — "28 TEST GRIDS ARE WAITING FOR A PHOTO" where
  * it says one, a different material, a different preset, a different date. Nothing
  * caught that for as long as alt text was invisible here, and no guard catches it now

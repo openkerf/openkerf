@@ -76,10 +76,10 @@ library yourself and pick the layer there. Greyed out without a token, and on a
 test board's own layers, whose speeds are the trial.
 
 With more than one layer in the list there is also a **List** button for the whole
-list, and a density switch that reads **Compact** or **Roomy**. Compact puts the
-identity and the values on one line and moves the three fields into the fold —
-useful once you have more than about eight layers. The choice is remembered
-between sessions.
+list, and under **List view** a two-part switch, **Compact** or **Roomy**. It is a way
+of looking and changes nothing about what burns. Compact puts the identity and the
+values on one line and moves the three fields into the fold — useful once you have
+more than about eight layers. The choice is remembered between sessions.
 
 **When it goes wrong.** Without a token the panel does not edit anything. Rows
 then show their values as plain text and the tooltip says **Requires a token**;

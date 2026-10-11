@@ -12,10 +12,8 @@ import { scratchFetch as fetch, assertScratch } from './scratch.mjs';
  * every shot states the state it needs and puts it there itself through the API.
  * Nothing here reads what happened to be on the bed.
  *
- * Desktop is 1440×900 in the light theme — the width the usability rounds were
- * measured at, so the layout in the picture is the layout that was designed. The
- * phone is 390×844, the size at which the app switches to its own phone screen
- * (below 768 px).
+ * Desktop is 1440×900 — the width the usability rounds were measured at, so the
+ * layout in the picture is the layout that was designed.
  *
  * Nothing in here starts the laser. The queue picture (13) would need a real job in
  * a real machine's spooler, and there is no way to fake that in the browser without
@@ -390,8 +388,6 @@ async function open(path = '/', { width = 1440, height = 900, route = null } = {
 	// clicking it means no screen is photographed half-translated.
 	await context.addInitScript(() => {
 		window.localStorage.setItem('openkerf.language', 'en');
-		// The theme is the same kind of stored choice; the handbook is in light.
-		window.localStorage.removeItem('openkerf.theme');
 	});
 	const page = await context.newPage();
 	if (route) await route(page);
@@ -401,7 +397,7 @@ async function open(path = '/', { width = 1440, height = 900, route = null } = {
 	await page.goto(BASE + path, { waitUntil: 'domcontentloaded', timeout: 30000 });
 	// Not `networkidle`: the status connection stays open for as long as the app
 	// runs, so that state never arrives. Wait for the app to have drawn instead.
-	await page.waitForSelector('.statusbar, .setup, .card, .phone', { timeout: 20000 });
+	await page.waitForSelector('.statusbar, .setup, .card', { timeout: 20000 });
 	await page.waitForTimeout(900);
 	// The notification prompt floats over the bottom right when it turns up. It is
 	// about this browser profile, not about the app, so it does not belong in the
@@ -743,7 +739,7 @@ await scene(
 		if (!box) throw new Error('46: no arrow beside the start button to press');
 		await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
 		await page.waitForTimeout(400);
-		const row = await page.locator('.pf-menu [role="menuitem"]').boundingBox();
+		const row = await page.locator('.menu [role="menuitem"]').boundingBox();
 		if (!row) throw new Error('46: a click where the arrow stands did not open its menu');
 		await page.mouse.click(row.x + row.width / 2, row.y + row.height / 2);
 		await page.waitForSelector(`${DIALOG} input.mono`, { timeout: 10000 });
@@ -855,8 +851,6 @@ await scene('20-text.png', '/?tab=design', {}, async (page) => {
 	if (await field.count()) await field.fill('Made on the 5030');
 	await page.waitForTimeout(400);
 });
-
-await scene('24-phone.png', '/', { width: 390, height: 844 });
 
 await scene('25-language.png', '/?tab=design', {}, async (page) => {
 	await page.locator('.language').first().click();
@@ -1649,7 +1643,7 @@ if (wanted('37')) {
 					});
 				});
 				// The run block reads the live socket and nothing else — one fact, one
-				// source, so the top bar and the phone view cannot drift from it. Which
+				// source, so the top bar cannot drift from it. Which
 				// means the socket is where this has to be said too.
 				await page.routeWebSocket('**/api/ws', (ws) => {
 					const server = ws.connectToServer();

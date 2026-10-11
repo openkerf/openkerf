@@ -91,6 +91,8 @@
 	} = $props();
 
 	let stepsOff = $derived(stepsDisabled ?? disabled);
+	// The − and + are Icon's own paths, drawn inline: this field is rendered on its own
+	// by `tests/numberfield.test.ts`, which compiles this one file and nothing it imports.
 	let named = $derived(ariaLabel ?? label);
 
 	// The label has to hang off the input explicitly. A <label> that wraps its controls
@@ -148,7 +150,7 @@
 
 <div class="field" class:compact class:off={disabled} title={disabled ? why : note}>
 	<label class="name" for={id}
-		>{label}{#if unit && !compact}{' '}<span class="eenheid">({unit})</span>{/if}</label
+		>{label}{#if unit && !compact}{' '}({unit}){/if}</label
 	>
 	<span class="stepper">
 		<button
@@ -157,7 +159,7 @@
 			disabled={stepsOff}
 			title={stepsOff ? why : stepLabel?.(-1).title}
 			aria-label={stepLabel?.(-1).aria ?? t('field.decrease', { label: named })}
-			onclick={() => set(-1)}>−</button
+			onclick={() => set(-1)}><svg class="icon-svg" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14" /></svg></button
 		>
 		<input
 			{id}
@@ -181,7 +183,7 @@
 			disabled={stepsOff}
 			title={stepsOff ? why : stepLabel?.(1).title}
 			aria-label={stepLabel?.(1).aria ?? t('field.increase', { label: named })}
-			onclick={() => set(1)}>+</button
+			onclick={() => set(1)}><svg class="icon-svg" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg></button
 		>
 	</span>
 </div>
@@ -190,38 +192,62 @@
 	/* min-width: 0 at all three levels. Without that the input keeps its own width of
 	   ~20 characters and the stepper runs out of a narrow column — in the layers panel it
 	   stuck 28px outside the panel. */
-	.field { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; min-width: 0; }
+	.field { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-1); min-width: 0; }
 	.name { font-size: var(--text-xs); color: var(--text-2); }
-	.eenheid { color: var(--text-2); }
-	.stepper { display: flex; min-width: 0; }
+
+	/*
+	 * One object: the well of the global field drawn once around all three parts, with
+	 * hairlines between them. The input inside gives up its own well — two borders and
+	 * two radii side by side read as three controls — and its focus ring moves to the
+	 * whole, so the ring is the global one and goes round what you are typing into.
+	 */
+	.stepper {
+		display: flex;
+		min-width: 0;
+		min-height: max(32px, var(--target-min));
+		border: 1px solid var(--line);
+		border-radius: var(--radius-field);
+		background: var(--surface-2);
+		transition: border-color var(--transition);
+	}
+	.stepper:hover:not(:focus-within) { border-color: color-mix(in srgb, var(--text-2) 50%, var(--line)); }
+	.stepper:has(input:focus-visible) {
+		outline: 2px solid var(--accent);
+		outline-offset: 1px;
+		border-color: var(--accent);
+	}
 	.stepper input {
 		flex: 1;
 		min-width: 0;
+		min-height: 0;
 		text-align: center;
-		font: inherit;
-		font-family: var(--font-mono);
 		font-size: var(--text-sm);
-		padding: 8px 4px;
-		border: 1px solid var(--line);
-		border-left: 0;
-		border-right: 0;
-		background: var(--surface-2);
-		color: var(--text-1);
+		padding: var(--space-1h) var(--space-1);
+		border: 0;
+		border-radius: 0;
+		background: transparent;
 	}
+	.stepper input:focus-visible { outline: none; background: transparent; }
 	.stepper button {
 		flex: none;
-		width: 38px;
-		font: inherit;
-		font-size: var(--text-lg);
-		line-height: 1;
-		border: 1px solid var(--line);
-		background: var(--surface-2);
+		display: grid;
+		place-items: center;
+		width: max(32px, var(--target-min));
 		color: var(--text-1);
+		transition: background var(--transition);
 	}
-	.stepper button:first-child { border-radius: var(--radius-field) 0 0 var(--radius-field); }
-	.stepper button:last-child { border-radius: 0 var(--radius-field) var(--radius-field) 0; }
-	.stepper button:hover:not(:disabled) { background: var(--surface-1); }
-	.stepper button:disabled, .stepper input:disabled { opacity: 0.5; }
+	.stepper button:first-child {
+		border-inline-end: 1px solid var(--line);
+		border-radius: var(--radius-field) 0 0 var(--radius-field);
+	}
+	.stepper button:last-child {
+		border-inline-start: 1px solid var(--line);
+		border-radius: 0 var(--radius-field) var(--radius-field) 0;
+	}
+	.stepper button:hover:not(:disabled) { background: var(--hover); }
+	/* Off is drained, like every control: the muted ink, no fill change, nothing faded. */
+	.stepper button:disabled { color: var(--text-2); cursor: not-allowed; }
+	.field.off .stepper:not(:hover) { border-color: var(--line); }
 
 	/* ── The narrow form ──────────────────────────────────────────────────────
 	   Label beside the field, unit behind the number, and nothing else different:
@@ -238,7 +264,6 @@
 		text-align: center;
 		min-width: 1.1em;
 	}
-	.field.compact.off .name { opacity: 0.5; }
 	/* Where the label is a letter the unit belongs *in* the box, behind the number. As a
 	   column of its own beside the grid it stood three columns from the number it belongs
 	   to. The roomy form writes it in its label instead, because there it fits and a cap
@@ -247,14 +272,9 @@
 		display: grid;
 		place-items: center;
 		flex: none;
-		padding: 0 var(--space-2) 0 2px;
+		padding-inline: 0 var(--space-2);
 		font-size: var(--text-xs);
 		color: var(--text-2);
-		border: 1px solid var(--line);
-		border-left: 0;
-		border-right: 0;
-		background: var(--surface-2);
 	}
-	.field.off .suffix { opacity: 0.5; }
-	.field.compact .stepper input { padding-right: 2px; }
+	.stepper:has(.suffix) input { padding-inline-end: var(--space-1); text-align: right; }
 </style>

@@ -26,6 +26,8 @@
 	 * up and moves the pointer; the machine is reached from here, by somebody
 	 * standing next to it.
 	 */
+	import Icon from './Icon.svelte';
+	import Notice from './Notice.svelte';
 	import { i18n, t } from '$lib/i18n/index.svelte';
 	import type { SeriesStore } from '$lib/series.svelte';
 
@@ -186,8 +188,8 @@
 	<!-- Outside `{#if run}`, the same as the tile run: a refusal that ends the run —
 	     `series.noRun` — would otherwise take its own explanation off the screen with
 	     it, and a button that 409s then looks like a button that does nothing. -->
-	<p class="notice" role="alert">
-		{series.error}
+	<div class="failure"><Notice tone="danger" live>
+		<span>{series.error}</span>
 		{#if series.errorCode === 'series.alreadyBurned'}
 			<!-- The exception and not the ordinary route: only after the refusal, and
 			     deliberately not the primary button. Going over work that is already
@@ -196,15 +198,15 @@
 				{t('series.burnAgain')}
 			</button>
 		{/if}
-	</p>
+	</Notice></div>
 {/if}
 
 {#if run}
-	<section class="seriesRun" aria-label={t('series.run.aria')}>
+	<section class="seriesRun card" aria-label={t('series.run.aria')}>
 		<header>
 			<strong>{t('series.current', { n: i18n.number(current ?? 0), total: i18n.number(total) })}</strong>
 			<button
-				class="btn subtle"
+				class="btn ghost mini stop"
 				type="button"
 				title={t('series.stop.title')}
 				disabled={series.busy}
@@ -225,7 +227,7 @@
 			<p class="engraves">{t('series.burn.blank')}</p>
 		{/if}
 		{#if engraved.standing}
-			<p class="fine">{t('series.burn.short', { n: engraved.standing })}</p>
+			<p class="help">{t('series.burn.short', { n: engraved.standing })}</p>
 		{/if}
 
 		{#if done !== null}
@@ -242,12 +244,12 @@
 			>
 				<span class="vol" style="width: {total ? Math.round((done / total) * 1000) / 10 : 0}%"></span>
 			</div>
-			<p class="fine">{t('series.progress', { done: i18n.number(done), total: i18n.number(total) })}</p>
+			<p class="help">{t('series.progress', { done: i18n.number(done), total: i18n.number(total) })}</p>
 		{/if}
 
 		{#if stale}
-			<p class="notice stale" role="alert">{staleWhy}</p>
-			<p class="fine">{t('series.stale.how')}</p>
+			<Notice tone="warn" live>{staleWhy}</Notice>
+			<p class="help">{t('series.stale.how')}</p>
 		{/if}
 
 		<div class="actions">
@@ -269,14 +271,14 @@
 		</div>
 
 		{#if sent !== null}
-			<p class="fine sent">{t('series.sent', { n: i18n.number(sent) })}</p>
+			<p class="help sent">{t('series.sent', { n: i18n.number(sent) })}</p>
 		{/if}
 	</section>
 {:else if sum?.attached}
 	<!-- Attached, and not going yet. The panel orders itself by the phase of the
 	     process (DESIGN-SYSTEM.md v5), and this is the phase before the first plate:
 	     what is waiting, and the one button that begins it. -->
-	<section class="seriesRun ready" aria-label={t('series.ready.aria')}>
+	<section class="seriesRun card ready" aria-label={t('series.ready.aria')}>
 		<header>
 			<strong>{t('series.ready', { burns: i18n.number(total) })}</strong>
 		</header>
@@ -286,7 +288,7 @@
 		{#if !reads}
 			<!-- The same refusal the server would answer with, said before the press
 			     rather than after it. -->
-			<p class="fine">{t('series.nothingReads')}</p>
+			<p class="help">{t('series.nothingReads')}</p>
 		{/if}
 		<div class="actions">
 			<button
@@ -303,12 +305,14 @@
 {:else if ended}
 	<!-- The run is over and this block is about to vanish with it. Saying nothing
 	     would leave the last press looking like the one that failed. -->
-	<p class="notice ended">
-		{t('series.finished')}
-		<button class="btn subtle" type="button" aria-label={t('common.dismiss')} onclick={() => (ended = false)}
-			>×</button
-		>
-	</p>
+	<div class="ended"><Notice tone="ok">
+		<span class="ended-row">
+			{t('series.finished')}
+			<button class="btn ghost icon" type="button" aria-label={t('common.dismiss')} title={t('common.dismiss')} onclick={() => (ended = false)}
+				><Icon name="close" /></button
+			>
+		</span>
+	</Notice></div>
 {/if}
 
 <style>
@@ -322,8 +326,6 @@
 		grid-template-columns: minmax(0, 1fr);
 		gap: var(--space-2);
 		padding: var(--space-3);
-		border: 1px solid var(--line);
-		border-radius: var(--radius-card);
 		margin-bottom: var(--space-4);
 	}
 	header {
@@ -338,14 +340,9 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
-	.fine {
-		margin: 2px 0 0;
-		font-size: var(--text-xs);
-		color: var(--text-2);
-	}
 	.bar {
 		height: 6px;
-		border-radius: 3px;
+		border-radius: var(--radius-sharp);
 		background: var(--line);
 		overflow: hidden;
 	}
@@ -359,38 +356,26 @@
 		gap: var(--space-2);
 		flex-wrap: wrap;
 	}
-	.notice {
-		color: var(--danger);
+	.failure,
+	.ended {
 		margin: 0 0 var(--space-2);
+	}
+	.ended-row {
 		display: flex;
-		align-items: baseline;
+		align-items: center;
+		justify-content: space-between;
 		gap: var(--space-2);
-		flex-wrap: wrap;
 	}
-	.notice.stale {
-		color: var(--warn);
-		margin: 0;
-	}
-	.notice.ended {
-		color: var(--text-1);
+	.stop {
+		flex: none;
 	}
 	.sent {
+		margin-top: 2px;
 		color: var(--text-1);
 	}
 	.btn.warn {
-		border-color: var(--warn);
+		border-color: var(--warn-edge);
 		color: var(--warn);
-	}
-	.btn.subtle {
-		flex: none;
-		font-size: var(--text-xs);
-		color: var(--text-2);
-		background: none;
-		border: none;
-		padding: 4px 8px;
-	}
-	.btn.subtle:hover:not(:disabled) {
-		background: var(--surface-2);
-		color: var(--text-1);
+		justify-self: start;
 	}
 </style>

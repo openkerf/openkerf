@@ -176,7 +176,7 @@ for (const withRaster of [true, false]) {
 			await page.mouse.click(summary.at.x, summary.at.y);
 			await page.waitForTimeout(400);
 			// The menu is on top and its one line is there.
-			const row = await whatIsOnTop('.pf-menu [role="menuitem"]');
+			const row = await whatIsOnTop('.menu [role="menuitem"]');
 			assert.ok(row, 'a click on the middle of the arrow did not open the menu');
 			assert.ok(row.self, `the menu's line lies behind ${row.over}`);
 
@@ -189,7 +189,7 @@ for (const withRaster of [true, false]) {
 			const capabilities = await (await fetch(`${BASE}/api/capabilities`)).json();
 			const keepsFiles = capabilities?.actions?.upload === true;
 			const line = await page.evaluate(() => {
-				const node = document.querySelector('.pf-menu [role="menuitem"]') as HTMLButtonElement;
+				const node = document.querySelector('.menu [role="menuitem"]') as HTMLButtonElement;
 				return { disabled: node.disabled, title: node.title };
 			});
 			if (!keepsFiles) {

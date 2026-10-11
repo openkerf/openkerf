@@ -559,8 +559,8 @@ class ApiServer:
         """
         The state of the tile series, or nothing.
 
-        In the status payload and not in a route of its own: top bar, canvas and phone view
-        have to see the same state, and three separate requests let them drift apart.
+        In the status payload and not in a route of its own: top bar and canvas have to
+        see the same state, and separate requests let them drift apart.
         """
         try:
             return self.tiles.state()
@@ -571,9 +571,8 @@ class ApiServer:
         """
         The series, or nothing — and the bed put right on the way past.
 
-        Beside the tile run and for the same reason: top bar, canvas, context panel and
-        phone view all read the live socket, and four separate requests for one fact
-        drift apart. `Series.state()` also re-primes the engine when something has moved
+        Beside the tile run and for the same reason: top bar, canvas and context panel
+        all read the live socket, and three separate requests for one fact drift apart. `Series.state()` also re-primes the engine when something has moved
         the row behind our back, which is why it is called even on the way to answering
         `None`.
 
@@ -721,8 +720,8 @@ class ApiServer:
 
         `reader.snapshot()` alone was the kernel and the device status; the tile run was
         missing on the WebSocket (`/api/ws`, which the running app uses) while
-        `/api/status` already sent it along. Top bar, canvas and phone view all three
-        read the live socket, so without these fields here a running series never
+        `/api/status` already sent it along. Top bar and canvas both read the live
+        socket, so without these fields here a running series never
         arrived there — exactly what `_tiling_state`'s docstring promised to prevent.
         """
         payload = self.reader.snapshot()

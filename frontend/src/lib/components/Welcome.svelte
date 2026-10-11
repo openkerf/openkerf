@@ -26,7 +26,7 @@
 </script>
 
 <main>
-	<section class="card">
+	<section class="card welcome">
 		<div class="mark"><Logo /><span>OpenKerf</span></div>
 
 		<h1>{t('welcome.title')}</h1>
@@ -38,16 +38,16 @@
 					<span class="number mono">{index + 1}</span>
 					<span class="text">
 						<strong>{step.head}</strong>
-						<span class="muted">{step.hint}</span>
+						<span class="help">{step.hint}</span>
 					</span>
 				</li>
 			{/each}
 		</ol>
 
-		<a class="button primary" href="/setup/kind">{t('setup.crumb')}</a>
+		<a class="btn primary big go" href="/setup/kind">{t('setup.crumb')}</a>
 
 		<!-- The arrows inherit the text colour of the line. They used to be on --line
-		     and got 1.41 in light and 1.62 in dark that way: practically invisible, so
+		     and got 1.41 that way: practically invisible, so
 		     this read as three loose words instead of as the sequence it is. --line is
 		     tuned for borders *against* a surface, not for something to be read. -->
 		<p class="daarna">
@@ -60,10 +60,10 @@
 		<hr />
 
 		<p class="uitweg">
-			<button type="button" class="tekstknop" onclick={onrondkijken}
+			<button type="button" class="link" onclick={onrondkijken}
 				>{t('welcome.lookAround')}</button
 			>
-			<span class="muted">{t('welcome.lookAround.body')}</span>
+			<span class="help">{t('welcome.lookAround.body')}</span>
 		</p>
 	</section>
 </main>
@@ -78,33 +78,14 @@
 		padding: var(--space-6) var(--space-4);
 		background: var(--surface-0);
 	}
-	.card {
-		position: relative;
+	/* The shared card, given room: it is the whole screen's one question. The dashed
+	   accent line that ran along its top edge is gone — the kerf line means the laser is
+	   working, and the accent means an action; on a welcome card it was neither. */
+	.welcome {
 		width: 100%;
 		max-width: 520px;
-		background: var(--surface-1);
-		border: 1px solid var(--line);
-		border-radius: var(--radius-card);
 		box-shadow: var(--lift-2);
 		padding: var(--space-6);
-	}
-	/* The kerf line as a cut across the top edge of the card. Static: in DESIGN-SYSTEM the
-	   animated variant is reserved for selection, job progress and the active tab, and a
-	   welcome screen should be quiet. */
-	.card::before {
-		content: '';
-		position: absolute;
-		left: var(--space-6);
-		right: var(--space-6);
-		/* On the edge itself, not above it: at -1px the line floated free of the card and
-		   in the dark theme read as a stripe that was there by accident. */
-		top: 0;
-		height: 1px;
-		background: repeating-linear-gradient(
-			to right,
-			color-mix(in srgb, var(--accent) 80%, transparent) 0 6px,
-			transparent 6px 10px
-		);
 	}
 	.mark {
 		display: flex;
@@ -136,6 +117,8 @@
 		align-items: flex-start;
 		gap: var(--space-3);
 	}
+	/* A sequence number, not a choice: a raised grey disc and ink figures, not the
+	   accent tint that means "chosen". */
 	.number {
 		flex: none;
 		width: 22px;
@@ -143,9 +126,7 @@
 		display: grid;
 		place-items: center;
 		border-radius: var(--radius-dot);
-		background: color-mix(in srgb, var(--accent) 14%, transparent);
-		/* See the badge on /setup: accent on an accent tint does not make AA, and an 11px
-		   sequence number is ordinary text. The tint stays, the figures do not. */
+		background: var(--surface-2);
 		color: var(--text-1);
 		font-size: var(--text-xs);
 	}
@@ -154,26 +135,10 @@
 		gap: 2px;
 		min-width: 0;
 	}
-	.text .muted {
-		font-size: var(--text-xs);
-		color: var(--text-2);
-	}
-	.button {
-		display: block;
-		text-align: center;
-		padding: 12px var(--space-4);
-		border-radius: var(--radius-field);
-		border: 1px solid var(--accent);
-		background: var(--accent);
-		color: var(--accent-ink);
-		font-weight: 500;
-		text-decoration: none;
-		transition: filter var(--transition);
-	}
-	/* No colour change on hover: a generic .btn:hover made the main button white on light
-	   grey elsewhere (X1 in FEATURE-GAPS). Darker is enough. */
-	.button.primary:hover {
-		filter: brightness(0.92);
+	/* The shared primary at its big size, across the card. */
+	.go {
+		display: flex;
+		width: 100%;
 	}
 	.daarna {
 		margin: var(--space-3) 0 0;
@@ -192,33 +157,9 @@
 	.uitweg {
 		margin: 0;
 		display: grid;
-		gap: 4px;
+		gap: var(--space-1);
 	}
-	.uitweg .muted {
-		font-size: var(--text-xs);
-		color: var(--text-2);
-	}
-	.tekstknop {
+	.uitweg .link {
 		justify-self: start;
-		font: inherit;
-		padding: 0;
-		border: 0;
-		background: none;
-		color: var(--accent);
-		text-decoration: underline;
-		text-underline-offset: 3px;
-		cursor: pointer;
-	}
-	/* The type scale already shifts along in tokens.css; here only the touch targets,
-	   because 44px suits a glove and 40 does not. */
-	@media (max-width: 1199px) {
-		.button,
-		.tekstknop {
-			min-height: 44px;
-		}
-		.tekstknop {
-			display: inline-flex;
-			align-items: center;
-		}
 	}
 </style>

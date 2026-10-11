@@ -12,15 +12,15 @@
  * and no rest state, so a button that erases looked exactly like the button beside it
  * that changes nothing. Measured at 1440 on the untouched build, in the Unsaved changes
  * window: *Discard* `color rgb(27,31,36)`, `background rgb(255,255,255)`,
- * `border rgb(214,218,222)` — the same three values as the *Cancel* beside it, in both
- * themes; the Projects delete question the same. Meanwhile the top bar's Stop, the same
+ * `border rgb(214,218,222)` — the same three values as the *Cancel* beside it; the
+ * Projects delete question the same. Meanwhile the top bar's Stop, the same
  * class, was solid red and the library's Remove was red ink on a red tint: three
  * drawings for one class, and the invisible one stood in the two questions a user meets
  * most.
  *
- * What is measured: in all three windows, in both themes, the destroying answer differs
- * from the way out beside it in letter and in border, its letter is the danger colour of
- * the theme it stands in, and that letter is at least 4.5:1 against everything painted
+ * What is measured: in all three windows, the destroying answer differs from the way
+ * out beside it in letter and in border, its letter is the app's danger colour, and that
+ * letter is at least 4.5:1 against everything painted
  * behind it — because colour is the whole of the difference, it has to be readable.
  */
 import { test, before, after } from 'node:test';
@@ -127,7 +127,7 @@ const paintRow = (selector: string): Paint[] => {
 	});
 };
 
-/** The theme's own danger colour, as the page resolves it. */
+/** The app's danger colour, as the page resolves it. */
 const dangerInk = (): string => {
 	const probe = document.createElement('span');
 	probe.style.color = 'var(--danger)';
@@ -145,29 +145,21 @@ function apart(paints: Paint[], danger: string, where: string) {
 	assert.ok(destroys, `${where}: no destroying answer in the row`);
 	assert.notEqual(destroys.color, wayOut.color, `${where}: the letter is the way out's letter`);
 	assert.notEqual(destroys.border, wayOut.border, `${where}: the border is the way out's border`);
-	assert.equal(destroys.color, danger, `${where}: the letter is not the theme's danger colour`);
+	assert.equal(destroys.color, danger, `${where}: the letter is not the danger colour`);
 	// The two signals are colour, so the red has to be readable where it stands: AA for
-	// normal text. Measured, the drawing gives 5.32 light and 4.78 dark; a fill behind it
-	// would take the dark one to 4.34.
+	// normal text. Measured, the drawing gives 5.32; a fill behind it would cost 0.61.
 	assert.ok(
 		destroys.contrast >= 4.5,
 		`${where}: the letter is ${destroys.contrast}:1 on what is painted behind it, under 4.5`
 	);
 }
 
-async function fresh(theme: 'light' | 'dark'): Promise<Page> {
+async function fresh(): Promise<Page> {
 	const context = await browser!.newContext({
 		viewport: { width: 1440, height: 900 },
-		colorScheme: theme
+		colorScheme: 'light'
 	});
-	const page = await context.newPage();
-	if (theme === 'dark')
-		await page.addInitScript(() => {
-			const set = () => document.documentElement?.setAttribute('data-theme', 'dark');
-			set();
-			document.addEventListener('DOMContentLoaded', set);
-		});
-	return page;
+	return context.newPage();
 }
 
 async function loaded(page: Page) {
@@ -195,82 +187,80 @@ after(async () => {
 			);
 });
 
-for (const theme of ['light', 'dark'] as const) {
-	test(`Discard is not Cancel in the unsaved-changes window (${theme})`, async (t) => {
-		if (!reachable || !browser) return noServer(t, BASE);
-		const page = await fresh(theme);
-		try {
-			await loaded(page);
-			await page.locator('.project-button').first().click({ timeout: 10000 });
-			await page.waitForTimeout(300);
-			await page.getByRole('menuitem', { name: /New/i }).first().click({ timeout: 10000, force: true });
-			await page.waitForSelector('[role=dialog] .ask-actions, [role=dialog] .answers', {
-				timeout: 10000
-			});
-			const paints = await page.evaluate(paintRow, '[role=dialog] .ask-actions, [role=dialog] .answers');
-			const danger = await page.evaluate(dangerInk);
-			apart(paints, danger, `the unsaved-changes window (${theme})`);
-			// Nothing is thrown away: the question is left the way it was found.
-			await page.keyboard.press('Escape');
-		} finally {
-			await page.context().close();
-		}
-	});
+test('Discard is not Cancel in the unsaved-changes window', async (t) => {
+	if (!reachable || !browser) return noServer(t, BASE);
+	const page = await fresh();
+	try {
+		await loaded(page);
+		await page.locator('.project-button').first().click({ timeout: 10000 });
+		await page.waitForTimeout(300);
+		await page.getByRole('menuitem', { name: /New/i }).first().click({ timeout: 10000, force: true });
+		await page.waitForSelector('[role=dialog] .ask-actions, [role=dialog] .answers', {
+			timeout: 10000
+		});
+		const paints = await page.evaluate(paintRow, '[role=dialog] .ask-actions, [role=dialog] .answers');
+		const danger = await page.evaluate(dangerInk);
+		apart(paints, danger, 'the unsaved-changes window');
+		// Nothing is thrown away: the question is left the way it was found.
+		await page.keyboard.press('Escape');
+	} finally {
+		await page.context().close();
+	}
+});
 
-	test(`Delete is not Cancel in the Projects window (${theme})`, async (t) => {
-		if (!reachable || !browser) return noServer(t, BASE);
-		const page = await fresh(theme);
-		try {
-			await loaded(page);
-			await page.locator('.project-button').first().click({ timeout: 10000 });
-			await page.waitForTimeout(300);
-			await page.getByRole('menuitem', { name: /Open…/ }).first().click({ timeout: 10000, force: true });
-			await page.waitForSelector('[role=dialog] .row', { timeout: 10000 });
-			const row = page.locator('[role=dialog] .row').filter({ hasText: PROJECT }).first();
-			await row.locator('button').last().click({ timeout: 10000, force: true });
-			await page.waitForTimeout(300);
-			await page.getByRole('menuitem', { name: /Delete/i }).first().click({ timeout: 10000, force: true });
-			await page.waitForSelector('[role=dialog] .ask .ask-actions', { timeout: 10000 });
-			const paints = await page.evaluate(paintRow, '[role=dialog] .ask .ask-actions');
-			const danger = await page.evaluate(dangerInk);
-			apart(paints, danger, `the Projects window (${theme})`);
-			// The project stays: the question is answered with the way out.
-			await page.getByRole('button', { name: /^Cancel$/ }).first().click({ force: true });
-		} finally {
-			await page.context().close();
-		}
-	});
+test('Delete is not Cancel in the Projects window', async (t) => {
+	if (!reachable || !browser) return noServer(t, BASE);
+	const page = await fresh();
+	try {
+		await loaded(page);
+		await page.locator('.project-button').first().click({ timeout: 10000 });
+		await page.waitForTimeout(300);
+		await page.getByRole('menuitem', { name: /Open…/ }).first().click({ timeout: 10000, force: true });
+		await page.waitForSelector('[role=dialog] .row', { timeout: 10000 });
+		const row = page.locator('[role=dialog] .row').filter({ hasText: PROJECT }).first();
+		await row.locator('button').last().click({ timeout: 10000, force: true });
+		await page.waitForTimeout(300);
+		await page.getByRole('menuitem', { name: /Delete/i }).first().click({ timeout: 10000, force: true });
+		await page.waitForSelector('[role=dialog] .ask .ask-actions', { timeout: 10000 });
+		const paints = await page.evaluate(paintRow, '[role=dialog] .ask .ask-actions');
+		const danger = await page.evaluate(dangerInk);
+		apart(paints, danger, 'the Projects window');
+		// The project stays: the question is answered with the way out.
+		await page.getByRole('button', { name: /^Cancel$/ }).first().click({ force: true });
+	} finally {
+		await page.context().close();
+	}
+});
 
-	test(`Replace is not Cancel in the overwrite question (${theme})`, async (t) => {
-		if (!reachable || !browser) return noServer(t, BASE);
-		const page = await fresh(theme);
-		try {
-			await loaded(page);
-			await page.locator('.project-button').first().click({ timeout: 10000 });
-			await page.waitForTimeout(300);
-			// Dispatched rather than clicked: with no machine connected the alarm card lies
-			// over this row of the menu, and even a forced click lands on the card (N1).
-			await page
-				.getByRole('menuitem', { name: /Save as…/ })
-				.first()
-				.dispatchEvent('click');
-			await page.waitForSelector('[role=dialog] input.project-name', { timeout: 10000 });
-			// The window fills its list after it opens, and `taken` reads that list.
-			await page.waitForSelector(`[role=dialog] .row:has-text("${PROJECT}")`, { timeout: 10000 });
-			// The name of another project on the server, so Save asks before it replaces.
-			await page.locator('[role=dialog] input.project-name').fill(PROJECT);
-			await page.waitForTimeout(300);
-			await page.locator('[role=dialog] button.save').dispatchEvent('click');
-			// The whole question, not its `.ask-actions`: the untouched build words this
-			// one row without that class, and this test has to be able to fail on it.
-			await page.waitForSelector('[role=dialog] .ask button.danger', { timeout: 10000 });
-			const paints = await page.evaluate(paintRow, '[role=dialog] .ask');
-			const danger = await page.evaluate(dangerInk);
-			apart(paints, danger, `the overwrite question (${theme})`);
-			// Nothing is overwritten: the question is answered with the way out.
-			await page.getByRole('button', { name: /^Cancel$/ }).first().click({ force: true });
-		} finally {
-			await page.context().close();
-		}
-	});
-}
+test('Replace is not Cancel in the overwrite question', async (t) => {
+	if (!reachable || !browser) return noServer(t, BASE);
+	const page = await fresh();
+	try {
+		await loaded(page);
+		await page.locator('.project-button').first().click({ timeout: 10000 });
+		await page.waitForTimeout(300);
+		// Dispatched rather than clicked: with no machine connected the alarm card lies
+		// over this row of the menu, and even a forced click lands on the card (N1).
+		await page
+			.getByRole('menuitem', { name: /Save as…/ })
+			.first()
+			.dispatchEvent('click');
+		await page.waitForSelector('[role=dialog] input.project-name', { timeout: 10000 });
+		// The window fills its list after it opens, and `taken` reads that list.
+		await page.waitForSelector(`[role=dialog] .row:has-text("${PROJECT}")`, { timeout: 10000 });
+		// The name of another project on the server, so Save asks before it replaces.
+		await page.locator('[role=dialog] input.project-name').fill(PROJECT);
+		await page.waitForTimeout(300);
+		await page.locator('[role=dialog] button.save').dispatchEvent('click');
+		// The whole question, not its `.ask-actions`: the untouched build words this
+		// one row without that class, and this test has to be able to fail on it.
+		await page.waitForSelector('[role=dialog] .ask button.danger', { timeout: 10000 });
+		const paints = await page.evaluate(paintRow, '[role=dialog] .ask');
+		const danger = await page.evaluate(dangerInk);
+		apart(paints, danger, 'the overwrite question');
+		// Nothing is overwritten: the question is answered with the way out.
+		await page.getByRole('button', { name: /^Cancel$/ }).first().click({ force: true });
+	} finally {
+		await page.context().close();
+	}
+});

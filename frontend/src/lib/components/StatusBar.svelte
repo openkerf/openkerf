@@ -123,7 +123,7 @@
 				{t('status.restart.body')}
 			</p>
 		</div>
-		<button onclick={() => location.reload()}>{t('status.restart.reload')}</button>
+		<button class="btn primary" onclick={() => location.reload()}>{t('status.restart.reload')}</button>
 	</div>
 {/if}
 <!-- Errors from write actions are not really at home here, but this is the only
@@ -132,20 +132,25 @@
      design panel, which is just as easy not to be looking at. -->
 <Notice {control} {edits} />
 
-<footer class="statusbar mono">
+<!-- Words in the interface face, values in mono: the bar used to be mono from end to
+     end, so "Connect" and "Server connected" read as data. Only the coordinates, the
+     count and the clock are set as figures now. -->
+<footer class="statusbar">
 	<!-- Two positions side by side: where the head is, and where your pointer is.
 	     Without the distinction one reads as the other. -->
 	<span class="what">{t('status.head')}</span>
-	<span class:stale={!fresh}>X <b>{formatMm(mm?.[0])}</b></span>
-	<span class:stale={!fresh}>Y <b>{formatMm(mm?.[1])}</b> mm</span>
+	<span class="mono" class:stale={!fresh}>X <b>{formatMm(mm?.[0])}</b></span>
+	<span class="mono" class:stale={!fresh}>Y <b>{formatMm(mm?.[1])}</b> mm</span>
 	{#if !fresh}
 		<!-- One word, but it is the difference between "the head is there" and "the
-		     head was there when we last saw it". -->
+		     head was there when we last saw it". The figures beside it go muted and
+		     slanted rather than faded: a position from before the silence has to stay
+		     readable (4.5:1), it just must not read as fact. -->
 		<span class="what">{t('status.lastSeen')}</span>
 	{/if}
 	<span class="sep pointerpart" aria-hidden="true"></span>
 	<span class="what pointerpart">{t('status.mouse')}</span>
-	<span class="pointer pointerpart">
+	<span class="pointer pointerpart mono">
 		{#if pointerMm}
 			<b>{formatMm(pointerMm.x)}</b>, <b>{formatMm(pointerMm.y)}</b> mm
 		{:else}
@@ -159,14 +164,14 @@
 	     on the Edit and Layers tabs — it moved here, it did not leave the screen. -->
 	{#if elementCount !== null}
 		<span class="sep docpart" aria-hidden="true"></span>
-		<span class="docpart">{t('panel.elements', { n: elementCount })}</span>
+		<span class="docpart figures">{t('panel.elements', { n: elementCount })}</span>
 	{/if}
 	<span class="sep" aria-hidden="true"></span>
 	<!-- During a job "how much longer" is the only number that counts; the total
 	     estimate was there, but you had to subtract it from the clock yourself. -->
-	<span class="time">
+	<span class="time figures">
 		{#if job && remaining !== null}
-			{#if percent !== null}<b class="pct">{percent}%</b>{/if}
+			{#if percent !== null}<b class="pct mono">{percent}%</b>{/if}
 			<!-- Two whole messages instead of one sentence with a styled tail: the
 			     emphasis survives (how long is left is the number that counts) and
 			     neither half is a fragment a translator cannot place. -->
@@ -197,9 +202,9 @@
 				     round — the verb that pulls the plug on the left and *Leave it* on the
 				     right — which is the reverse of every other question in the app. -->
 				<span class="ask-actions">
-					<button class="verbind" onclick={() => (zekerVerbreken = false)}>{t('status.disconnect.keep')}</button>
+					<button class="btn mini verbind" onclick={() => (zekerVerbreken = false)}>{t('status.disconnect.keep')}</button>
 					<button
-						class="verbind"
+						class="btn mini danger verbind"
 						disabled={control.busy === 'disconnect'}
 						title={control.busy === 'disconnect' ? t('reason.busy') : undefined}
 						onclick={() => {
@@ -210,8 +215,12 @@
 				</span>
 			</span>
 		{:else}
+			<!-- Connect is a plain small button. Disconnect is a ghost: it stays reachable
+			     while a job burns — the connection is yours to release — but it must not
+			     sit there as the most tempting thing in the bar. -->
 			<button
-				class="verbind"
+				class="btn mini verbind"
+				class:ghost={hangt}
 				disabled={control.needsToken || control.busy === 'connect' || control.busy === 'disconnect'}
 				title={control.needsToken
 					? t('status.needsToken')
@@ -262,31 +271,23 @@
 		align-items: center;
 		gap: var(--space-4);
 		padding: var(--space-2) var(--space-4);
-		border-top: 1px solid var(--warn-solid);
-		background: var(--surface-1);
+		border-top: 1px solid var(--warn-edge);
+		background: var(--warn-tint);
 		box-shadow: var(--lift-2);
 		font-size: var(--text-xs);
 		color: var(--text-1);
 	}
 	.restarted .text { min-width: 0; }
 	.restarted strong { display: block; font-size: var(--text-sm); }
-	.restarted p { margin: 0; color: var(--text-2); }
-	.restarted button {
+	.restarted p { margin: 0; color: var(--text-1); }
+	/* The shared primary; this gets touched on a tablet beside the machine too, so it
+	   keeps the 44px it always had. */
+	.restarted .btn {
 		flex: none;
 		margin-left: auto;
-		/* 44px: this gets touched on a tablet beside the machine too. */
-		min-height: 44px;
-		padding: 0 var(--space-4);
-		font: inherit;
-		font-weight: 600;
-		border: 1px solid var(--accent);
-		border-radius: var(--radius-field);
-		background: var(--accent);
-		color: var(--accent-ink);
+		min-height: max(44px, var(--target-min));
 	}
 	.what {
-		font-family: var(--font-ui);
-		font-size: var(--text-xs);
 		color: var(--text-2);
 	}
 	/* Fixed width: otherwise the whole bar jumps along with every pointer move. */
@@ -296,6 +297,18 @@
 	   lines as soon as a job was running. */
 	@media (max-width: 1199px) {
 		.pointerpart { display: none; }
+	}
+	/* Below 900 px the head position, the job's figures, the machine link and the
+	   server state no longer fit one line: at 800 the server state stood 86 px past
+	   the edge of the screen. The bar takes a second line rather than hide any of
+	   them — each is a fact you may need at the machine. */
+	@media (max-width: 899px) {
+		.statusbar {
+			flex-wrap: wrap;
+			row-gap: 0;
+			column-gap: var(--space-3);
+		}
+		.statusbar .sep { display: none; }
 	}
 	.statusbar > span { white-space: nowrap; }
 
@@ -313,23 +326,22 @@
 		font-size: var(--text-xs);
 		color: var(--text-2);
 	}
+	/* Words with a number inside them ("6 elements", "4:12 left") stay in the
+	   interface face, with figures of one width so the line does not jitter as they
+	   count. */
+	.figures { font-variant-numeric: tabular-nums; }
 	.offline { color: var(--danger); }
 	/* Not red: the server is fine, there is simply no machine attached. Red would
 	   equate this with a fault, and then nobody believes the red that does
 	   matter. */
 	.onthecht { color: var(--warn); }
+	/* The shared small button, flattened to the bar on a desk (the bar is 28px) and
+	   back on the 44px floor beside the machine. */
 	.verbind {
+		min-height: max(22px, var(--target-min));
+		padding-block: 0;
 		margin-left: var(--space-1);
-		padding: 1px var(--space-1);
-		font: inherit;
-		color: var(--text-1);
-		background: var(--surface-2);
-		border: 1px solid var(--line);
-		border-radius: var(--radius-1);
-		cursor: pointer;
 	}
-	.verbind:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
-	.verbind:disabled { opacity: 0.5; cursor: default; }
 	.verbreek-ask {
 		display: inline-flex;
 		align-items: center;
@@ -350,11 +362,17 @@
 		text-decoration: underline dotted;
 		text-underline-offset: 3px;
 	}
-	/* Positions from before the silence: readable, but no longer as fact. */
-	.stale { opacity: 0.55; }
 	b {
 		color: var(--text-1);
 		font-weight: 400;
+	}
+	/* Positions from before the silence: readable, but no longer as fact. Muted and
+	   slanted, with "last seen" beside them — never faded below 4.5:1 (--text-2 on the
+	   bar measures 5.9:1). */
+	.stale,
+	.stale b {
+		color: var(--text-2);
+		font-style: italic;
 	}
 	.sep {
 		width: 1px;
@@ -371,10 +389,7 @@
 		margin-left: auto;
 		display: flex;
 		align-items: center;
-		gap: 8px;
+		gap: var(--space-2);
 		color: var(--text-1);
 	}
-	/* Size only; the colour per state is shared — `.machinedot` in `tokens.css`. This
-	   bar had a rule for one of the six states, so the other five were grey here while
-	   the top bar coloured them. */
 </style>

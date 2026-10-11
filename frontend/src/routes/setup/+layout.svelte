@@ -31,16 +31,17 @@
 	<div class="brand"><Logo />OpenKerf</div>
 	<span class="crumb">{t('setup.crumb')}</span>
 	<div class="spacer"></div>
-	<a class="btn" href="/">{t('common.back')}<span class="lang">{t('setup.backToWorkArea')}</span></a>
+	<!-- One sentence, not "Back" glued to "to the work area": two halves only make a
+	     sentence in languages that put the words in the same order. -->
+	<a class="btn" href="/">{t('setup.backToWorkArea')}</a>
 </header>
 
 <main class:narrow>
 	{#if current >= 0}
 	<nav class="steps" aria-label={t('setup.progress')}>
-		<!-- Five pills without a count do not say how far you are; on a phone they
-		     wrap as well, and then the highlighted pill is the only foothold. The
-		     sentence before it always works. -->
-		<p class="stepper">{t('setup.stepOf', { n: current + 1, total: STEPS.length })}</p>
+		<!-- Five pills without a count do not say how far you are; when they wrap, the
+		     highlighted pill is the only foothold. The sentence before it always works. -->
+		<p class="help stepper">{t('setup.stepOf', { n: current + 1, total: STEPS.length })}</p>
 		<ol>
 			{#each STEPS as step, index (step.path)}
 				<li class:current={index === current} class:done={current > index}>
@@ -56,23 +57,14 @@
 	{/if}
 
 	<!-- The steps sat as bare text in an empty window: at 1440 by 900 two thirds of the
-	     screen was nothing. A card makes it a screen rather than a document. -->
-	<div class="sheetcard">
+	     screen was nothing. A card makes it a screen rather than a document. Inside it
+	     a step uses `.card.inset` for a block of its own — never a second card. -->
+	<div class="card sheetcard">
 		{@render children()}
 	</div>
 </main>
 
 <style>
-	/* At 390 pixels this heading breaks over three lines and the button falls off the
-	   screen. Shorter, then: the destination is still there. */
-	/* The space between "Back" and the rest comes from a margin: in a flexbox a written
-	   space between two items disappears. */
-	.lang { margin-left: 0.3em; }
-	@media (max-width: 560px) {
-		.crumb { display: none; }
-		.lang { display: none; }
-	}
-
 	.topbar {
 		height: var(--topbar-height);
 		flex: none;
@@ -108,21 +100,11 @@
 		max-width: 560px;
 	}
 	.sheetcard {
-		background: var(--surface-1);
-		border: 1px solid var(--line);
-		border-radius: var(--radius-card);
 		box-shadow: var(--lift-1);
 		padding: var(--space-6);
 	}
-	@media (max-width: 560px) {
-		.sheetcard {
-			padding: var(--space-4);
-		}
-	}
 	.stepper {
 		margin: 0 0 var(--space-2);
-		font-size: var(--text-xs);
-		color: var(--text-2);
 	}
 	.steps ol {
 		display: flex;
@@ -133,98 +115,38 @@
 		font-size: var(--text-xs);
 		flex-wrap: wrap;
 	}
+	/* A completed step is a link back, so it is a touch target beside the machine. */
 	.steps li span,
 	.steps li a {
-		display: block;
-		padding: 4px 8px;
+		display: flex;
+		align-items: center;
+		min-height: max(24px, var(--target-min));
+		padding: var(--space-1) var(--space-3);
 		border-radius: var(--radius-dot);
 		background: var(--surface-2);
 		color: var(--text-2);
 		text-decoration: none;
 	}
-	/* A completed step sits on --surface-2, and there --accent stays at 4.33
-	   short; --accent-text is the same colour one shade deeper and reaches 5.09. On hover
-	   as well, because that lays --line underneath. */
+	/* A completed step sits on --surface-2; --accent is deep enough to reach 5.09
+	   there (tokens.css, D7), so it is safe as text. */
 	.steps li.done a {
-		color: var(--accent-text);
+		color: var(--accent);
 	}
-	/* The hover set --line as the fill, and that is a border colour, not a surface: in
-	   light the pill drops to 4.14 with it and in dark to 3.42 — both below the bound, and
-	   precisely at the moment you *want* to click the step. The surface now stays; the
-	   indication is a stripe, and that cannot cost contrast. */
 	.steps li.done a:hover {
 		text-decoration: underline;
-		text-underline-offset: 2px;
+		text-underline-offset: 3px;
 	}
+	/* The current step is the selection, and the one pill that takes the accent. */
 	.steps li.current span {
 		background: var(--accent);
 		color: var(--accent-ink);
 	}
-	/* A completed step is a link back, so a touch target. Measured at 27px tall on tablet
-	   and phone; the design system demands 44. */
-	@media (max-width: 1199px) {
-		.steps li span,
-		.steps li a {
-			min-height: 44px;
-			display: flex;
-			align-items: center;
-			padding: 4px 12px;
-		}
-	}
 	/* Shared by all the steps — those are separate routes, so scoped styles per page
-	   would repeat the same thing five times. */
-	:global(.setup h1) {
-		font-size: var(--text-lg);
-		font-weight: 600;
-		letter-spacing: -0.01em;
-		margin: 0 0 var(--space-2);
+	   would repeat the same thing five times. Where things sit, not what they look like. */
+	:global(.setup h1.title) {
+		margin-bottom: var(--space-2);
 	}
-	:global(.setup .muted) {
-		color: var(--text-2);
-	}
-	/* The width now lives on the card (main.narrow), not in the content: otherwise a 460px
-	   column sat on the left of a 900 card. */
-	:global(.setup.narrow) {
-		max-width: none;
-	}
-	:global(.setup .actions) {
-		display: flex;
-		gap: var(--space-2);
+	:global(.setup .ask-actions) {
 		margin-top: var(--space-6);
-	}
-	:global(.setup .error) {
-		padding: var(--space-3);
-		border-radius: var(--radius-field);
-		background: color-mix(in srgb, var(--danger) 14%, transparent);
-		margin: 0 0 var(--space-4);
-	}
-	.btn,
-	:global(.setup .btn) {
-		display: inline-flex;
-		align-items: center;
-		padding: 8px 16px;
-		border-radius: var(--radius-field);
-		border: 1px solid var(--line);
-		background: var(--surface-1);
-		font-weight: 500;
-		text-decoration: none;
-		color: inherit;
-		transition: background var(--transition);
-	}
-	.btn:hover,
-	:global(.setup .btn:hover:not(:disabled)) {
-		background: var(--surface-2);
-	}
-	:global(.setup .btn:disabled) {
-		opacity: 0.45;
-		cursor: not-allowed;
-	}
-	:global(.setup .btn.primary) {
-		background: var(--accent);
-		border-color: var(--accent);
-		color: var(--accent-ink);
-	}
-	:global(.setup .btn.subtle) {
-		color: var(--text-2);
 	}
 </style>

@@ -44,7 +44,8 @@ test('Job starts quiet; machine setup unfolds without issuing commands', async (
       assert.equal(await machine.evaluate(el => (el as HTMLDetailsElement).open), false);
       await page.locator('.adjust-status').waitFor({ state: 'visible' });
       assert.match(await page.locator('.adjust-status').innerText(), /50%/);
-      assert.equal(await page.locator('.adjust-status > div').count(), 1, 'unread speed is not an override');
+      // The shared Notice (named `.adjust-status`) holds its lines in `.notice-body`.
+      assert.equal(await page.locator('.adjust-status .notice-body > div').count(), 1, 'unread speed is not an override');
       const start = page.locator('.pf-split > button').first();
       await start.waitFor({ state: 'visible' });
       assert.ok(await start.evaluate(el => {

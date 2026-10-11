@@ -166,9 +166,9 @@ test('"nothing to burn" is one question, asked of the design', () => {
 test('may I pause, resume or stop — one answer for four surfaces', () => {
 	// Four formulas for this existed. `+page.svelte` asked the capabilities and the
 	// token; `JobControls` asked the capabilities, the phase and its own `blocked`;
-	// `PhoneView` asked whether there was a job, the token and the connection — and not
-	// the capabilities at all, so a driver that cannot pause was offered a pause button
-	// on the phone. `StatusBar` had a fourth that the template never read.
+	// a third surface asked whether there was a job, the token and the connection — and
+	// not the capabilities at all, so a driver that cannot pause was offered a pause
+	// button. `StatusBar` had a fourth that the template never read.
 	//
 	// The three questions differ in exactly one way, and it is worth writing down:
 	// stopping stays allowed wherever the machine can do it. If our reading of the
@@ -188,7 +188,7 @@ test('may I pause, resume or stop — one answer for four surfaces', () => {
 	assert.equal(
 		transportAllowed('pause', { able: { ...able, pause: false }, phase: 'burning', blocked: false }),
 		false,
-		'this driver cannot pause — the phone used not to ask'
+		'this driver cannot pause — one surface used not to ask'
 	);
 	assert.equal(transportAllowed('pause', { able, phase: 'burning', blocked: true }), false);
 

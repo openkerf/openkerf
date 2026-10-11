@@ -50,7 +50,7 @@ For text that follows a curve, see **Arc text** under the generators.
 
 ## Images
 
-**Place image** in the tool rail opens a file picker for `.png`, `.jpg`, `.jpeg`, `.gif`, `.bmp` and `.webp`, and drops the picture on the bed. Import in the top bar does the same for the wider list of design files.
+**Place image** in the tool rail opens a file picker for `.png`, `.jpg`, `.jpeg`, `.gif`, `.bmp` and `.webp`, and drops the picture on the bed. **Import…** in the project menu does the same for the wider list of design files.
 
 An image only burns in a raster layer. What decides how it comes out of the machine is the fold **Image** in the panel on the right, which appears when an image is selected. It holds eight switches; the summary shows `{n} on` when any of them are, and **Clear everything** puts the image back as it came in.
 

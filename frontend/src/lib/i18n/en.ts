@@ -56,6 +56,7 @@ export const en = {
 	// ── The Projects window ─────────────────────────────────────────────────────
 	'projects.title': 'Projects',
 	'projects.saveAs.title': 'Save as…',
+	'projects.empty.title': 'No projects yet',
 	'projects.empty': 'Nothing has been saved on this server yet.',
 	'projects.column.name': 'Name',
 	'projects.column.saved': 'Saved',
@@ -78,24 +79,19 @@ export const en = {
 	'unsaved.discard': 'Discard',
 	'unsaved.leave': 'There are unsaved changes. Are you sure you want to leave?',
 
-	'topbar.import': 'Import',
+	'topbar.import': 'Import…',
 	'topbar.import.title':
 		'Import a file into this sheet — SVG, DXF, RD, G-code or an image',
 	'topbar.import.aria': 'Import file into this sheet',
-	'topbar.export': 'Export',
+	'topbar.export': 'Export as SVG',
 	'topbar.export.title': 'Save this sheet as SVG',
 	'topbar.frame': 'Show frame',
 	'topbar.frame.short': 'Frame',
 	'topbar.frame.title': 'Send the head around the outline of your work, without burning',
 	'topbar.frame.off': 'Nothing is on the bed, or this machine cannot move',
 	'topbar.frame.noServer': 'Running the frame has to wait until the server is back.',
-	'topbar.theme': 'Switch theme',
 
 	// ── Transport (top bar, panel, status bar all read these) ──────────────────
-	'transport.start': 'Prepare job',
-	'transport.start.short': 'Prepare',
-	'transport.start.preflight': 'Open the pre-flight',
-	'transport.start.busy': 'A job is already under way',
 	'transport.pause': 'Pause',
 	'transport.pause.title': 'Pause the job — the head stops, the job stays (Pause)',
 	'transport.pause.unsupported': 'This machine has no pause — use the button on the machine',
@@ -111,7 +107,6 @@ export const en = {
 	'transport.noServer.stop': 'Stopping is only possible with the emergency stop on the machine now.',
 	'transport.noServer.pause': 'Pausing is only possible with the button on the machine now.',
 	'transport.noServer.resume': 'Resuming is only possible on the machine now.',
-	'transport.noServer.start': 'Wait until the server is back.',
 
 	// ── Tool rail ──────────────────────────────────────────────────────────────
 	'rail.aria': 'Tools',
@@ -139,8 +134,7 @@ export const en = {
 	'rail.group.tools': 'Tools',
 	'rail.group.add': 'Add',
 	'rail.group.file': 'File',
-	'rail.importHere': 'Import into this sheet',
-	'rail.sheetAsSvg': 'This sheet as SVG',
+	'rail.group.windows': 'Windows',
 
 	// ── Status bar ─────────────────────────────────────────────────────────────
 	'status.head': 'head',
@@ -475,6 +469,10 @@ export const en = {
 	'common.back': 'Back',
 	'common.busy': 'Working…',
 	'common.more': 'More',
+	'common.why': 'Why?',
+	// The − and + of a number field, named after the field itself.
+	'field.decrease': 'Decrease {label}',
+	'field.increase': 'Increase {label}',
 
 	// ── Work from an earlier session ──────────────────────────────────────────
 	'recovery.title': 'Work from an earlier session',
@@ -535,7 +533,7 @@ export const en = {
 	'canvas.snap.on': 'Snapping is on — hold Alt to skip it for one move',
 	'canvas.snap.off': 'Snapping is off — hold Alt to use it for one move',
 	'canvas.bedSize': 'bed {width} × {height} mm',
-	'canvas.empty.body': 'Use Import in the top bar for an existing design, or pick a shape on the left and click the bed.',
+	'canvas.empty.body': 'Use Import… in the project menu for an existing design, or pick a shape on the left and click the bed.',
 	// Below 1200px the bar has no Import — it is a row in the rail's More menu — so the
 	// sentence names the door that is on the screen it is shown on. A whole second
 	// sentence, not two glued halves. Gauntlet P33.
@@ -738,6 +736,9 @@ export const en = {
 	'job.adjust.hint': 'This scales what the machine is doing right now. The layer keeps its own setting — which may come from a preset, and then it is evidence.',
 	'job.zAxis.noCommand': 'This profile reports a Z axis, but the driver for this machine has no command to move the head. Focusing is done by hand.',
 	'job.noPause': 'This device has no pause/resume — those commands come from the device service.',
+	'job.lastKnown': 'Last known state: {phase}, {percent}%.',
+	'job.lastKnown.noProgress': 'Last known state: {phase}.',
+	'job.lastKnown.ago': 'The last report from the machine came in {ago}.',
 	'job.pause.keepGoing': 'Carry on where the head left off',
 	'job.pause.stopHead': 'Stop the head without losing the job',
 	'job.stop.now': 'Abort the job right away',
@@ -894,7 +895,8 @@ export const en = {
 		one: '1 element',
 		other: '{n} elements'
 	},
-	'panel.empty': 'Nothing on the bed yet. Import in the top bar brings in an SVG, DXF or image; with the tools on the left you draw your own.',
+	'panel.empty.title': 'Nothing to edit yet',
+	'panel.empty': 'Nothing on the bed yet. Import… in the project menu brings in an SVG, DXF or image; with the tools on the left you draw your own.',
 	'panel.shapes': '{n} shapes',
 	'panel.noLayer': 'in no layer',
 	'panel.noLayer.title': 'This shape does not burn',
@@ -960,8 +962,9 @@ export const en = {
 	'panel.list.prune.explain': 'Shapes and filled layers stay',
 	'panel.list.prune.none': 'There is no empty layer in the list',
 	'panel.list.dropAll': 'Remove all layers…',
-	'panel.density.compact': 'Compact list — click for roomy rows',
-	'panel.density.roomy': 'Roomy list — click for compact rows',
+	'panel.density.view': 'List view',
+	'panel.density.compact': 'One line per layer; the fields open under its name.',
+	'panel.density.roomy': 'Two lines per layer, with speed, power and passes in the row.',
 	'panel.density.compactLabel': 'Compact',
 	'panel.density.roomyLabel': 'Roomy',
 	'panel.empties': {
@@ -975,6 +978,7 @@ export const en = {
 	'panel.dropAll.noShapes': 'There is no shape on the bed yet.',
 	'panel.dropAll.gridsStay': 'Test grids stay.',
 	'panel.dropAll.confirm': 'Throw away all layers',
+	'panel.noLayers.title': 'Nothing will burn yet',
 	'panel.noLayers': 'No layers yet. A layer is an operation — cut, engrave or raster — with a speed and power of its own. Make one below; then select a shape to put into it.',
 	'panel.layer.dragAria': 'Order of {label} — drag, or use the arrow keys',
 	'panel.layer.dragTitle': 'Drag to reorder (or arrow up/down). Right-click for burning earlier or later.',
@@ -1071,11 +1075,6 @@ export const en = {
 	'notify.permission.default': 'The browser has not been asked yet.',
 	'notify.permission.granted': 'The browser may show notifications.',
 	'notify.permission.denied': 'The browser blocks notifications for this site.',
-	// The same three states as a chip, for the phone: the whole sentence above does not
-	// fit beside a title, and a word that is also a CSS class cannot be translated.
-	'notify.state.on': 'On',
-	'notify.state.off': 'Off',
-	'notify.state.blocked': 'Blocked',
 	'notify.refused': 'The browser refused to show the notification. With an installed app it often helps to open it again.',
 	'notify.test.title': 'Test notification',
 	'notify.test.body': 'This is what a notification looks like. Done or fault arrives the same way.',
@@ -1179,7 +1178,7 @@ export const en = {
 	'library.searchAria': 'Search the library',
 	'library.newMaterial': 'New material',
 	'library.onlyMaterial': 'Presets for {material}',
-	'library.onlyMaterial.why': '— from this sheet',
+	'library.onlyMaterial.why': 'That is the material of this sheet.',
 	'library.onlyMachine': 'Presets for {machine}',
 	'library.applyTo': 'Apply to',
 	'library.noLayer': 'There is no layer to put a preset on yet. Make one in the Layers tab; after that one tap puts the speed and power on it.',
@@ -1477,7 +1476,7 @@ export const en = {
 	},
 	'grid.suggested.none': 'No presets for this combination yet; this is a broad starting point.',
 	'grid.done.title': 'Grid #{id} is on the bed',
-	'grid.done.body': '— {cells} squares, as one group in your design. Check the frame first, burn it after, and come back for step 3.',
+	'grid.done.body': 'It has {cells} squares, as one group in your design. Check the frame first, burn it after, and come back for step 3.',
 	'grid.frameRunning': 'Frame is running…',
 	'grid.starting': 'Starting…',
 	'grid.frameDone': 'The head is tracing the outline of the bed. Is your board in the right place?',
@@ -1856,7 +1855,7 @@ export const en = {
 	'setup.anotherMachine': 'Another machine',
 	'setup.toWorkArea': 'To the work area',
 	'setup.crumb': 'Set up a machine',
-	'setup.backToWorkArea': 'to the work area',
+	'setup.backToWorkArea': 'Back to the work area',
 	'setup.progress': 'Progress',
 	'setup.stepOf': 'Step {n} of {total}',
 	'setup.done.draw.title': 'Draw or import something',
@@ -2053,66 +2052,6 @@ export const en = {
 	'kind.galvo': 'Galvo — fibre or UV',
 	'kind.galvo.blurb': 'Mirror head on a stand, marks metal. Balor control.',
 
-	// ── Phone view ────────────────────────────────────────────────────────────────
-	'phone.photoSaved': 'Photo saved. You get the preset out of it on the desktop.',
-	// The refusal itself comes from the API, which knows which two boards it is about.
-	// This is the fallback for the case where the answer carries no sentence at all — a
-	// network that went away mid-upload, or a 500 — and it says the one thing the phone
-	// can be sure of: the picture is not filed, so the plank is still wanted.
-	'phone.photoFailed': 'The photo was not saved. Keep the board and try again.',
-	'phone.noConnection': 'No connection',
-	'phone.noMachine': 'no machine',
-	'phone.cameraAlt': 'Camera image of the bed',
-	'phone.bed': 'Bed',
-	// The − and + of a number field, named after the field itself.
-	'field.decrease': 'Decrease {label}',
-	'field.increase': 'Increase {label}',
-	'phone.bedAria.size': 'Bed {width} by {height} millimetres',
-	'phone.bedAria.empty': 'empty',
-	'phone.bedAria.silent': '{n} do not burn',
-	'phone.bedAria.offBed': '{n} off the bed',
-	'phone.bedAria.offSheet': '{n} off the sheet',
-	'phone.bedAria.head': 'head at {position}',
-	'phone.head': 'Head',
-	'phone.onTheBed': 'On the bed',
-	'phone.nothing': 'nothing',
-	'phone.silent': ', {n} do not burn',
-	'phone.lastSeen': 'This is the last state we saw.',
-	'phone.unplugged': 'There is no machine attached to the server. Check whether it is on and the cable is in.',
-	'phone.idle': 'Nothing is burning. You start a job on the desktop.',
-	'phone.cameraNoImage': 'The camera is on but delivers no image. Cable loose?',
-	'phone.cameraStarting': 'Starting the camera…',
-	'phone.cameraRetry': 'Try again',
-	'phone.cameraOn': 'Switch the camera on',
-	'phone.noCamera': 'No camera linked to this machine.',
-	'phone.waitingPhoto': {
-		one: '{n} test grid is waiting for a photo',
-		other: '{n} test grids are waiting for a photo'
-	},
-	'phone.waitingAlign': {
-		one: '{n} test grid is waiting to be aligned',
-		other: '{n} test grids are waiting to be aligned'
-	},
-	'phone.photoIn': 'photo in — align it on the desktop',
-	'phone.again': 'Again',
-	'phone.takePhoto': 'Take a photo',
-	'phone.newPhotoOf': 'New photo of test grid {id}',
-	'phone.notBurning': 'Nothing is burning',
-	'phone.paused': 'paused',
-	'phone.pauseAsked': 'pause requested…',
-	'phone.remaining': '{time} left',
-	'phone.doneAt': 'done at {time}',
-	'phone.burning': 'burning',
-	'phone.designElsewhere': 'You design on the desktop — this screen keeps an eye on the machine.',
-	'phone.stopOnMachine': 'No connection — stopping is only possible with the button on the machine.',
-	'phone.retry': 'Try again',
-	'phone.retry.auto': 'Try again (automatically in {seconds} s)',
-	'phone.pausing': 'Pausing…',
-	'phone.operation.cut': 'cut',
-	'phone.operation.engrave': 'engrave',
-	'phone.operation.raster': 'raster',
-	'phone.operation.mark': 'mark',
-
 	// ── Welcome ───────────────────────────────────────────────────────────────────
 	'welcome.title': 'No machine has been set up yet.',
 	'welcome.lead': 'Without a machine the canvas does not know how big your bed is. Four steps, about a minute — and everything can still be changed later.',
@@ -2163,7 +2102,6 @@ export const en = {
 	'result.thisMaterial': 'this material',
 	'result.burnFirst': 'Burn this grid and photograph the board.',
 	'result.burnFirst.how': 'Straight from above, the whole board in frame — you align the corners yourself afterwards.',
-	'result.orPhone': 'Or grab your phone: open OpenKerf on it and this grid is under “Photograph a test grid”.',
 	'result.photoAlt': 'Photo of the burned grid',
 	'result.corner.drag': 'Drag corner {corner}',
 	'result.corner.topLeft': 'top left',
@@ -2185,7 +2123,7 @@ export const en = {
 	},
 	'result.makePreset': 'Make a preset',
 	'result.becamePreset': 'Became a preset:',
-	'result.pointHighlights': '— pointing at it highlights the square on the photo.',
+	'result.pointHighlights': 'Pointing at one of these highlights its square on the photo.',
 	'result.gridNoMaterial': 'This grid belongs to no material, so no preset can come out of it. Link a material when generating the next grid.',
 	'result.align.failed': 'The alignment could not be saved.',
 	'result.align.failedOffline': 'The alignment could not be saved — no connection.',

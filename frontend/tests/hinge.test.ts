@@ -38,7 +38,8 @@ async function openHinge() {
 	await page.getByTitle(/Generators/).first().click();
 	// Exact: the rail's own tooltip names the hinge too ("Generators — repeats,
 	// boxes, codes and a living hinge"), so a loose match finds two buttons.
-	await page.getByRole('button', { name: 'Living hinge', exact: true }).click();
+	// The forms are a tablist now (role="tab", like the right-hand panel's tabs).
+	await page.getByRole('tab', { name: 'Living hinge', exact: true }).click();
 	await page.waitForTimeout(600);
 }
 

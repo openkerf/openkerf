@@ -22,6 +22,7 @@
 	 */
 	import { t } from '$lib/i18n/index.svelte';
 	import type { Controller } from '$lib/control.svelte';
+	import Icon from './Icon.svelte';
 
 	let {
 		control,
@@ -58,10 +59,17 @@
 {#if notices.length}
 	<div class="notices">
 		{#each notices as notice (notice.key)}
-			<div class="notice" role="alert">
-				<span class="stip" aria-hidden="true"></span>
-				<p>{notice.text}</p>
-				<button aria-label={t('message.close')} onclick={notice.clear}>×</button>
+			<!-- The shared danger notice (tokens.css): tinted box and icon, the sentence,
+			     and its own cross. -->
+			<div class="notice danger" role="alert">
+				<span class="notice-icon"><Icon name="danger" /></span>
+				<p class="notice-body">{notice.text}</p>
+				<button
+					class="btn ghost icon"
+					aria-label={t('message.close')}
+					title={t('message.close')}
+					onclick={notice.clear}><Icon name="close" /></button
+				>
 			</div>
 		{/each}
 	</div>
@@ -86,37 +94,16 @@
 		gap: var(--space-2);
 		max-width: min(420px, calc(100vw - 2 * var(--space-4)));
 	}
+	/* Only where it sits and that it floats: the face is `.notice.danger`. */
 	.notice {
-		display: flex;
-		align-items: flex-start;
-		gap: var(--space-2);
 		width: 100%;
-		padding: var(--space-3);
-		border: 1px solid var(--danger-solid);
-		border-radius: var(--radius-card);
-		background: var(--surface-1);
 		box-shadow: var(--lift-2);
-		font-size: var(--text-xs);
-		color: var(--text-1);
 	}
-	.stip {
-		flex: none;
-		width: 8px;
-		height: 8px;
-		margin-top: var(--space-1h);
-		border-radius: var(--radius-dot);
-		background: var(--danger-solid);
+	.notice-body {
+		flex: 1;
+		margin: 0;
 	}
-	p { margin: 0; }
-	button {
-		flex: none;
-		width: 24px;
-		height: 24px;
-		margin: -4px -4px 0 0;
-		border-radius: var(--radius-field);
-		font-size: var(--text-md);
-		line-height: 1;
-		color: var(--text-2);
+	.notice .btn.icon {
+		margin: calc(-1 * var(--space-1)) calc(-1 * var(--space-1)) 0 0;
 	}
-	button:hover { background: var(--surface-2); color: var(--text-1); }
 </style>

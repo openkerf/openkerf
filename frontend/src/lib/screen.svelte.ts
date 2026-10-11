@@ -13,8 +13,6 @@
  * with a name explains why it exists, a width does not.
  */
 
-/** Below this width PhoneView takes over. */
-export const PHONE_MAX = 767;
 /** Up to here it is a tablet; above it a desk with a mouse. */
 export const TABLET_MAX = 1199;
 
@@ -23,15 +21,13 @@ function matches(query: string): boolean {
 	return window.matchMedia(query).matches;
 }
 
-const PHONE = `(max-width: ${PHONE_MAX}px)`;
-const TABLET = `(min-width: ${PHONE_MAX + 1}px) and (max-width: ${TABLET_MAX}px)`;
+const TABLET = `(max-width: ${TABLET_MAX}px)`;
 
 class Screen {
-	phone = $state(matches(PHONE));
 	tablet = $state(matches(TABLET));
 
 	get desktop() {
-		return !this.phone && !this.tablet;
+		return !this.tablet;
 	}
 
 	/**
@@ -58,28 +54,24 @@ class Screen {
 	 * touch screen there is no way to read one. Where that reason is the difference
 	 * between "this is broken" and "select two shapes first", it has to be on the
 	 * screen instead — see the print-and-cut block in `JobControls`. Bound to the same
-	 * two widths as the rule above rather than to `pointer: coarse`, so that one number
+	 * width as the rule above rather than to `pointer: coarse`, so that one number
 	 * still decides what a tablet is; a trackpad at 1100 px gets a line it did not need,
 	 * which costs less than a tablet getting no reason at all.
 	 */
 	get noHover() {
-		return this.phone || this.tablet;
+		return this.tablet;
 	}
 
 	/** Follow along; returns a cleanup function. Call it inside an `$effect`. */
 	follow(): () => void {
 		if (typeof window === 'undefined' || !window.matchMedia) return () => {};
-		const phone = window.matchMedia(PHONE);
 		const tablet = window.matchMedia(TABLET);
 		const update = () => {
-			this.phone = phone.matches;
 			this.tablet = tablet.matches;
 		};
 		update();
-		phone.addEventListener('change', update);
 		tablet.addEventListener('change', update);
 		return () => {
-			phone.removeEventListener('change', update);
 			tablet.removeEventListener('change', update);
 		};
 	}

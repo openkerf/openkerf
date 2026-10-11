@@ -2610,7 +2610,7 @@ class Drawing:
             "sheet": sheet,
             "layers": self.job_layers(library, provenance, sheet),
             # What hangs off the bed or off the sheet (gap C2). Here and not only on the
-            # canvas: on tablet and phone the canvas is not beside it, and this is the last
+            # canvas: on a tablet the canvas may not be beside it, and this is the last
             # screen before burning.
             "bounds": self.bounds_report(sheet),
             "engine": self.engine_report(),

@@ -179,21 +179,29 @@ test('a locked shape has its five number fields switched off, with the reason on
 	// The sixth control in the grid, the ratio chain, is off with them — and looks it.
 	// Measured before: disabled with the reason on it, but opacity 1, rgb(12, 112, 121)
 	// on its teal pressed background and cursor: pointer, beside five fields at 0.6.
-	const chain = await page.$eval('.selected .figures .link', (node) => {
+	// The chain is the shared icon button now (`.btn.ghost.icon`), named `.chain`.
+	// The design system drains an off control rather than fading it (DESIGN.md, "Don't
+	// fade a disabled control with opacity"), so "looks off" is now: the same muted ink
+	// as the five disabled fields beside it, not the accent of a pressed chain.
+	const chain = await page.$eval('.selected .figures .chain', (node) => {
 		const style = getComputedStyle(node);
+		const field = node.parentElement?.querySelector('input:disabled');
 		return {
 			disabled: (node as HTMLButtonElement).disabled,
 			title: node.getAttribute('title') ?? '',
-			opacity: Number(style.opacity),
+			color: style.color,
+			fieldColor: field ? getComputedStyle(field).color : '',
 			cursor: style.cursor,
 			background: style.backgroundColor
 		};
 	});
 	assert.ok(chain.disabled, 'the ratio chain is still pressable on a locked shape');
 	assert.match(chain.title, /locked/i, 'the ratio chain is off without saying why');
-	assert.ok(
-		chain.opacity <= 0.6,
-		`the ratio chain is off but reads as live: opacity ${chain.opacity}`
+	assert.ok(chain.fieldColor, 'no disabled field beside the chain to compare with');
+	assert.equal(
+		chain.color,
+		chain.fieldColor,
+		`the ratio chain is off but reads as live: ${chain.color} beside fields in ${chain.fieldColor}`
 	);
 	assert.equal(chain.cursor, 'not-allowed', 'the ratio chain still invites a click');
 	assert.match(

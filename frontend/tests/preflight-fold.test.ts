@@ -1,5 +1,6 @@
 /**
- * The pre-flight opens with its numbers above the sticky footer, not under it.
+ * The pre-flight reads top to bottom: what it burns on, what is wrong with it, the one
+ * action, and then the evidence — and nothing covers anything.
  *
  * Running against a live server:
  *   OK_BASE=http://127.0.0.1:8122 node --test frontend/tests/preflight-fold.test.ts
@@ -8,44 +9,24 @@
  * Nothing is pressed here: the panel is measured as it opens, and the laser is never
  * touched.
  *
- * Why it exists. The footer is sticky, so whatever is last in the column is what the
- * footer lies over — and the footer was 211.6 px at 1440 x 900 and 230.5 px at
- * 1024 x 768, a quarter to a third of the panel. Measured on this seed (four layers on
- * unverified presets, no machine attached, which is the state the app opens in), with
- * the footer's top at 660 / 528 / 560 / 493 at the four sizes below: the "4 layers use
- * presets that were not verified" warning lay under the footer at 1366 x 768
- * (`elementFromPoint` on its middle answered `SPAN.pf-head`) and at 1024 x 768
- * (`BUTTON.btn`), the "machine is not responding" warning at 1024 x 768 (`LI`), and the
- * layer table at every size but 1440, where only its header row was clear.
+ * Why it exists. The action row (`.pf-stick`) used to be a sticky footer at the end of
+ * the column, and whatever stood last was what it lay over: warnings and table rows at
+ * 1366 x 768 and 1024 x 768 answered the footer under `elementFromPoint`. The row now
+ * stands directly after the warnings and stays sticky only as a guard, so the promise
+ * is in two halves:
  *
- * What is measured, at four viewports and once more with a rotary fitted: the material
- * row, every warning in the column, the "Show cut path" button (`.pf-order`) and — with
- * no rotary — the first two rows of the layer table are each the topmost element at their
- * own middle and lie wholly above the footer's top edge. The place they are in is not pinned — only
- * that the one screen you read before you burn does not hide what it has to say.
+ * - As opened, at four viewports and once more with a rotary fitted: the material row
+ *   and every warning lie wholly above the action row and are each the topmost element
+ *   at their own middle, and the start button is on screen and answers for itself.
+ * - Below it, the "Show cut path" button, the first rows of the layer table and the
+ *   drawing (the picture is the enlarge control) each stand clear when scrolled to.
  *
- * With a rotary fitted the table is left out of the opening measurement and held at the
- * foot instead: measured at 1024 x 768, the rotary's two sentences leave 462 px between
- * the material row and the footer's top at 654 for 566 px of warnings, button and table,
- * and the table's own header then stands at 647. What is asserted there is the order of
- * the sacrifice — every warning readable, the one control pressable, the rows scrolled to.
- *
- * And the tail. What the footer does lie over as the panel opens is the drawing, whose
- * own captions and notices sit under it at the two smallest sizes; a picture is prose,
- * and prose you can scroll to. The second half of each test scrolls the foot of the
- * pre-flight into view and requires that the drawing *and* the button inside it (the
- * picture is the enlarge control) then stand clear of the footer and answer for
- * themselves. `.preflight` is not the last block in `.panel-scroll`, so the footer
- * un-sticks at its foot and nothing in the pre-flight is unreachable — that is the
- * property, and it is measured rather than assumed.
- *
- * The rotary case is the state P7 lists last, and it is the longest column the pre-flight
- * has: two more sentences above the table. Its two paragraphs are put into the DOM here
- * with the words `job.rotary.chuck`, `job.rotary.frame` and `rotary.overlap` actually
- * render, instead of switching the machine's rotary on over the API: that setting is
- * stored on the device and lands in the shared `MeerK40t.cfg` (see CLAUDE.md), and a
- * rotary left on there rescales the Y of the next real job on this computer. A test may
- * only press what it measures.
+ * The rotary case is the longest column the pre-flight has: two more sentences among the
+ * warnings. They are put into the DOM here with the words `job.rotary.chuck`,
+ * `job.rotary.frame` and `rotary.overlap` actually render, instead of switching the
+ * machine's rotary on over the API: that setting is stored on the device and lands in
+ * the shared `MeerK40t.cfg` (see CLAUDE.md), and a rotary left on there rescales the Y
+ * of the next real job on this computer. A test may only press what it measures.
  */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -125,7 +106,7 @@ after(async () => {
 for (const rotary of [false, true]) {
 	for (const [width, height] of SIZES) {
 		const what = rotary ? ' with a rotary fitted' : '';
-		test(`the pre-flight's numbers clear the footer at ${width} x ${height}${what}`, async (t) => {
+		test(`the pre-flight's warnings stand above the action row at ${width} x ${height}${what}`, async (t) => {
 			if (!reachable || !browser) return noServer(t, BASE);
 			const context = await browser.newContext({ viewport: { width, height } });
 			const page = await context.newPage();
@@ -140,15 +121,15 @@ for (const rotary of [false, true]) {
 				const measured = await page.evaluate(
 					([withRotary, lines]) => {
 						const preflight = document.querySelector('.preflight')!;
+						const stick = document.querySelector('.pf-stick')!;
 						if (withRotary) {
-							// Where the component puts them: under the material row, above
-							// everything the table says.
-							const anchor = preflight.querySelector('.pf-time.sheet')!.nextElementSibling;
-							(lines as string[]).forEach((text, i) => {
-								const line = document.createElement('p');
-								line.className = i === 0 ? 'pf-warn strong' : 'pf-warn';
+							// Where the component puts them: with the other warnings, above the
+							// action row.
+							(lines as string[]).forEach((text) => {
+								const line = document.createElement('div');
+								line.className = 'notice warn';
 								line.textContent = text;
-								preflight.insertBefore(line, anchor);
+								preflight.insertBefore(line, stick);
 							});
 						}
 						const scroller = document.querySelector('.panel-scroll') as HTMLElement;
@@ -164,61 +145,49 @@ for (const rotary of [false, true]) {
 									: null
 							};
 						};
-						const read = (nodes: { what: string; node: Element }[]) => ({
-							stickTop: Math.round(document.querySelector('.pf-stick')!.getBoundingClientRect().top),
-							stickHeight: Math.round(
-								document.querySelector('.pf-stick')!.getBoundingClientRect().height
-							),
-							items: nodes.map(({ what, node }) => ({ what, ...box(node) }))
-						});
 
-						const wanted: { what: string; node: Element }[] = [];
+						// As opened: the material row and every warning stand above the action
+						// row, and the start button itself is on screen and answers for itself.
+						const above: { what: string; node: Element }[] = [];
 						const material = document.querySelector('.pf-time.sheet');
-						if (material) wanted.push({ what: 'the material row', node: material });
-						for (const warning of document.querySelectorAll('.preflight > .pf-warn')) {
-							wanted.push({
+						if (material) above.push({ what: 'the material row', node: material });
+						for (const warning of document.querySelectorAll('.preflight > .notice, .preflight > .help.warn')) {
+							above.push({
 								what: `the warning "${(warning.textContent ?? '').trim().slice(0, 34)}…"`,
 								node: warning
 							});
 						}
-						if (!withRotary) {
-							// Not with the rotary: at 1024 x 768 its two extra sentences push the
-							// table's own header to 647, past a footer top of 654, and there is no
-							// arrangement of this column that fits 566 px of it into 462 px. The
-							// table is rows you work down; it is held at the foot instead.
-							const rows = [
-								...document.querySelectorAll('.pf-layers thead tr, .pf-layers tbody tr')
-							].slice(0, 3);
-							rows.forEach((row, i) =>
-								wanted.push({ what: i === 0 ? 'the table header' : `table row ${i}`, node: row })
-							);
-						}
-						// A button behind the footer is the harder half of this: prose you can
-						// scroll to, a control you cannot press at all. The seed always hands
-						// `onCutPath` in, so its absence is itself the bug and is asserted.
-						const order = document.querySelector('.pf-order');
-						if (order) wanted.push({ what: 'the "Show cut path" button', node: order });
-						const asOpened = read(wanted);
+						const stickTop = Math.round(stick.getBoundingClientRect().top);
+						const start = document.querySelector('.pf-split .btn.primary')!;
+						const asOpened = {
+							stickTop,
+							items: above.map(({ what, node }) => ({ what, ...box(node) })),
+							start: { ...box(start), viewport: window.innerHeight }
+						};
 
-						// Now the foot of the column: scroll until the pre-flight's own bottom
-						// edge meets the bottom of the scroller, which is where the sticky
-						// footer lets go.
-						scroller.scrollTop +=
-							preflight.getBoundingClientRect().bottom - scroller.getBoundingClientRect().bottom;
-						const tail: { what: string; node: Element }[] = [];
-						const table = document.querySelector('.pf-layers');
-						if (table) tail.push({ what: 'the layer table', node: table });
-						const drawing = document.querySelector('.pf-beeld');
-						if (drawing) tail.push({ what: 'the drawing', node: drawing });
-						const enlarge = document.querySelector('.pf-beeld button');
-						if (enlarge) tail.push({ what: 'the drawing you press to enlarge', node: enlarge });
-						const atFoot = read(tail);
+						// Below the action row: the cut-path button, the table and the drawing.
+						// Each, scrolled to, stands clear of the row — sticky or not, the row
+						// never lies over what you scroll to.
+						const below: { what: string; node: Element }[] = [];
+						const order = document.querySelector('.pf-order');
+						if (order) below.push({ what: 'the "Show cut path" button', node: order });
+						[...document.querySelectorAll('.pf-layers thead tr, .pf-layers tbody tr')]
+							.slice(0, 3)
+							.forEach((row, i) =>
+								below.push({ what: i === 0 ? 'the table header' : `table row ${i}`, node: row })
+							);
+						const drawing = document.querySelector('.pf-beeld button');
+						if (drawing) below.push({ what: 'the drawing you press to enlarge', node: drawing });
+						const scrolledTo = below.map(({ what, node }) => {
+							node.scrollIntoView({ block: 'center' });
+							return { what, ...box(node) };
+						});
 						scroller.scrollTop = 0;
-						return { asOpened, atFoot, hasOrder: Boolean(order), hasDrawing: Boolean(drawing) };
+						return { asOpened, scrolledTo, hasOrder: Boolean(order), hasDrawing: Boolean(drawing) };
 					},
 					[rotary, ROTARY_LINES] as [boolean, string[]]
 				);
-				assert.ok(measured.asOpened.items.length >= 4, 'the pre-flight did not open with its numbers');
+				assert.ok(measured.asOpened.items.length >= 1, 'the pre-flight did not open with its material row');
 				assert.ok(
 					measured.hasOrder,
 					'the "Show cut path" button is not on the pre-flight at all — the seed hands `onCutPath` in'
@@ -227,16 +196,15 @@ for (const rotary of [false, true]) {
 				for (const item of measured.asOpened.items) {
 					assert.ok(
 						item.bottom <= measured.asOpened.stickTop,
-						`${item.what} runs to y ${item.bottom}, past the footer's top edge at ${measured.asOpened.stickTop}`
+						`${item.what} runs to y ${item.bottom}, past the action row's top edge at ${measured.asOpened.stickTop}`
 					);
 					assert.ok(item.self, `${item.what} lies behind ${item.over}`);
 				}
-				for (const item of measured.atFoot.items) {
-					assert.ok(
-						item.bottom <= measured.atFoot.stickTop,
-						`with the foot of the pre-flight in view, ${item.what} still runs to y ${item.bottom}, past the footer's top edge at ${measured.atFoot.stickTop}`
-					);
-					assert.ok(item.self, `with the foot of the pre-flight in view, ${item.what} lies behind ${item.over}`);
+				const start = measured.asOpened.start;
+				assert.ok(start.bottom <= start.viewport, `the start button runs to y ${start.bottom}, off the screen`);
+				assert.ok(start.self, `the start button lies behind ${start.over}`);
+				for (const item of measured.scrolledTo) {
+					assert.ok(item.self, `scrolled to, ${item.what} lies behind ${item.over}`);
 				}
 			} finally {
 				await context.close();

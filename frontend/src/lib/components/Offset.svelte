@@ -34,14 +34,14 @@
 	let richting = $derived(t(value > 0 ? 'offset.outward' : 'offset.inward'));
 </script>
 
-<Dialog title={t('offset.title')} bind:open width="400px">
+<Dialog title={t('offset.title')} bind:open size="s">
 	<div class="offset">
 		<div class="paar">
 			<NumberField label={t('offset.distance')} unit="mm" step={0.5} bind:value={distance} />
 			<!-- The direction in words beside the number. A minus sign is the input,
 			     "inward" is the meaning — and those two are not the same as long as you
 			     still have to work out which side is negative. -->
-			<p class="richting">
+			<p class="help richting">
 				{#if geldig}
 					{t('offset.reading', { mm: i18n.number(Math.abs(value)), direction: richting })}
 				{:else}
@@ -49,7 +49,7 @@
 				{/if}
 			</p>
 		</div>
-		<p class="row">{t('offset.explain')}</p>
+		<p class="help">{t('offset.explain')}</p>
 	</div>
 
 	{#snippet footer()}
@@ -86,15 +86,8 @@
 		gap: var(--space-3);
 		align-items: end;
 	}
+	/* On the field's own baseline, beside it rather than under it. */
 	.richting {
-		margin: 0 0 6px;
-		font-size: var(--text-xs);
-		color: var(--text-2);
-	}
-	.row {
-		margin: 0;
-		font-size: var(--text-xs);
-		line-height: 1.5;
-		color: var(--text-2);
+		margin-bottom: var(--space-1h);
 	}
 </style>

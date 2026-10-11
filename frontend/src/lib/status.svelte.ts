@@ -121,8 +121,8 @@ export class StatusConnection {
 	 * The job the controls are about — running *or* standing still.
 	 *
 	 * This filtered on `running`, and on Lihuiyu that flag goes to `false` as soon
-	 * as you pause. Consequence: the job disappeared from the status bar, from the
-	 * Job panel and from the phone, there was no button to resume, and "Start job"
+	 * as you pause. Consequence: the job disappeared from the status bar and from the
+	 * Job panel, there was no button to resume, and "Start job"
 	 * became active again on top of work that was merely paused.
 	 */
 	get activeJob() {

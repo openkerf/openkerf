@@ -7,9 +7,9 @@ how the view moves, and how sheets work.
 
 ![An empty bed with rulers in millimetres along the top and left, the tool rail on the left, and the words "Empty bed" in the middle](images/05-canvas-empty.png)
 
-A fresh bed says **Empty bed**, with "Use Import in the top bar for an existing design, or
-pick a shape on the left and click the bed." On a narrower window, where the top bar has
-no Import and importing lives in the tool rail's **More** menu, the same block reads "Use
+A fresh bed says **Empty bed**, with "Use Import… in the project menu for an existing
+design, or pick a shape on the left and click the bed." On a tablet-width window, where
+**Import…** is also in the tool rail's **More** menu, the same block reads "Use
 More on the left for an existing design, or pick a shape above it and click the bed."
 That block disappears as soon as there is work on the bed, and also while a job is
 running.
@@ -51,10 +51,19 @@ The rail on the left holds eight tools; one is active at a time.
 | **Text** | Click the bed and the **Place text** window opens, with the text itself, **Height (mm)**, **Letter spacing** and **Alignment**. |
 | **Measure** | Two clicks; the distance in millimetres stays on the bed until you start again. |
 
-Below the tools sit **Place image** and the buttons that open a window of their own:
-**Generators — grid, circle, polygon, box, QR**, **Search clipart in public collections**,
-**Test grid**, **Series — one design burned once per row of a list** and the material
-library.
+At the foot of the rail, below a line, sit **Place image** and the buttons that open a
+window of their own: **Generators — grid, circle, polygon, box, QR**, **Search clipart in
+public collections**, **Series — one design burned once per row of a list**, **Test grid**
+and the material library. The tools at the top are modes — what the next click on the bed
+does, with the chosen one tinted; the buttons at the foot open something and leave the
+mode as it was.
+
+On a tablet the rail keeps **Select** and **Rectangle** at the top and **Material** and
+**Test grid** at the foot, each with its word under it. Everything else is under
+**More**: the other tools (with a tick on the one in hand), **Place image**,
+**Generators**, **Search clipart** and **Series**, and a **File** group with **Import…**
+and **Export as SVG** — below 880 px wide the whole project menu. It is the same menu as
+everywhere else in the app: the arrow keys walk it, Escape or a tap beside it closes it.
 
 Placing a shape snaps just as dragging does, so a new rectangle lands on the grid line you
 put it on and not 3.7 mm beside it.
@@ -108,7 +117,8 @@ really something to choose between: with one shape under the pointer it is left 
 ## Changing what you have selected
 
 The selection is a dashed frame, drawn a few pixels clear of the shape so the layer colour
-underneath stays readable. Its measure stands underneath it, live: `60.0 × 40.0 mm`.
+underneath stays readable. It stays still while you drag: the moving dashed line is kept for
+the path of a running job. Its measure stands underneath it, live: `60.0 × 40.0 mm`.
 
 - **Move**: drag anywhere inside the frame. Or use the arrow keys — 0.1 mm a press, 1 mm
   with shift held. The panel says the same over its column of numbers, as a tooltip:
@@ -573,7 +583,8 @@ words: "Trace of the head — measured, including the jumps between shapes." fol
 ## Off the bed, off the sheet
 
 A shape that crosses an edge lights up on the bed with a glow under it, and a strip under
-the bed says what is wrong. Two different problems, two sentences:
+the bed says what is wrong, each sentence in a tinted box with its own icon — red for the
+bed, amber for the sheet. Two different problems, two sentences:
 
 - "One shape lies outside the bed — the head does not reach there." (or "3 shapes lie …")
 - "One shape lies outside Sheet 1 — there is no material there."

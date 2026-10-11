@@ -13,6 +13,8 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import StarterOffer from '$components/StarterOffer.svelte';
+	import Notice from '$components/Notice.svelte';
+	import Why from '$components/Why.svelte';
 	import { t } from '$lib/i18n/index.svelte';
 	import { createStore } from '$lib/setup.svelte';
 	import { SheetStore } from '$lib/sheets.svelte';
@@ -93,23 +95,26 @@
 
 <svelte:head><title>{t('setup.head.done')}</title></svelte:head>
 
-<section class="setup narrow">
+<section class="setup">
 	{#if loaded && !machine}
-		<h1>{t('setup.gone')}</h1>
-		<p class="muted">
+		<h1 class="title">{t('setup.gone')}</h1>
+		<p>
 			{machinePath ? t('setup.gone.path', { path: machinePath }) : t('setup.gone.noPath')}
 			{t('setup.gone.bookmark')}
 		</p>
-		<div class="actions">
+		<div class="ask-actions">
 			<a class="btn primary" href="/setup">{t('setup.toYourMachines')}</a>
 		</div>
 	{:else}
-		<h1>{machine ? t('setup.ready', { machine: machine.label }) : t('setup.ready.plain')}</h1>
-		<p class="muted">{t('setup.firstJob')}</p>
+		<h1 class="title">{machine ? t('setup.ready', { machine: machine.label }) : t('setup.ready.plain')}</h1>
+		<p>{t('setup.firstJob')}</p>
 
 		{#if sheetQuestion}
-			<div class="sheetask">
-				<h2 class="head">{t('setup.sheetFits')}</h2>
+			<!-- A question, not a warning: nothing is broken, there is something to choose.
+			     So a block of its own with two equal answers, and the step's one primary
+			     stays "To the work area". -->
+			<div class="card inset sheetask">
+				<h2 class="title">{t('setup.sheetFits')}</h2>
 				<p>
 					{t('setup.sheetFits.body', {
 						sheet: `${sheetQuestion.sheet.name} — ${size(sheetQuestion.sheet.width_mm)} × ${size(
@@ -119,26 +124,28 @@
 						bed: `${size(sheetQuestion.bed.w)} × ${size(sheetQuestion.bed.h)} mm`
 					})}
 				</p>
-				<p class="muted">
-					{t('setup.sheetFits.offcut', { width: size(sheetQuestion.sheet.width_mm) })}
-				</p>
-				<div class="sheetbuttons">
-					<button class="btn primary" disabled={sheets.busy} title={sheets.busy ? t('reason.busy') : undefined} onclick={useBedSize}>
-						{t('setup.sheetToBed')}
-					</button>
-					<button class="btn subtle" onclick={() => (sheetAnswer = 'kept')}>
+				<Why>{t('setup.sheetFits.offcut', { width: size(sheetQuestion.sheet.width_mm) })}</Why>
+				<!-- Two outcomes that exclude each other: the one that leaves things as they
+				     are first, the change last. -->
+				<div class="ask-actions">
+					<button class="btn" onclick={() => (sheetAnswer = 'kept')}>
 						{t('setup.sheetLeave')}
 					</button>
+					<button class="btn" disabled={sheets.busy} title={sheets.busy ? t('reason.busy') : undefined} onclick={useBedSize}>
+						{t('setup.sheetToBed')}
+					</button>
 				</div>
-				{#if sheets.error}<p class="failure" role="alert">{sheets.error}</p>{/if}
+				{#if sheets.error}<Notice tone="danger" live>{sheets.error}</Notice>{/if}
 			</div>
 		{:else if sheetAnswer === 'adjusted' && sheets.active}
-			<p class="sheetdone" role="status">
-				{t('setup.sheetNow', {
-					sheet: sheets.active.name,
-					size: `${size(sheets.active.width_mm)} × ${size(sheets.active.height_mm)} mm`
-				})}
-			</p>
+			<div class="after">
+				<Notice tone="ok" live>
+					{t('setup.sheetNow', {
+						sheet: sheets.active.name,
+						size: `${size(sheets.active.width_mm)} × ${size(sheets.active.height_mm)} mm`
+					})}
+				</Notice>
+			</div>
 		{/if}
 
 		<!-- The moment the whole preset story exists for: a machine has just been
@@ -147,22 +154,22 @@
 		     is made once and reads the same in both places. It sits above the four
 		     steps because step two of them is choosing a layer's settings, and this is
 		     where those come from. -->
-		<StarterOffer />
+		<StarterOffer framed={false} />
 
-		<h2>{t('setup.firstCut')}</h2>
+		<h2 class="label-section firstcut">{t('setup.firstCut')}</h2>
 		<ol class="gone">
 			{#each STEPS as step, index (step.head)}
 				<li>
-					<span class="number mono">{index + 1}</span>
+					<span class="number">{index + 1}</span>
 					<span class="text">
 						<strong>{step.head}</strong>
-						<span class="muted">{step.hint}</span>
+						<span class="help">{step.hint}</span>
 					</span>
 				</li>
 			{/each}
 		</ol>
 
-		<div class="actions">
+		<div class="ask-actions">
 			<a class="btn" href="/setup">{t('setup.anotherMachine')}</a>
 			<a class="btn primary" href="/">{t('setup.toWorkArea')}</a>
 		</div>
@@ -170,9 +177,7 @@
 </section>
 
 <style>
-	h2 {
-		font-size: var(--text-sm);
-		font-weight: 600;
+	.firstcut {
 		margin: var(--space-6) 0 var(--space-3);
 	}
 	.gone {
@@ -187,68 +192,39 @@
 		align-items: flex-start;
 		gap: var(--space-3);
 	}
+	/* An order, not a selection: a quiet ring in ink, and the accent stays for the one
+	   step pill above that says where you are. */
 	.number {
 		flex: none;
 		width: 22px;
 		height: 22px;
 		display: grid;
 		place-items: center;
+		border: 1px solid var(--line);
 		border-radius: var(--radius-dot);
-		background: color-mix(in srgb, var(--accent) 14%, transparent);
-		/* The same as the step dots on the welcome screen: accent on an accent tint does
-		   not make AA. */
+		background: var(--surface-2);
 		color: var(--text-1);
 		font-size: var(--text-xs);
+		font-variant-numeric: tabular-nums;
 	}
 	.text {
 		display: grid;
-		gap: 2px;
+		gap: var(--space-1);
 		min-width: 0;
 	}
-	.text .muted {
-		font-size: var(--text-xs);
-	}
 
-	/* A question, not a warning: nothing is broken, there is something to choose. Hence
-	   the accent in the border and not amber. */
 	.sheetask {
+		display: grid;
+		gap: var(--space-2);
 		margin-top: var(--space-6);
-		padding: var(--space-4);
-		border: 1px solid var(--line);
-		border-left: 3px solid var(--accent);
-		border-radius: var(--radius-card);
-		background: var(--surface-2);
-	}
-	.sheetask .head {
-		margin: 0 0 var(--space-2);
 	}
 	.sheetask p {
-		margin: 0 0 var(--space-2);
-		font-size: var(--text-xs);
+		margin: 0;
 	}
-	.sheetbuttons {
-		display: flex;
-		flex-wrap: wrap;
-		/* Two outcomes that exclude each other: far enough apart not to bad-aim with a
-		   thumb. */
-		gap: var(--space-6);
-		margin-top: var(--space-3);
+	.sheetask .ask-actions {
+		margin-top: var(--space-2);
 	}
-	/* With a glove on, 37px is too little; the buttons in the setup are otherwise mouse
-	   buttons, so this lives here and not in the layout. */
-	@media (max-width: 1199px), (pointer: coarse) {
-		.sheetbuttons :global(.btn) {
-			min-height: 44px;
-		}
-	}
-	.sheetdone {
+	.after {
 		margin-top: var(--space-6);
-		font-size: var(--text-xs);
-		color: var(--ok);
-	}
-	.failure {
-		margin: var(--space-2) 0 0;
-		font-size: var(--text-xs);
-		color: var(--danger);
 	}
 </style>

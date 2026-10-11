@@ -51,6 +51,9 @@
 	 */
 	import { i18n, t } from '$lib/i18n/index.svelte';
 	import Dialog from './Dialog.svelte';
+	import EmptyState from './EmptyState.svelte';
+	import Icon from './Icon.svelte';
+	import Notice from './Notice.svelte';
 	import Menu from './Menu.svelte';
 	import NumberField from './NumberField.svelte';
 	import Segmented from './Segmented.svelte';
@@ -496,7 +499,7 @@
 	}
 </script>
 
-<Dialog title={t('series.title')} bind:open width="960px">
+<Dialog title={t('series.title')} bind:open size="l">
 	<div class="werkbank" style="--banners: {bannerHeight}px">
 		{#if series.error || running}
 			<!-- Pinned rather than scrolled away, and measured rather than calculated: a
@@ -507,10 +510,10 @@
 			     the tail of it hanging in the other column (measured). -->
 			<div class="banners" bind:clientHeight={bannerHeight}>
 				{#if series.error}
-					<p class="error" role="alert">{series.error}</p>
+					<Notice tone="danger" live>{series.error}</Notice>
 				{/if}
 				{#if running}
-					<p class="notice">{t('series.running')}</p>
+					<Notice tone="info">{t('series.running')}</Notice>
 				{/if}
 			</div>
 		{/if}
@@ -528,7 +531,7 @@
 						placeholder={t('series.search')}
 						aria-label={t('series.searchAria')}
 					/>
-					<p class="fine">
+					<p class="help">
 						{t('series.summary', {
 							burns: t('count.burns', { n: burns.length }),
 							rows: t('count.rows', { n: sum?.row_count ?? 0 })
@@ -537,13 +540,13 @@
 					{#if sum && sum.step > 1}
 						<!-- A sheetful eats several rows per burn, and that is the one number
 						     that explains why five rows make two burns. -->
-						<p class="fine">{t('series.step', { n: i18n.number(sum.step) })}</p>
+						<p class="help">{t('series.step', { n: i18n.number(sum.step) })}</p>
 					{/if}
 					{#if !reads}
-						<p class="notice">{t('series.nothingReads')}</p>
+						<Notice tone="warn">{t('series.nothingReads')}</Notice>
 					{/if}
 					{#if sum?.source?.kind === 'numbers'}
-						<p class="fine">
+						<p class="help">
 							{t('series.from.numbers', {
 								first: i18n.number(sum.source.first ?? 0),
 								last: i18n.number(sum.source.last ?? 0)
@@ -553,60 +556,62 @@
 						<!-- The file name goes in the body and not in the window's title: a
 						     title built out of somebody's file name is a window the docs
 						     cannot name. -->
-						<p class="fine">{t('series.from.file', { file: sum.source.name })}</p>
+						<p class="help">{t('series.from.file', { file: sum.source.name })}</p>
 					{/if}
 				</div>
 
 				{#if shown.length === 0}
-					<div class="leeg">
-						<p>{t('series.nothingFound', { query })}</p>
-						<button class="mini" onclick={() => (query = '')}>{t('series.clearSearch')}</button>
-					</div>
+					<EmptyState title={t('series.nothingFound', { query })}>
+						{#snippet action()}
+							<button class="btn mini" onclick={() => (query = '')}>{t('series.clearSearch')}</button>
+						{/snippet}
+					</EmptyState>
 				{:else}
 					<ul>
 						{#each shown as burn (burn.number)}
 							<li
-								class:now={burn.now}
 								oncontextmenu={(e) => {
 									e.preventDefault();
 									rowMenu = { x: e.clientX, y: e.clientY, list: burnMenu(burn) };
 								}}
 							>
 								<button
-									class="brandrij"
+									class="listrow brandrij"
+									aria-current={burn.now ? 'true' : undefined}
 									disabled={!canEdit}
 									title={canEdit ? t('series.menu.show') : t('reason.needsToken')}
 									onclick={() => void show(burn.rows)}
 								>
-									<!-- The number is the mark, not the colour: a chip you can read
+									<!-- The number is the mark, not the colour: a badge you can read
 									     from a metre away and still read in a screenshot. -->
-									<span class="nummer" class:chip={burn.now}>{i18n.number(burn.number)}</span>
+									<span class="nummer mono" class:badge={burn.now}>{i18n.number(burn.number)}</span>
 									<span class="wat">
 										{#if burn.text}
 											<!-- The reader's own data: bare, with the whole string in the
 											     title for the ones that do not fit. -->
 											<span class="cell" title={burn.text}>{burn.text}</span>
 										{:else if reads}
-											<span class="fine">{t('series.burn.blank')}</span>
+											<span class="help">{t('series.burn.blank')}</span>
 										{/if}
 										{#if burn.standing}
-											<span class="fine">{t('series.burn.short', { n: burn.standing })}</span>
+											<span class="help">{t('series.burn.short', { n: burn.standing })}</span>
 										{/if}
 									</span>
 									{#if burn.now}
-										<span class="mark bed" title={t('series.onBed.title')}>{t('series.onBed')}</span>
+										<span class="badge" title={t('series.onBed.title')}>{t('series.onBed')}</span>
 									{/if}
 									{#if burn.done}
-										<span class="mark klaar" title={t('series.done.title')}>{t('series.done')}</span>
+										<span class="badge ok" title={t('series.done.title')}>{t('series.done')}</span>
 									{/if}
 								</button>
 								<button
-									class="dots"
+									class="btn ghost icon"
 									aria-label={t('series.rowMenu')}
+									title={t('series.rowMenu')}
 									onclick={(e) => {
 										const box = (e.currentTarget as HTMLElement).getBoundingClientRect();
 										rowMenu = { x: box.left, y: box.bottom + 4, list: burnMenu(burn) };
-									}}>⋯</button
+									}}><Icon name="more" /></button
 								>
 							</li>
 						{/each}
@@ -618,7 +623,7 @@
 
 		<!-- RIGHT: the detail. Where the rows come from and what was decided. -->
 		<section class="detail">
-			{#if !attached}<p class="fine">{t('ux.series.purpose')}</p>{/if}
+			{#if !attached}<p class="help">{t('ux.series.purpose')}</p>{/if}
 			<Segmented
 				label={t('series.source')}
 				bind:value={source}
@@ -648,11 +653,11 @@
 						/>
 					</label>
 					{#if onDisk}
-						<span class="fine">{t('series.chosen', { file: onDisk })}</span>
+						<span class="help">{t('series.chosen', { file: onDisk })}</span>
 					{/if}
 				</div>
 				{#if !fileName}
-					<p class="fine">{t('series.pick.hint')}</p>
+					<p class="help">{t('series.pick.hint')}</p>
 				{/if}
 			{:else}
 				<!-- The second way in. Numbers are not a second kind of series — the rows
@@ -673,30 +678,30 @@
 							bind:value={range.padding}
 						/>
 					</div>
-					<label class="veld">
+					<label class="field-label">
 						<span>{t('series.numbers.column')}</span>
 						<input type="text" bind:value={range.column} />
 					</label>
 				</div>
-				<details class="fold"><summary>{t('ux.series.placeholders')}</summary><p class="fine">{t('series.numbers.hint', { example: example(range.column.trim() || 'number') })}</p></details>
+				<details class="fold"><summary>{t('ux.series.placeholders')}</summary><p class="help">{t('series.numbers.hint', { example: example(range.column.trim() || 'number') })}</p></details>
 			{/if}
 
 			{#if unfinished}
-				<p class="notice">{t('series.unfinished')}</p>
+				<Notice tone="info">{t('series.unfinished')}</Notice>
 			{/if}
 			{#if series.previewError}
 				<!-- Kept apart from `error` on purpose: this is an intermediate state, and
 				     the last good reading below stays up. -->
-				<p class="notice" role="status">{series.previewError}</p>
+				<Notice tone="warn" live>{series.previewError}</Notice>
 			{/if}
 
 			{#if sample}
-				<div class="blok">
-					<h3>{t('series.firstRows')}</h3>
+				<div class="blok card">
+					<h3 class="label-section">{t('series.firstRows')}</h3>
 
 					{#if sample.has_header !== null}
-						<div class="veld">
-							<span class="grouplabel">{t('series.header')}</span>
+						<div class="field-label">
+							<span>{t('series.header')}</span>
 							<Segmented
 								label={t('series.header')}
 								bind:value={header}
@@ -711,7 +716,7 @@
 							     it, this sentence contradicts the control right above it:
 							     measured, "read the first row as the column names" sat under a
 							     switch set to Data. -->
-							<p class="fine">
+							<p class="help">
 								{sample.header_guess
 									? t('series.header.guess.names')
 									: t('series.header.guess.data')}
@@ -734,7 +739,7 @@
 					{#each sample.warnings ?? [] as warning (warning.code)}
 						<!-- The server's own sentence: it names numbers this side cannot know,
 						     and it reaches curl and the logs in the same words. -->
-						<p class="notice">{warning.text}</p>
+						<Notice tone="warn">{warning.text}</Notice>
 					{/each}
 
 					<div class="tabelrol">
@@ -758,7 +763,7 @@
 						</table>
 					</div>
 					{#if sample.row_count > sample.rows.length}
-						<p class="fine">
+						<p class="help">
 							{t('series.moreRows', { n: sample.row_count - sample.rows.length })}
 						</p>
 					{/if}
@@ -766,9 +771,9 @@
 			{/if}
 
 			{#if columns.length}
-				<div class="blok">
-					<h3>{t('series.columns')}</h3>
-					<details class="fold"><summary>{t('ux.series.placeholders')}</summary><p class="fine">{t('ux.series.placeholderHelp')}</p></details>
+				<div class="blok card">
+					<h3 class="label-section">{t('series.columns')}</h3>
+					<details class="fold"><summary>{t('ux.series.placeholders')}</summary><p class="help">{t('ux.series.placeholderHelp')}</p></details>
 					<div class="tabelrol">
 						<table class="kolommen">
 							<thead>
@@ -789,11 +794,11 @@
 										<td class="getal">{i18n.number(blanks[column] ?? 0)}</td>
 										<td>
 											{#if reservedColumn(column)}
-												<span class="mark waarschuwing" title={t('series.column.reserved')}>
+												<span class="badge warn" title={t('series.column.reserved')}>
 													{t('series.column.reserved.short')}
 												</span>
 											{:else if findColumn(used, column)}
-												<span class="mark inuse" title={t('series.column.used.title')}>
+												<span class="badge" title={t('series.column.used.title')}>
 													{t('series.column.used')}
 												</span>
 											{/if}
@@ -807,22 +812,22 @@
 			{/if}
 
 			{#if sum?.ghosts?.length}
-				<div class="blok">
-					<h3>{t('series.ghosts')}</h3>
-					<p class="fine">{t('series.ghosts.why')}</p>
+				<div class="blok card">
+					<h3 class="label-section">{t('series.ghosts')}</h3>
+					<p class="help">{t('series.ghosts.why')}</p>
 					<ul class="geesten">
 						{#each sum.ghosts as ghost (ghost.id ?? ghost.text)}
 							<li>
 								<!-- The text is the reader's own, placeholders and all. -->
 								<span class="cell mono" title={ghost.text}>{ghost.text}</span>
-								<span class="fine">
+								<span class="help">
 									{t('series.ghost.missing', {
 										columns: i18n.list(ghost.missing.map((name) => example(name)))
 									})}
 								</span>
 								{#if ghost.id}
 									<button
-										class="mini danger"
+										class="btn mini danger"
 										disabled={!canEdit}
 										title={canEdit ? undefined : t('reason.needsToken')}
 										onclick={() => void remove(ghost.id ?? '')}
@@ -842,13 +847,13 @@
 			     rather than about the list. It sits above the closing block because it
 			     changes the drawing, which is the thing the rest of this window reads. -->
 			{#if attached}
-				<div class="blok plaat">
-					<h3>{t('series.plate')}</h3>
+				<div class="blok card plaat">
+					<h3 class="label-section">{t('series.plate')}</h3>
 					<!-- Which plate this is, and what it is made of. The sum below is measured
 					     against these three numbers, and a number you cannot check is a number
 					     you cannot trust — that is why they are here and not only under the
 					     sheet tab. -->
-					<p class="fine">
+					<p class="help">
 						{#if laidOut}
 							<!-- The fields are gone once the plate is laid out, so the size comes
 							     back into the sentence: this is then the only place it is said. -->
@@ -883,22 +888,22 @@
 								onchange={(value) => void resize({ height_mm: Number(value) })}
 							/>
 						</div>
-						<button class="btn subtle" type="button" onclick={() => onEditMaterial?.()}>
+						<button class="btn ghost material" type="button" onclick={() => onEditMaterial?.()}>
 							{materialName ? t('series.plate.material.change') : t('series.plate.material')}
 						</button>
 					{/if}
 					{#if series.plateError}
-						<p class="fine">{series.plateError}</p>
+						<p class="help">{series.plateError}</p>
 					{:else if laidOut}
 						<!-- Already laid out. The plan beside it would measure the whole plate
 						     as the piece and answer "one place, seven plates" about a plate that
 						     has just been filled, so what is said here is what the plate now
 						     holds — and the number of plates comes from the run's own sum. -->
-						<p class="fine">
+						<p class="help">
 							{t('series.plate.done', { n: i18n.number(sum?.step ?? 1) })}
 						</p>
 						{#if (sum?.burns ?? 1) > 1}
-							<p class="fine">
+							<p class="help">
 								{t('series.plate.more', {
 									burns: i18n.number(sum?.burns ?? 1),
 									last: i18n.number(lastPlaces)
@@ -906,7 +911,7 @@
 							</p>
 						{/if}
 					{:else if series.plate}
-						<p class="fine">
+						<p class="help">
 							{t('series.plate.fits', {
 								// `number` and not `mm` for the two halves: the sentence carries
 								// the unit once, and "80.0 mm × 40.0 mm mm" is what happens when
@@ -924,7 +929,7 @@
 							<!-- The question this feature raises the moment it answers the first
 							     one: and the other thirty names? They are plates of this same
 							     sheet, which is what the run counts. -->
-							<p class="fine">
+							<p class="help">
 								{t('series.plate.more', {
 									burns: i18n.number(series.plate.burns),
 									last: i18n.number(series.plate.last_places)
@@ -983,7 +988,7 @@
 					<span>
 						{t('series.skipBlank')}
 						{#if (sum?.step ?? 1) > 1}
-							<span class="fine"
+							<span class="help"
 								>{t('series.skipBlank.cannot', { n: i18n.number(sum?.step ?? 1) })}</span
 							>
 						{/if}
@@ -993,7 +998,7 @@
 				<div class="paar">
 					<NumberField label={t('series.startAt')} step={1} min={1} bind:value={startAt} />
 				</div>
-				<p class="fine">{t('series.startAt.hint')}</p>
+				<p class="help">{t('series.startAt.hint')}</p>
 
 				<!-- The shared ask row (`.ask-actions` in tokens.css): the way out — here
 				     the button that detaches the list — first, the primary last. It sticks
@@ -1087,32 +1092,19 @@
 		display: flex;
 		align-items: center;
 		gap: 2px;
-		border-radius: var(--radius-field);
 	}
-	.lijst li:hover {
-		background: var(--surface-2);
-	}
-	/* The row the bed is showing, tinted as well as chipped: the tint finds it while
-	   scrolling, the chip and the word say what it is once you are there. */
-	.lijst li.now {
-		background: color-mix(in srgb, var(--accent) 8%, transparent);
-	}
+	/* The row the bed is showing is the listrow's chosen tint (`aria-current`): the
+	   tint finds it while scrolling, the badge and the word say what it is once you
+	   are there. */
 	.brandrij {
 		flex: 1;
 		min-width: 0;
-		display: flex;
-		align-items: center;
-		gap: var(--space-2);
-		padding: 6px var(--space-2);
-		border: 0;
-		border-radius: var(--radius-field);
-		background: none;
-		color: var(--text-1);
-		font: inherit;
-		font-size: var(--text-sm);
-		text-align: left;
+		padding-inline: var(--space-2);
 	}
+	/* Without a token the row cannot be pressed, but it is still the reader's data:
+	   it stays in ink rather than drained. */
 	.brandrij:disabled {
+		color: var(--text-1);
 		cursor: default;
 	}
 	/* The number of the burn, in a column of its own so the numbers line up under
@@ -1120,20 +1112,17 @@
 	.nummer {
 		flex: none;
 		min-width: 2.2em;
-		font-variant-numeric: tabular-nums;
 		font-size: var(--text-xs);
 		color: var(--text-2);
 		text-align: right;
 	}
-	/* The one on the bed carries a chip *with its number in it*: a colour alone is
-	   read by nobody in a screenshot and by nobody who does not see the difference. */
-	.nummer.chip {
-		padding: 2px 7px;
-		border-radius: 999px;
-		background: var(--accent);
-		color: var(--accent-ink);
+	/* The one on the bed carries a badge *with its number in it*: a colour alone is
+	   read by nobody in a screenshot and by nobody who does not see the difference.
+	   A state, so the badge and not the accent. */
+	.nummer.badge {
+		justify-content: center;
+		color: var(--text-1);
 		font-weight: 600;
-		text-align: center;
 	}
 	.wat {
 		flex: 1;
@@ -1149,49 +1138,8 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
-	.mark {
+	.badge {
 		flex: none;
-		font-size: 10px;
-		letter-spacing: 0.03em;
-		padding: 1px 5px;
-		border-radius: var(--radius-dot);
-		white-space: nowrap;
-	}
-	.mark.bed {
-		border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--line));
-		color: var(--accent);
-	}
-	.mark.klaar {
-		border: 1px solid color-mix(in srgb, var(--ok) 45%, var(--line));
-		color: var(--ok);
-	}
-	.mark.inuse {
-		border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--line));
-		color: var(--accent);
-	}
-	.mark.waarschuwing {
-		border: 1px solid color-mix(in srgb, var(--warn-solid) 45%, var(--line));
-		color: var(--warn);
-	}
-	.dots {
-		flex: none;
-		width: 28px;
-		height: 28px;
-		border-radius: var(--radius-field);
-		color: var(--text-2);
-		background: none;
-		border: 0;
-	}
-	.dots:hover {
-		background: var(--surface-2);
-		color: var(--text-1);
-	}
-	.leeg {
-		padding: var(--space-4) 0;
-	}
-	.leeg p {
-		margin: 0 0 var(--space-2);
-		color: var(--text-2);
 	}
 
 	/* ── The detail column ──────────────────────────────────────────────────── */
@@ -1202,20 +1150,13 @@
 		gap: var(--space-3);
 	}
 	.blok {
-		border: 1px solid var(--line);
-		border-radius: var(--radius-field);
 		padding: var(--space-3);
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-2);
 	}
-	.blok h3 {
-		margin: 0;
-		font-size: var(--text-xs);
-		font-weight: 600;
-		text-transform: uppercase;
-		letter-spacing: 0.06em;
-		color: var(--text-2);
+	.material {
+		align-self: flex-start;
 	}
 	/* Form rule v4: a stack of rows, and what belongs together sits in a pair. */
 	.velden {
@@ -1228,16 +1169,6 @@
 		grid-template-columns: 1fr 1fr;
 		gap: var(--space-3);
 		align-items: end;
-	}
-	.veld {
-		display: grid;
-		gap: 2px;
-		font-size: var(--text-xs);
-		color: var(--text-2);
-	}
-	.grouplabel {
-		font-size: var(--text-xs);
-		color: var(--text-2);
 	}
 	.feiten {
 		display: grid;
@@ -1276,7 +1207,7 @@
 	   "Skip a row with an empty cell This design takes 2 rows per burn, and…" —
 	   measured, both on one line box at x=595. Each half is a whole sentence in the
 	   catalogue; it is the layout that was gluing them. */
-	.vink .fine {
+	.vink .help {
 		display: block;
 	}
 	.afsluiting {
@@ -1299,10 +1230,10 @@
 		font-weight: 600;
 		color: var(--text-2);
 		border-bottom: 1px solid var(--line);
-		padding: 4px var(--space-2) 4px 0;
+		padding: var(--space-1) var(--space-2) var(--space-1) 0;
 	}
 	td {
-		padding: 3px var(--space-2) 3px 0;
+		padding: var(--space-1) var(--space-2) var(--space-1) 0;
 		border-bottom: 1px solid var(--line);
 		color: var(--text-1);
 	}
@@ -1325,9 +1256,6 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
-	.mono {
-		font-family: var(--font-mono);
-	}
 	.geesten {
 		margin: 0;
 		padding: 0;
@@ -1346,45 +1274,6 @@
 		max-width: 22ch;
 	}
 
-	.fine {
-		margin: 0;
-		font-size: var(--text-xs);
-		color: var(--text-2);
-		line-height: 1.5;
-	}
-	.error {
-		margin: 0 0 var(--space-2);
-		font-size: var(--text-xs);
-		color: var(--danger);
-	}
-	.notice {
-		margin: 0;
-		font-size: var(--text-xs);
-		color: var(--accent);
-		line-height: 1.5;
-	}
-	.mini {
-		font-size: var(--text-xs);
-		color: var(--accent);
-		padding: 4px var(--space-1h);
-		border-radius: var(--radius-field);
-	}
-	.mini:hover {
-		background: var(--surface-2);
-	}
-	.mini.danger {
-		color: var(--danger);
-		font-weight: 600;
-	}
-	input[type='text'],
-	input[type='search'] {
-		font: inherit;
-		padding: 8px;
-		border: 1px solid var(--line);
-		border-radius: var(--radius-field);
-		background: var(--surface-2);
-		color: var(--text-1);
-	}
 	/* A file input is invisible and its label is the button.
 	   `MaterialLibrary`'s own way of hiding it, and the difference matters: with
 	   `display: none` the input is out of the tab order altogether, so measured, Tab
@@ -1410,8 +1299,10 @@
 		outline: 2px solid var(--accent);
 		outline-offset: 2px;
 	}
+	/* Off is drained like every disabled button, not faded. */
 	.btn.file.off {
-		opacity: 0.45;
+		background: var(--surface-2);
+		color: var(--text-2);
 		cursor: not-allowed;
 	}
 </style>

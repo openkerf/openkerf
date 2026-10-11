@@ -35,8 +35,9 @@ OpenKerf writes the one that matches the keyboard you are on.
 | ⌘S / Ctrl+S | Save the open project | `save` |
 | ⌘⇧S / Ctrl+Shift+S | Save the project under another name | `saveAs` |
 
-The project button in the top bar opens the same six rows, in this order, with a
-line after the first four:
+The project button in the top bar opens these rows, in this order, with a line
+after the first four and another after the next two. Below 880 px wide the button
+is not in the bar, and the same rows are under **More** on the tool rail.
 
 | Row | What it does | |
 |---|---|---|
@@ -47,6 +48,9 @@ line after the first four:
 | — line — | | |
 | Download | Downloads the current project as a file | `project.download` |
 | Upload… | Reads a project file back in, under its own name | `project.upload` |
+| — line — | | |
+| Import… | Reads a file into the sheet you are on — SVG, DXF, RD, G-code or an image — and adds it to what is there | `sheet.import` |
+| Export as SVG | Downloads this sheet as SVG, for another program; no layers, material or machine | `sheet.export` |
 
 **New project**, **Open…** and **Upload…** all replace the whole project, so each
 one asks first when there are changes that are not saved: a window titled
@@ -420,8 +424,8 @@ without one.
 
 ## Language
 
-The globe button at the right-hand end of the top bar, next to the theme switch,
-with the two-letter code beside it. It opens a short menu headed "Language":
+The globe button at the right-hand end of the top bar, with the two-letter code
+beside it. It opens a short menu headed "Language":
 English and Nederlands, each spelled in its own tongue, with a tick on the one
 you are in.
 
@@ -434,13 +438,6 @@ back to English, which is the source language and therefore always complete.
 Numbers and dates change with it: 3,5 mm in Dutch, 3.5 mm in English. Names of
 materials, layers and sheets do not — those are your words and stay as you typed
 them.
-
-## Light and dark
-
-The sun button at the far right of the top bar, tooltip "Switch theme". It
-flips the whole window between the light and the dark palette, and nothing else
-changes with it. Dark works but has not been measured as carefully as light; if
-something is hard to read there, the light theme is the one to trust.
 
 ## Notifications
 
@@ -537,9 +534,6 @@ clicking it again stops it. Two more controls appear while it is running:
 With more than one camera attached, the calibration window has a **Camera**
 drop-down at the top: choosing another one switches the picture over. With one
 camera there is no chooser, because a choice of one is not a choice.
-
-If the picture stops arriving while the camera is running, the phone falls back to a
-still that refreshes every two seconds rather than to a broken picture.
 
 Calibrating opens the window "Calibrate the camera" over the raw picture:
 "Drag the four points to the corners of the bed, starting top left and going

@@ -379,8 +379,8 @@ export class SeriesStore {
 	 * The state as it rides in the status payload, from `_series_state()`.
 	 *
 	 * The same shape as `load()` minus the rows, and `null` when nothing is attached — so
-	 * the run block, the top bar and the phone view all read one fact from one socket
-	 * instead of asking three times and drifting. Called from the status store; the rows
+	 * the run block and the top bar both read one fact from one socket instead of
+	 * asking twice and drifting. Called from the status store; the rows
 	 * are left alone because this payload never carries them and a window that has loaded
 	 * them must not lose them on the next heartbeat.
 	 *

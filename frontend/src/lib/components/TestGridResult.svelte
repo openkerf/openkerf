@@ -1,5 +1,8 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
+	import EmptyState from './EmptyState.svelte';
+	import Icon from './Icon.svelte';
+	import Notice from './Notice.svelte';
 	import { i18n, t } from '$lib/i18n/index.svelte';
 	import { apiError } from '$lib/i18n/core.ts';
 	import { operationName } from '$lib/library.svelte';
@@ -547,7 +550,7 @@
 				</select>
 			</div>
 			{#if filter.trim() && shown.length === 0}
-				<p class="muted">{t('result.sift.none', { what: filter.trim() })}</p>
+				<p class="help">{t('result.sift.none', { what: filter.trim() })}</p>
 			{/if}
 		{/if}
 	</div>
@@ -555,7 +558,7 @@
 	{#if canEdit}
 		<!-- Step 3 begins with a photograph, not with a list: the code on the plank says
 		     which board it is, so the reader should not have to. -->
-		<div class="reading" bind:this={doorway}>
+		<div class="reading card inset" bind:this={doorway}>
 			<label class="btn primary file">
 				{t('library.readBoard')}
 				<input
@@ -567,50 +570,49 @@
 					onchange={readBoardFromPhoto}
 				/>
 			</label>
-			<p class="hint">{t('result.read.how')}</p>
+			<p class="help">{t('result.read.how')}</p>
 		</div>
-		{#if reading}<p class="muted" role="status">{t('result.read.busy')}</p>{/if}
+		{#if reading}<p class="help" role="status">{t('result.read.busy')}</p>{/if}
 		{#if readFound}
-			<p class="notice good" role="status">{t('result.read.found', { name: readFound })}</p>
+			<Notice tone="ok" live>{t('result.read.found', { name: readFound })}</Notice>
 		{/if}
 		{#if readError}
-			<p class="notice failure" role="alert">
-				{readError}
-				<span class="muted">{t('result.read.orPick')}</span>
-			</p>
+			<Notice tone="danger" live>
+				<span>{readError}</span>
+				<span>{t('result.read.orPick')}</span>
+			</Notice>
 		{/if}
 	{/if}
 
 	{#if grids.length === 0}
-		<p class="muted">{t('result.noGrids')}</p>
+		<p class="help">{t('result.noGrids')}</p>
 	{/if}
 
-	{#if error}<p class="notice failure" role="alert">{error}</p>{/if}
+	{#if error}<Notice tone="danger" live>{error}</Notice>{/if}
 	{#if made}
-		<p class="notice good" role="status">
+		<Notice tone="ok" live>
 			{t('result.saved', {
 				n: made,
 				material: grid?.material_name ?? t('result.thisMaterial')
 			})}
-		</p>
+		</Notice>
 	{/if}
 
 	{#if grid && box}
 		{#if !grid.photo_path}
 			<!-- No photo: then no grid of empty squares over nothing. Say what has to
-			     happen and how you do it with a phone. -->
-			<div class="geenfoto">
-				<p class="why">
-					<strong>{t('result.burnFirst')}</strong>
-					{t('result.burnFirst.how')}
-				</p>
-				{#if canEdit}
-					<label class="btn primary big file">
-						{t('library.addPhoto')}
-						<input type="file" accept="image/*" capture="environment" onchange={uploadPhoto} />
-					</label>
-				{/if}
-				<p class="muted">{t('result.orPhone')}</p>
+			     happen and how. -->
+			<div class="geenfoto card inset">
+				<EmptyState center title={t('result.burnFirst')} text={t('result.burnFirst.how')}>
+					{#snippet action()}
+						{#if canEdit}
+							<label class="btn primary big file">
+								{t('library.addPhoto')}
+								<input type="file" accept="image/*" capture="environment" onchange={uploadPhoto} />
+							</label>
+						{/if}
+					{/snippet}
+				</EmptyState>
 			</div>
 		{:else}
 			<div class="podium" bind:this={podium}>
@@ -705,7 +707,7 @@
 					{#if pickedCells.length}
 						{#each pickedCells as cell (key(cell))}
 							<button
-								class="chip mono"
+								class="chip on mono"
 								onclick={() => toggle(cell)}
 								aria-label={t('result.undoChoice', {
 									row: cell.row + 1,
@@ -716,10 +718,10 @@
 									row: cell.row + 1,
 									column: cell.column + 1,
 									values: cellText(cell)
-								})} ×</button>
+								})}<Icon name="close" /></button>
 						{/each}
 					{:else}
-						<span class="muted">{t('result.noneChosen')}</span>
+						<span class="help">{t('result.noneChosen')}</span>
 					{/if}
 				</div>
 
@@ -747,7 +749,7 @@
 				{/if}
 			</div>
 
-			{#if saveError}<p class="notice failure" role="alert">{saveError}</p>{/if}
+			{#if saveError}<Notice tone="danger" live>{saveError}</Notice>{/if}
 
 			{#if usedCells.length}
 				<!-- Gap M4: the provenance said "row 2, column 3" and nothing was marked on
@@ -755,27 +757,27 @@
 				     at the square — here by highlighting it, and in the library because the
 				     photo with ?cell= gets the outline drawn in. -->
 				<div class="herkomst">
-					<span class="muted">{t('result.becamePreset')}</span>
+					<span class="help">{t('result.becamePreset')}</span>
 					{#each usedCells as cell (key(cell))}
 						<button
-							class="chip bewijs mono"
+							class="chip mono"
 							onpointerenter={() => (aangewezen = cell)}
 							onpointerleave={() => (aangewezen = null)}
 							onfocus={() => (aangewezen = cell)}
 							onblur={() => (aangewezen = null)}
 							onclick={() => (aangewezen = cell)}
-						>{t('result.chip', {
+						><span class="bewijs"><Icon name="check" /></span>{t('result.chip', {
 								row: cell.row + 1,
 								column: cell.column + 1,
 								values: cellText(cell)
 							})}</button>
 					{/each}
-					<span class="muted">{t('result.pointHighlights')}</span>
 				</div>
+				<p class="help">{t('result.pointHighlights')}</p>
 			{/if}
 
 			{#if grid.material_id === null}
-				<p class="notice waarschuwing">{t('result.gridNoMaterial')}</p>
+				<Notice tone="warn">{t('result.gridNoMaterial')}</Notice>
 			{/if}
 		{/if}
 	{/if}
@@ -790,37 +792,15 @@
 		border-top: 1px solid var(--line);
 	}
 	.head { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
-	.title {
-		margin: 0;
-		font-size: var(--text-sm);
-		font-weight: 600;
-		letter-spacing: -0.01em;
-		color: var(--text-1);
-	}
-	.muted { color: var(--text-2); margin: 0; font-size: var(--text-xs); }
 	.picker {
-		font: inherit;
-		font-size: var(--text-sm);
 		flex: 1;
 		min-width: 16rem;
-		padding: 8px;
-		border: 1px solid var(--line);
-		border-radius: var(--radius-field);
-		background: var(--surface-2);
-		color: var(--text-1);
 	}
 
 	/* The filter and the list are one control: narrowing and choosing in that order. */
 	.finding { display: flex; align-items: center; gap: var(--space-2); flex: 1; flex-wrap: wrap; }
 	.sift {
-		font: inherit;
-		font-size: var(--text-sm);
 		width: 11rem;
-		padding: 8px;
-		border: 1px solid var(--line);
-		border-radius: var(--radius-field);
-		background: var(--surface-2);
-		color: var(--text-1);
 	}
 
 	/* The way in that comes before the list, so it reads as the first step and not as
@@ -830,24 +810,12 @@
 		align-items: baseline;
 		gap: var(--space-3);
 		flex-wrap: wrap;
-		padding: var(--space-3);
-		border: 1px dashed var(--line);
-		border-radius: var(--radius-card);
-		background: var(--surface-2);
 	}
-	.reading .hint { margin: 0; max-width: 52ch; font-size: var(--text-xs); color: var(--text-2); }
+	.reading .help { max-width: 52ch; }
 
 	.geenfoto {
-		display: grid;
-		justify-items: center;
-		gap: var(--space-3);
-		padding: var(--space-6) var(--space-4);
-		text-align: center;
-		border: 1px dashed var(--line);
-		border-radius: var(--radius-card);
-		background: var(--surface-2);
+		padding: var(--space-4);
 	}
-	.why { margin: 0; max-width: 44ch; font-size: var(--text-sm); color: var(--text-1); }
 
 	.podium {
 		position: relative;
@@ -884,10 +852,14 @@
 		cursor: pointer;
 		outline: none;
 	}
+	/* The focus ring of a square. An outline does not follow a polygon on a photograph,
+	   so the square's own edge becomes the ring: solid accent at 3 px, the same colour
+	   and weight as the global ring, with a light halo under it so it still stands
+	   out on a dark board, where the accent alone sinks into the wood. Not dashed — dashes are the kerf line. */
 	.cell polygon:focus-visible {
 		stroke: var(--accent);
 		stroke-width: 3;
-		stroke-dasharray: 4 3;
+		filter: drop-shadow(0 0 1px var(--surface-1));
 	}
 	.cell.used polygon {
 		stroke: var(--ok);
@@ -942,7 +914,7 @@
 		position: absolute;
 		left: var(--space-2);
 		bottom: var(--space-2);
-		padding: 4px var(--space-3);
+		padding: var(--space-1) var(--space-3);
 		border-radius: var(--radius-dot);
 		font-size: var(--text-xs);
 		background: color-mix(in srgb, var(--surface-1) 88%, transparent);
@@ -966,57 +938,23 @@
 		flex-wrap: wrap;
 		font-size: var(--text-xs);
 	}
-	.chip.bewijs {
-		border-color: var(--ok);
-		background: color-mix(in srgb, var(--ok) 12%, transparent);
+	/* The squares that became a preset carry the ok check: a state, said by the icon
+	   in its colour rather than by tinting a button. */
+	.bewijs {
+		display: inline-flex;
+		color: var(--ok);
 	}
-
-	.chip {
-		font: inherit;
+	.chip.mono {
 		font-family: var(--font-mono);
-		font-size: var(--text-xs);
-		padding: 4px var(--space-2);
-		border-radius: var(--radius-dot);
-		border: 1px solid var(--accent);
-		background: color-mix(in srgb, var(--accent) 12%, transparent);
-		color: var(--text-1);
 	}
 
-	/* Without this rule the general hover beats .primary: on hover the button went
-	   light grey with white text. Same specificity, later in the stylesheet — a
-	   classic. */
-	/* A disabled primary button must not look like a button that works: 45% accent
-	   still reads as "click me" in the dark theme. */
-	.btn.primary:disabled {
-		background: var(--surface-2);
-		border-color: var(--line);
-		color: var(--text-2);
-		opacity: 1;
-	}
+	/* Aligning is a mode that is on: the chosen tint, as a chip that is on. */
 	.btn[aria-pressed='true'] {
-		background: color-mix(in srgb, var(--accent) 14%, transparent);
-		border-color: var(--accent);
-		color: var(--accent);
+		background: var(--accent-tint);
+		border-color: var(--accent-edge);
 	}
-	.btn.big { min-height: 48px; padding: 12px 20px; font-size: var(--text-md); }
-	.btn.file { cursor: pointer; display: inline-grid; place-items: center; }
+	.btn.file { position: relative; cursor: pointer; }
 	.btn.file input { position: absolute; width: 0; height: 0; opacity: 0; }
-
-	.notice {
-		margin: 0;
-		padding: var(--space-2) var(--space-3);
-		border-radius: var(--radius-field);
-		font-size: var(--text-xs);
-	}
-	.notice.failure { background: color-mix(in srgb, var(--danger-solid) 14%, transparent); }
-	.notice.good {
-		background: color-mix(in srgb, var(--ok) 14%, transparent);
-		border-left: 3px solid var(--ok);
-	}
-	.notice.waarschuwing {
-		background: color-mix(in srgb, var(--warn-solid) 12%, transparent);
-		border-left: 3px solid var(--warn-solid);
-	}
 
 	@media (max-width: 720px) {
 		.onderbalk .btn { flex: 1; }

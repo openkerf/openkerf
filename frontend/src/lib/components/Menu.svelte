@@ -23,6 +23,7 @@
 	 *   you learn it: not from a manual but from the menu.
 	 */
 	import ArrangeIcon from './ArrangeIcon.svelte';
+	import Icon from './Icon.svelte';
 	import type { Menu, MenuItem } from '$lib/actions';
 
 	let {
@@ -79,6 +80,9 @@
 		)
 	);
 	let cursor = $state(-1);
+	let scrolls = $derived(
+		!menu.some((group) => group.items.some((item) => item !== 'separator' && 'items' in item))
+	);
 	let openSub = $state<string | null>(null);
 
 	function choose(item: MenuItem) {
@@ -129,6 +133,11 @@
 	$effect(() => {
 		box?.focus();
 	});
+	// The arrows walk a scrolling menu too: the row they land on comes into view.
+	$effect(() => {
+		if (cursor < 0 || !box) return;
+		box.querySelector('.row.here')?.scrollIntoView({ block: 'nearest' });
+	});
 </script>
 
 <svelte:window bind:innerWidth={viewport.w} bind:innerHeight={viewport.h} />
@@ -139,6 +148,7 @@
 
 <div
 	class="menu"
+	class:scrolls
 	role="menu"
 	tabindex="-1"
 	bind:this={box}
@@ -150,7 +160,7 @@
 >
 	{#each menu as group, groupIndex (group.title ?? groupIndex)}
 		{#if groupIndex > 0}<hr />{/if}
-		{#if group.title}<p class="head">{group.title}</p>{/if}
+		{#if group.title}<p class="label-section head">{group.title}</p>{/if}
 		{#each group.items as item, i (item === 'separator' ? `s${i}` : item.id)}
 			{#if item === 'separator'}
 				<hr />
@@ -174,11 +184,11 @@
 						onclick={() => choose(item)}
 					>
 						<span class="check" aria-hidden="true">
-							{#if item.on}✓{/if}
+							{#if item.on}<Icon name="check" />{/if}
 						</span>
 						<span class="text">{item.label}</span>
 						{#if 'items' in item}
-							<span class="arrow" aria-hidden="true">›</span>
+							<span class="arrow" aria-hidden="true"><Icon name="chevron-right" /></span>
 						{:else if item.key}
 							<span class="key mono">{item.key}</span>
 						{/if}
@@ -211,7 +221,7 @@
 									{#if item.grid && child.icon}
 										<ArrangeIcon name={child.icon} size={19} />
 									{:else}
-										<span class="check" aria-hidden="true">{#if child.on}✓{/if}</span>
+										<span class="check" aria-hidden="true">{#if child.on}<Icon name="check" />{/if}</span>
 										<span class="text">{child.label}</span>
 										{#if child.key}<span class="key mono">{child.key}</span>{/if}
 									{/if}
@@ -242,25 +252,30 @@
 		z-index: calc(var(--z-dialog) + 11);
 		min-width: 232px;
 		max-width: 320px;
-		padding: 4px;
+		padding: var(--space-1);
 		background: var(--surface-1);
 		border: 1px solid var(--line);
 		border-radius: var(--radius-card);
 		box-shadow: var(--shadow-float);
 		font-size: var(--text-sm);
 	}
-	.menu:focus-visible {
-		outline: none;
+	/* A long menu without submenus scrolls rather than running off the screen (the
+	   tool rail's on a short tablet). One with submenus cannot: they hang outside its
+	   box, and a scrolling box clips them. */
+	.menu.scrolls {
+		max-height: calc(100vh - 2 * var(--space-2));
+		overflow-y: auto;
 	}
+	/* The menu itself takes the focus when it opens, so the keys reach it. Opened from
+	   the keyboard it wears the global focus ring until an arrow puts "you are here" on
+	   a row; opened with the pointer the browser shows none. No `outline: none`: a menu
+	   with the focus and no sign of it is a keyboard user's dead end. */
+	/* The heading is `.label-section` (tokens.css); this only places it. */
 	.head {
-		margin: 4px 8px 2px;
-		font-size: var(--text-xs);
-		letter-spacing: 0.04em;
-		text-transform: uppercase;
-		color: var(--text-2);
+		margin: var(--space-1) var(--space-2) 2px;
 	}
 	hr {
-		margin: 4px 6px;
+		margin: var(--space-1) var(--space-1h);
 		border: none;
 		border-top: 1px solid var(--line);
 	}
@@ -272,7 +287,8 @@
 		align-items: center;
 		gap: var(--space-2);
 		width: 100%;
-		padding: 6px 8px;
+		min-height: max(32px, var(--target-min));
+		padding: var(--space-1h) var(--space-2);
 		border-radius: var(--radius-field);
 		text-align: left;
 		color: var(--text-1);
@@ -284,21 +300,23 @@
 	.row.here:not(:disabled) {
 		background: var(--surface-2);
 	}
+	/* Drained, not faded: the reason is in the tooltip, and the row has to stay
+	   readable to be learned where it is. */
 	.row:disabled {
 		color: var(--text-2);
-		opacity: 0.5;
-		cursor: default;
+		cursor: not-allowed;
 	}
 	.row.danger:not(:disabled) {
 		color: var(--danger);
 	}
 	.row.danger.here:not(:disabled) {
-		background: color-mix(in srgb, var(--danger) 10%, var(--surface-1));
+		background: var(--danger-tint);
 	}
 	.check {
 		flex: none;
-		width: 12px;
-		font-size: 12px;
+		display: grid;
+		place-items: center;
+		width: 16px;
 		color: var(--accent);
 	}
 	.text {
@@ -315,14 +333,15 @@
 	}
 	.arrow {
 		flex: none;
+		display: grid;
 		color: var(--text-2);
 	}
 	.submenu {
 		position: absolute;
 		left: 100%;
-		top: -4px;
+		top: calc(-1 * var(--space-1));
 		min-width: 200px;
-		padding: 4px;
+		padding: var(--space-1);
 		background: var(--surface-1);
 		border: 1px solid var(--line);
 		border-radius: var(--radius-card);

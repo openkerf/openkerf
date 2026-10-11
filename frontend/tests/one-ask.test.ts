@@ -58,8 +58,8 @@ const WAY_OUT = ['common.cancel', 'recovery.later', 'status.disconnect.keep'];
 /**
  * The windows and confirmations this pattern covers.
  *
- * The scan below finds `<div class="actions">` in fifteen more places — the setup
- * wizard's five pages, PhoneView, StarterOffer, MaterialLibrary, NotificationCard,
+ * The scan below finds `<div class="actions">` in more places — the setup
+ * wizard's five pages, StarterOffer, MaterialLibrary, NotificationCard,
  * SeriesRun and TileRun. They are rows of the same kind and were not in this pattern's
  * measurements; bringing one in is adding a line here.
  */

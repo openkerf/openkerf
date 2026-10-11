@@ -20,6 +20,10 @@
 	import Segmented from './Segmented.svelte';
 	import ArrangeIcon from './ArrangeIcon.svelte';
 	import Menu from './Menu.svelte';
+	import Icon from './Icon.svelte';
+	import Notice from './Notice.svelte';
+	import EmptyState from './EmptyState.svelte';
+	import Why from './Why.svelte';
 	import { en } from '$lib/i18n/en';
 	import { i18n, t, type MessageKey } from '$lib/i18n/index.svelte';
 	import { screen } from '$lib/screen.svelte';
@@ -939,17 +943,70 @@
 	}
 </script>
 
+<!--
+	Speed, power and passes: the well of NumberField's compact form — the same border,
+	fill, height, unit behind the number and focus ring — without its − and +, because
+	three steppers do not fit beside each other in a 280 px row. The word stands over the
+	field, where `.field-label` puts every other word over a field.
+-->
+{#snippet valueFields(op: (typeof plainLayers)[number], percent: number | null)}
+	<label class="val speed field-label"><span>{t('panel.value.speed')}</span>
+		<span class="well">
+			<input
+				class="mono"
+				type="text"
+				inputmode="decimal"
+				aria-label={t('panel.layer.speedAria', { label: op.label })}
+				value={op.speed ?? ''}
+				disabled={edits.busy}
+				onchange={(e) => commitNumber(e, op.id, 'speed', op.speed)}
+			/><span class="suffix" aria-hidden="true">mm/s</span>
+		</span>
+	</label>
+	<label class="val field-label"><span>{t('panel.value.power')}</span>
+		<span class="well">
+			<input
+				class="mono"
+				type="text"
+				inputmode="numeric"
+				aria-label={t('panel.layer.powerAria', { label: op.label })}
+				value={percent ?? ''}
+				disabled={edits.busy}
+				onchange={(e) => commitNumber(e, op.id, 'power_percent', percent)}
+			/><span class="suffix" aria-hidden="true">%</span>
+		</span>
+	</label>
+	<label class="val narrow field-label"><span>{t('panel.value.passes')}</span>
+		<span class="well">
+			<input
+				class="mono"
+				type="text"
+				inputmode="numeric"
+				aria-label={t('panel.layer.passesAria', { label: op.label })}
+				value={op.passes ?? 1}
+				disabled={edits.busy}
+				onchange={(e) => commitNumber(e, op.id, 'passes', op.passes ?? 1)}
+			/><!-- The unit of a count of passes, "3×" — a sign in the value, not an icon. --><span
+				class="suffix"
+				aria-hidden="true">{'×'}</span
+			>
+		</span>
+	</label>
+{/snippet}
+
 {#if show === 'selection' && strays.length}
 	<div class="section stray">
 		<!-- The same words as the strip under the canvas (gap C2): there says what is
 		     going on, here says the way out. Two places naming the same problem
 		     differently makes the reader think there are two problems. -->
-		<p>{t('canvas.outsideBed', { n: strays.length })}</p>
-		{#if canEdit}
-			<button class="btn mini" disabled={edits.busy} title={edits.busy ? t('reason.busy') : undefined} onclick={() => onArrange?.('rescue')}>
-				{t('action.rescue')}
-			</button>
-		{/if}
+		<Notice tone="warn">
+			<p>{t('canvas.outsideBed', { n: strays.length })}</p>
+			{#if canEdit}
+				<button class="btn mini" disabled={edits.busy} title={edits.busy ? t('reason.busy') : undefined} onclick={() => onArrange?.('rescue')}>
+					{t('action.rescue')}
+				</button>
+			{/if}
+		</Notice>
 	</div>
 {/if}
 
@@ -978,13 +1035,13 @@
 		<!-- Below 1200px the bar has no Import (`.topbar.narrow .docs`); it is a row in the
 		     rail's More menu. Same choice, and same reason, as the bed's own empty text in
 		     `Canvas.svelte`. Gauntlet P33. -->
-		<p class="empty">{t(screen.tablet ? 'panel.empty.tablet' : 'panel.empty')}</p>
+		<EmptyState title={t('panel.empty.title')} text={t(screen.tablet ? 'panel.empty.tablet' : 'panel.empty')} />
 	</div>
 {/if}
 
 {#if show === 'selection' && selected && size}
 	<div class="section">
-		<h2 class="section-title">{t('panel.selection')}</h2>
+		<h2 class="label-section section-label">{t('panel.selection')}</h2>
 		<div class="selected">
 			<div class="head">
 				<span class="name" title={chosen.length > 1 ? undefined : selected.label}>
@@ -1005,7 +1062,7 @@
 				<span class="in-layers">
 					<span class="chips">
 						{#if inLayers.length === 0}
-							<span class="geenlaag" title={t('panel.noLayer.title')}>{t('panel.noLayer')}</span>
+							<span class="no-layer" title={t('panel.noLayer.title')}>{t('panel.noLayer')}</span>
 						{:else}
 							{#each inLayers as layer (layer.id)}
 								<!-- The dot carries the number, as the chip in the layer list does:
@@ -1014,14 +1071,14 @@
 								     tells two layers called "Engrave" apart stood in a tooltip
 								     (P12) — on a touch screen, nowhere. -->
 								<span
-									class="laagchip"
+									class="layer-ref"
 									class:off={!layer.output}
 									title={layer.output
 										? layerNamed(layer.number, layer.label)
 										: t('panel.layerChip.off', { n: layer.number, label: layer.label })}
 								>
 									<span
-										class="stip mono"
+										class="layer-num mono"
 										style="background: {layer.color}; color: {inkOn(layer.color ?? '')}"
 										>{layer.number}</span
 									>
@@ -1031,7 +1088,7 @@
 						{/if}
 					</span>
 				</span>
-				<button class="clear" onclick={() => design.select(null)}>{t('panel.clear')}</button>
+				<button class="link clear" onclick={() => design.select(null)}>{t('panel.clear')}</button>
 			</div>
 			<!-- And the word itself under the name, where the Layers row puts it too:
 			     under the layer's name, in the same colour, in the same three words. In
@@ -1043,15 +1100,15 @@
 			     switched-off one the tag would be false for half of what you are
 			     holding, and the warm-coloured chip already says which half. -->
 			{#if burns === 'layerOff'}
-				<p class="burn-off"><span class="tag">{t('panel.tag.doesNotBurn')}</span></p>
+				<p class="burn-off"><span class="badge warn">{t('panel.tag.doesNotBurn')}</span></p>
 			{/if}
 			<!-- A locked shape looks the same apart from its handles, so the panel says it
 			     in words and offers the way out in the same place. Above the values,
 			     because it explains why they are switched off. -->
 			{#if lockedHere}
 				<div class="locked-note">
-					<span class="rot-label">{t('panel.locked')}</span>
-					<p class="hint">{t('panel.locked.body')}</p>
+					<span class="label-section">{t('panel.locked')}</span>
+					<p class="help">{t('panel.locked.body')}</p>
 					<button
 						class="btn mini"
 						disabled={!canEdit || edits.busy} title={!canEdit ? t('reason.needsToken') : edits.busy ? t('reason.busy') : undefined}
@@ -1097,14 +1154,14 @@
 					/>
 				{/each}
 				<button
-					class="link"
+					class="btn ghost icon chain"
 					aria-pressed={linked}
 					disabled={Boolean(sizeOff)}
 					title={sizeOff ?? (linked ? t('panel.ratio.locked') : t('panel.ratio.free'))}
 					aria-label={linked ? t('panel.ratio.lockedShort') : t('panel.ratio.freeShort')}
 					onclick={() => (linked = !linked)}
 				>
-					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+					<svg class="icon-svg" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
 						{#if linked}
 							<path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1" />
 							<path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1" />
@@ -1171,14 +1228,14 @@
 			     block and the two "Off" values in `JobControls` follow. It costs the card
 			     one line where it had 92.4 px of empty panel under it at 1024. -->
 			{#if screen.noHover && canEdit && !lockedHere}
-				<p class="tip">{t('panel.dragHint')}</p>
+				<p class="help">{t('panel.dragHint')}</p>
 			{/if}
 			{#if sizeNote}
-				<p class="tip refused" role="status">{sizeNote}</p>
+				<p class="help warn refused" role="status">{sizeNote}</p>
 			{/if}
 
 			{#if canEdit && pose.mixed}
-				<p class="tip">{t('panel.angle.mixedNote')}</p>
+				<p class="help">{t('panel.angle.mixedNote')}</p>
 			{/if}
 
 			{#if selected.text}
@@ -1202,7 +1259,7 @@
 					     column to put in is not a value of this shape — a text can hold several
 					     placeholders and literal words besides — so the chooser is a verb and
 					     lives in the right-click menu. -->
-					<p class="reads">{t('series.panelValue', { text: readsNow })}</p>
+					<p class="help reads">{t('series.panelValue', { text: readsNow })}</p>
 				{/if}
 			{/if}
 
@@ -1237,7 +1294,7 @@
 			{/if}
 
 			{#if selected.effect}
-				<p class="hint">{t('panel.inEffect', { label: selected.effect.label })}</p>
+				<p class="help">{t('panel.inEffect', { label: selected.effect.label })}</p>
 			{/if}
 
 			{#if toSplit.shapes}
@@ -1246,15 +1303,15 @@
 				     right-click menu, under "Edit path", with the same number. Without
 				     this line the menu would promise a count you could not check
 				     anywhere. -->
-				<p class="tip">
+				<p class="help">
 					{t('panel.splittable', { n: toSplit.shapes, pieces: toSplit.stukken })}
 				</p>
 			{/if}
 			{#if tidyNote}
-				<p class="tip" role="status">{tidyNote}</p>
+				<p class="help" role="status">{tidyNote}</p>
 			{/if}
 			{#if cornerNote}
-				<p class="tip" role="status">{cornerNote}</p>
+				<p class="help" role="status">{cornerNote}</p>
 			{/if}
 
 			<!-- Bridges (tabs): the gaps that keep a cut part in the sheet. A value you set
@@ -1267,7 +1324,7 @@
 			     concludes the app cannot do them. It says where it is true instead. -->
 			{#if bridges.carries}
 			<div class="bridges">
-				<span class="rot-label">{t('panel.bridges')}</span>
+				<span class="label-section">{t('panel.bridges')}</span>
 				<label class="check" title={bridgeOff}>
 					<input
 						type="checkbox"
@@ -1309,9 +1366,9 @@
 						/>
 					</div>
 					{#if bridges.mixed}
-						<p class="tip">{t('panel.bridges.mixed')}</p>
+						<p class="help">{t('panel.bridges.mixed')}</p>
 					{:else if bridges.places}
-						<p class="hint">
+						<p class="help">
 							{t('panel.bridges.places', {
 								places: i18n.list(bridges.places.map((p) => i18n.number(p))),
 								length: i18n.number(bridges.lengthMm)
@@ -1323,7 +1380,7 @@
 						     same size the sentence has to say so. Measured with a 200 mm
 						     rectangle and a 125.7 mm circle selected: "spread over a contour of
 						     125.7 mm" never mentioned the rectangle. -->
-						<p class="hint">
+						<p class="help">
 							{t(
 								bridges.shapes > 1 && !bridges.sameContour
 									? 'panel.bridges.explainTightest'
@@ -1348,7 +1405,7 @@
 					     this shape comes loose the moment the cut closes" under a rectangle in
 					     Caption, under the QR in Engrave and under a shape in no layer at all —
 					     three readings, none of them true. -->
-					<p class="tip">{t('panel.bridges.notCut', { n: bridges.shapes })}</p>
+					<p class="help">{t('panel.bridges.notCut', { n: bridges.shapes })}</p>
 				{:else if bridges.carries && bridgesNotCut > 0}
 					<!-- Some of them cut and some do not, so neither sentence above is true of
 					     the selection. Measured on the seeded design at 1440 px with the
@@ -1356,17 +1413,17 @@
 					     come loose the moment the cut closes", said of a pair of which one is
 					     engraved. The count is the number that is not cut — the verb follows
 					     that one. -->
-					<p class="tip">
+					<p class="help">
 						{t(bridges.has ? 'panel.bridges.notCutSome' : 'panel.bridges.offSome', {
 							n: bridgesNotCut,
 							shapes: bridges.shapes
 						})}
 					</p>
 				{:else if bridges.carries && !bridges.has}
-					<p class="hint">{t('panel.bridges.off', { n: bridges.shapes })}</p>
+					<p class="help">{t('panel.bridges.off', { n: bridges.shapes })}</p>
 				{/if}
 				{#if bridgeNote}
-					<p class="tip" role="status">{bridgeNote}</p>
+					<p class="help" role="status">{bridgeNote}</p>
 				{/if}
 			</div>
 
@@ -1395,7 +1452,7 @@
 					<summary>
 						{t('panel.image')}
 						{#if image?.adjustments.some((a) => a.enabled)}
-							<span class="fold-note on">
+							<span class="badge">
 								{t('panel.image.on', { n: image.adjustments.filter((a) => a.enabled).length })}
 							</span>
 						{/if}
@@ -1489,7 +1546,7 @@
 			<!-- The drag hint moved up, onto the size grid it is about. What is left here
 			     is the refusal, which is a whole sentence and has to be read. -->
 			{#if !canEdit}
-				<p class="hint">{t('panel.needsToken')}</p>
+				<p class="help">{t('panel.needsToken')}</p>
 			{/if}
 		</div>
 	</div>
@@ -1497,14 +1554,14 @@
 
 {#if show === 'selection' && !selected}
 	<div class="section">
-		<p class="muted">{t('panel.nothingSelected')}</p>
+		<p class="help">{t('panel.nothingSelected')}</p>
 	</div>
 {/if}
 
 {#if show === 'layers'}
 	<div class="section">
 		<div class="section-head">
-			<h2 class="section-title">{t('panel.layers')}</h2>
+			<h2 class="label-section">{t('panel.layers')}</h2>
 			{#if plainLayers.length}
 				<!-- What the number on the chip means is said once. Without it the list
 				     reads as an arbitrary stack instead of as the order the machine works
@@ -1572,33 +1629,33 @@
 						}}
 					>
 						{t('panel.list')}
-						<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+						<Icon name="chevron-down" />
 					</button>
 				{/if}
 				<span class="list-stretch"></span>
-				<button
-					class="btn mini dichtheid"
-					aria-pressed={compact}
-					title={compact ? t('panel.density.compact') : t('panel.density.roomy')}
-					onclick={compactSchakel}
-				>
-					<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-						{#if compact}
-							<path d="M4 7h16M4 12h16M4 17h16" />
-						{:else}
-							<path d="M4 8h16M4 16h16" />
-						{/if}
-					</svg>
-					{compact ? t('panel.density.compactLabel') : t('panel.density.roomyLabel')}
-				</button>
+				<!-- A way of looking, and it says so: a labelled pair under "View", with
+				     both answers on screen. As one button reading "Roomy" it stood beside
+				     "Clear out", and in Dutch "Ruim" beside "Opruimen" reads as two verbs
+				     for the same thing. -->
+				<span class="density">
+					<span class="label-section" aria-hidden="true">{t('panel.density.view')}</span>
+					<Segmented
+						label={t('panel.density.view')}
+						options={[
+							{ value: true, label: t('panel.density.compactLabel'), title: t('panel.density.compact') },
+							{ value: false, label: t('panel.density.roomyLabel'), title: t('panel.density.roomy') }
+						]}
+						bind:value={() => compact, (value) => { if (value !== compact) compactSchakel(); }}
+					/>
+				</span>
 			</div>
 			{#if canEdit && emptyLayers.length}
 				<!-- A state with its way out in the same line. As a button in the bar it
 				     was there even when there was nothing to clear out; as a line it is
 				     only there when it means something, and then it says how many. -->
-				<p class="tidyrow">
+				<p class="tidyrow help">
 					{t('panel.empties', { n: emptyLayers.length })}
-					<button class="alsLink" disabled={edits.busy} title={edits.busy ? t('reason.busy') : undefined} onclick={() => onPrune?.()}
+					<button class="link" disabled={edits.busy} title={edits.busy ? t('reason.busy') : undefined} onclick={() => onPrune?.()}
 						>{t('panel.tidyUp')}</button
 					>
 				</p>
@@ -1624,14 +1681,14 @@
 				</span>
 				<div class="ask-actions">
 					<button class="btn mini" onclick={() => (confirmDropAll = false)}>{t('common.cancel')}</button>
-					<button class="btn mini drop" disabled={edits.busy} title={edits.busy ? t('reason.busy') : undefined} onclick={dropAllLayers}>
+					<button class="btn mini danger drop" disabled={edits.busy} title={edits.busy ? t('reason.busy') : undefined} onclick={dropAllLayers}>
 						{t('panel.dropAll.confirm')}
 					</button>
 				</div>
 			</div>
 		{/if}
 		{#if !operations.length}
-			<p class="muted">{t('panel.noLayers')}</p>
+			<EmptyState title={t('panel.noLayers.title')} text={t('panel.noLayers')} />
 		{/if}
 		{#each plainLayers as op, index (op.id)}
 			{@const open = editingLayer === op.id}
@@ -1689,7 +1746,7 @@
 							}
 						}}
 					>
-						<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true">
+						<svg class="grip-dots" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
 							<circle cx="9" cy="6" r="1.5" /><circle cx="15" cy="6" r="1.5" />
 							<circle cx="9" cy="12" r="1.5" /><circle cx="15" cy="12" r="1.5" />
 							<circle cx="9" cy="18" r="1.5" /><circle cx="15" cy="18" r="1.5" />
@@ -1704,7 +1761,7 @@
 					     What opens the settings is now the name beside it, with a marker in
 					     front of it, like every other fold in the app. -->
 					<button
-						class="chip mono"
+						class="layer-swatch mono"
 						style="background: {design.colorFor(op.id)}; color: {inkOn(
 							design.colorFor(op.id)
 						)}"
@@ -1754,7 +1811,7 @@
 							disabled={edits.busy}
 							onclick={() => patchLayer(op.id, { output: !op.output })}
 						>
-							<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+							<svg class="icon-svg" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
 								<path d="M12 3v9" />
 								<path d="M18.4 6.6a9 9 0 1 1-12.8 0" />
 							</svg>
@@ -1785,7 +1842,7 @@
 						     the ⋯ the menu — two different things, and the way to the menu has
 						     become visible. -->
 						<button
-							class="more"
+							class="btn ghost icon more"
 							aria-haspopup="menu"
 							title={t('panel.layer.moreTitle', { label: op.label })}
 							aria-label={t('panel.layer.moreAria', { label: op.label })}
@@ -1793,7 +1850,7 @@
 								const box = (e.currentTarget as HTMLElement).getBoundingClientRect();
 								openedLayerMenu(op, index, box.right - 200, box.bottom + 4);
 							}}
-						>⋯</button>
+						><Icon name="more" /></button>
 					{/if}
 				</div>
 
@@ -1815,61 +1872,22 @@
 							onclick={() => openSettings(open ? null : op.id)}
 						>{short(op)}</button>
 					{:else if canEdit}
-						<label class="val"><span class="value-label">{t('panel.value.speed')}</span>
-							<input
-								class="mono"
-								type="number"
-								step="1"
-								min="0.1"
-								inputmode="decimal"
-								aria-label={t('panel.layer.speedAria', { label: op.label })}
-								value={op.speed ?? ''}
-								disabled={edits.busy}
-								onchange={(e) => commitNumber(e, op.id, 'speed', op.speed)}
-							/><span>mm/s</span>
-						</label>
-						<label class="val"><span class="value-label">{t('panel.value.power')}</span>
-							<input
-								class="mono"
-								type="number"
-								step="1"
-								min="1"
-								max="100"
-								inputmode="numeric"
-								aria-label={t('panel.layer.powerAria', { label: op.label })}
-								value={percent ?? ''}
-								disabled={edits.busy}
-								onchange={(e) => commitNumber(e, op.id, 'power_percent', percent)}
-							/><span>%</span>
-						</label>
-						<label class="val narrow"><span class="value-label">{t('panel.value.passes')}</span>
-							<input
-								class="mono"
-								type="number"
-								step="1"
-								min="1"
-								inputmode="numeric"
-								aria-label={t('panel.layer.passesAria', { label: op.label })}
-								value={op.passes ?? 1}
-								disabled={edits.busy}
-								onchange={(e) => commitNumber(e, op.id, 'passes', op.passes ?? 1)}
-							/><span>×</span>
-						</label>
+						{@render valueFields(op, percent)}
 					{:else}
 						{#each describe(op) as value (value)}
-							<span class="pill mono">{value}</span>
+							<span class="badge mono value">{value}</span>
 						{/each}
 					{/if}
 					{#if !op.output}
 						<!-- Colour alone is not enough: this is here in words too, because it
 						     is the difference between "it has been cut" and "I forgot
 						     it". -->
-						<span class="tag">{t('panel.tag.doesNotBurn')}</span>
+						<span class="badge warn">{t('panel.tag.doesNotBurn')}</span>
 					{/if}
 					{#if design.isLayerHidden(op.id)}
 						<!-- And this is the other half of B4: hidden says nothing about
 						     burning. Two separate words, because two separate states. -->
-						<span class="tag zicht">{t('panel.tag.hidden')}</span>
+						<span class="badge">{t('panel.tag.hidden')}</span>
 					{/if}
 					{#if design.layerCapabilities.air_assist && (compact || op.air_assist)}
 						<!-- Air assist in the row (decision B11, gap L10).
@@ -1895,7 +1913,7 @@
 						     The pill only appears when the driver has a command that really
 						     switches the blower; on a Ruida there is none (L8). -->
 						<button
-							class="tag air"
+							class="chip air"
 							class:off={!op.air_assist}
 							role="switch"
 							aria-checked={op.air_assist}
@@ -1916,7 +1934,7 @@
 							title={t('panel.assign.title', { label: op.label })}
 							disabled={edits.busy}
 							onclick={() => onAssign?.(op.id, membership(op.id) !== 'all')}
-						>{membership(op.id) === 'all' ? '✓' : membership(op.id) === 'some' ? '–' : '+'}
+						><Icon name={membership(op.id) === 'all' ? 'check' : membership(op.id) === 'some' ? 'minus' : 'plus'} />
 							{t('panel.assign.label')}</button>
 					{/if}
 				</div>
@@ -1933,46 +1951,7 @@
 						<!-- In compact mode the fields are here, because there is no room in
 						     the row. Same fields, same behaviour — just one line lower. -->
 						<div class="vals wide">
-							<label class="val"><span class="value-label">{t('panel.value.speed')}</span>
-								<input
-									class="mono"
-									type="number"
-									step="1"
-									min="0.1"
-									inputmode="decimal"
-									aria-label={t('panel.layer.speedAria', { label: op.label })}
-									value={op.speed ?? ''}
-									disabled={edits.busy}
-									onchange={(e) => commitNumber(e, op.id, 'speed', op.speed)}
-								/><span>mm/s</span>
-							</label>
-							<label class="val"><span class="value-label">{t('panel.value.power')}</span>
-								<input
-									class="mono"
-									type="number"
-									step="1"
-									min="1"
-									max="100"
-									inputmode="numeric"
-									aria-label={t('panel.layer.powerAria', { label: op.label })}
-									value={percent ?? ''}
-									disabled={edits.busy}
-									onchange={(e) => commitNumber(e, op.id, 'power_percent', percent)}
-								/><span>%</span>
-							</label>
-							<label class="val narrow"><span class="value-label">{t('panel.value.passes')}</span>
-								<input
-									class="mono"
-									type="number"
-									step="1"
-									min="1"
-									inputmode="numeric"
-									aria-label={t('panel.layer.passesAria', { label: op.label })}
-									value={op.passes ?? 1}
-									disabled={edits.busy}
-									onchange={(e) => commitNumber(e, op.id, 'passes', op.passes ?? 1)}
-								/><span>×</span>
-							</label>
+							{@render valueFields(op, percent)}
 						</div>
 					{/if}
 					{#if !open || colourOpen}
@@ -2014,7 +1993,7 @@
 					{/if}
 
 					{#if open}
-						<label class="wide">
+						<label class="wide field-label">
 							<span>{t('panel.name')}</span>
 							<!-- Trimmed, and a name of nothing but spaces is put back rather
 							     than sent: the API refuses it (`layer.needsName`) the way the
@@ -2040,7 +2019,7 @@
 						     and redoing every assignment; LightBurn has a dropdown for it in the
 						     row. The shapes and the settings come along. -->
 						<div class="kind wide">
-							<span class="rot-label">{t('panel.kind')}</span>
+							<span class="label-section">{t('panel.kind')}</span>
 							<Segmented
 								label={t('panel.kindOf', { label: op.label })}
 								options={LAYER_TYPES.map(({ value, label }) => ({ value, label }))}
@@ -2048,7 +2027,7 @@
 								why={t('reason.busy')}
 								bind:value={() => kindOf(op.type), (value) => retypeLayer(op.id, value)}
 							/>
-							<details class="fold kind-help"><summary>{t('panel.kind.help')}</summary><p class="hint">{t('panel.kind.hint')}</p></details>
+							<Why label={t('panel.kind.help')}>{t('panel.kind.hint')}</Why>
 						</div>
 
 						{#if compact}
@@ -2101,7 +2080,7 @@
 									why={t('reason.busy')}
 									onchange={(v) => patchLayer(op.id, { z_step_mm: Number(v) })}
 								/>
-								<p class="hint">
+								<p class="help">
 									{#if !op.z_step_mm}
 										{t('panel.zStep.off')}
 									{:else if (op.passes ?? 1) < 2}
@@ -2159,13 +2138,13 @@
 						<!-- Order is burn order: engrave first, only then cut, otherwise the
 						     workpiece falls out of the sheet before the lettering is on it. -->
 						<div class="order wide">
-							<span class="rot-label">{t('panel.order', { kind: typeName(op.type) })}</span>
+							<span class="label-section">{t('panel.order', { kind: typeName(op.type) })}</span>
 							<button
 								class="btn mini"
 								disabled={edits.busy || index === 0}
 								title={index === 0 ? t('reason.alreadyFirst') : t('layerMenu.earlier')}
 								onclick={() => moveLayer(op.id, 'up')}
-							>↑ {t('panel.order.earlier')}</button>
+							><Icon name="arrow-up" /> {t('panel.order.earlier')}</button>
 							<button
 								class="btn mini"
 								disabled={edits.busy || index === plainLayers.length - 1}
@@ -2173,7 +2152,7 @@
 									? t('reason.alreadyLast')
 									: t('layerMenu.later')}
 								onclick={() => moveLayer(op.id, 'down')}
-							>↓ {t('panel.order.later')}</button>
+							><Icon name="arrow-down" /> {t('panel.order.later')}</button>
 						</div>
 
 						{#if confirmDrop === op.id}
@@ -2181,7 +2160,7 @@
 								<span>{t('panel.drop.ask', { label: op.label })}</span>
 								<div class="ask-actions">
 									<button class="btn mini" onclick={() => (confirmDrop = null)}>{t('common.cancel')}</button>
-									<button class="btn mini drop" onclick={() => dropLayer(op.id)}
+									<button class="btn mini danger drop" onclick={() => dropLayer(op.id)}
 										>{t('panel.drop.confirm')}</button
 									>
 								</div>
@@ -2199,17 +2178,18 @@
 		{#each gridGroups as group (group.id)}
 			<div class="layer grid-row">
 				<div class="ident">
-					<span class="chip mono grid-chip">R</span>
+					<span class="layer-swatch mono grid-chip">R</span>
 					<div class="layer-name">
 						<div class="op">{t('panel.grid.title', { id: group.id })}</div>
 						<div class="obj">{t('panel.grid.cells', { n: group.ops.length })}</div>
 					</div>
 					<button
-						class="more"
+						class="btn ghost icon more"
 						aria-expanded={openGrid === group.id}
 						aria-label={t('panel.grid.showCells', { id: group.id })}
+						title={t('panel.grid.showCells', { id: group.id })}
 						onclick={() => (openGrid = openGrid === group.id ? null : group.id)}
-					>{openGrid === group.id ? '−' : '+'}</button>
+					><Icon name={openGrid === group.id ? 'chevron-up' : 'chevron-down'} /></button>
 				</div>
 			</div>
 
@@ -2227,7 +2207,7 @@
 						</label>
 					{/each}
 					{#if canEdit}
-						<button class="btn mini gone cells-remove" onclick={() => removeGrid(group.id)}>
+						<button class="btn mini danger cells-remove" onclick={() => removeGrid(group.id)}>
 							{t('panel.grid.remove')}
 						</button>
 					{/if}
@@ -2275,14 +2255,14 @@
 					};
 				}}
 			>
-				+ {t('panel.addLayer')}
+				<Icon name="plus" /> {t('panel.addLayer')}
 				<!-- The chevron the list button beside it has: this opens a menu of the four
 				     kinds, and a button that unfolds something has to say so before it is
 				     pressed. It points up because the menu opens upward from here. -->
-				<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 15 6-6 6 6" /></svg>
+				<Icon name="chevron-up" />
 			</button>
 		{/if}
-		<p class="hint">
+		<p class="help">
 			{#if selected}
 				{t('panel.assign.hint', { into: t('panel.assign.label') })}
 			{:else}
@@ -2306,18 +2286,8 @@
 	.section + .section {
 		margin-top: var(--space-6);
 	}
-	.section-title {
-		font-size: var(--text-xs);
-		font-weight: 600;
-		text-transform: uppercase;
-		letter-spacing: 0.06em;
-		color: var(--text-2);
-		margin: 0 0 var(--space-2);
-	}
-	.empty,
-	.muted {
-		color: var(--text-2);
-		margin: 0;
+	.section-label {
+		margin-bottom: var(--space-2);
 	}
 	/* Two lines per layer: who it is, and what it does. More lines and the list becomes
 	   a stack of cards you can no longer find anything in; fewer and the values can no
@@ -2352,7 +2322,7 @@
 	/* We do not dim a switched-off layer away: you still have to be able to read it and
 	   switch it on. Only the values fade, because they are doing nothing for now. */
 	.layer.off .vals .val,
-	.layer.off .vals .pill {
+	.layer.off .vals .value {
 		opacity: 0.5;
 	}
 	.layer.off {
@@ -2476,10 +2446,14 @@
 	@media (max-width: 1199px), (pointer: coarse) {
 	}
 	/* ── Dragging to reorder (L1) ─────────────────────────────────────────── */
+	/* The dots are 14 px; what you can grab is not. At 14 x 22 the grip was the smallest
+	   target in the app, so it is 24 x 28 now and hangs 14 px of that into the margin the
+	   row keeps for it — the name gives up nothing. */
 	.grip {
 		flex: none;
-		width: 14px;
-		height: 22px;
+		width: 24px;
+		height: 28px;
+		margin-inline-start: -14px;
 		/* Dragging must not select text: the first version drew a blue selection across
 		   half the screen on every drag movement. */
 		user-select: none;
@@ -2493,6 +2467,14 @@
 	.grip:hover:not(:disabled) {
 		background: var(--surface-2);
 		color: var(--text-1);
+	}
+	.grip-dots {
+		fill: currentColor;
+	}
+	/* The compact row keeps no margin for it (see its padding), so there the grip hangs
+	   only into the row's own 8 px of air. */
+	.layer.compact .grip {
+		margin-inline-start: calc(var(--space-1) * -1);
 	}
 	/* What you are holding sits apart from the list: lifted and slightly transparent, so
 	   that you see the row underneath where it will land. */
@@ -2512,6 +2494,7 @@
 	}
 	.list-bar {
 		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
 		gap: var(--space-2);
 		margin-bottom: var(--space-2);
@@ -2535,24 +2518,12 @@
 		font-size: var(--text-xs);
 		color: var(--text-2);
 	}
-	.alsLink {
-		padding: 0;
-		border: none;
-		background: none;
-		font: inherit;
-		font-weight: 500;
-		color: var(--accent);
-		text-decoration: underline;
-		text-underline-offset: 2px;
-	}
-	.alsLink:disabled { opacity: 0.5; text-decoration: none; }
-	.dichtheid {
-		gap: var(--space-1h);
+	/* On a tablet the pair goes to a line of its own rather than out of the panel. */
+	.density {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-2);
 		margin-left: auto;
-		color: var(--text-2);
-	}
-	.dichtheid:hover {
-		color: var(--text-1);
 	}
 	.kind {
 		display: grid;
@@ -2587,7 +2558,9 @@
 		padding-left: var(--space-1);
 		padding-right: var(--space-1);
 	}
-	.chip {
+	/* The layer's swatch with its burn order on it — DESIGN.md's layer swatch, a button
+	   that opens the ten colours. Not the shared `.chip`, which is a pill you switch. */
+	.layer-swatch {
 		width: 26px;
 		height: 26px;
 		flex: none;
@@ -2602,7 +2575,7 @@
 		border: 0;
 		padding: 0;
 	}
-	.chip:not(:disabled):hover {
+	.layer-swatch:not(:disabled):hover {
 		box-shadow: 0 0 0 2px var(--surface-1), 0 0 0 4px currentColor;
 	}
 	/* Burning along: a button with an on state, not a tick you have to hit. */
@@ -2618,8 +2591,8 @@
 		color: var(--text-2);
 	}
 	.out.on {
-		border-color: color-mix(in srgb, var(--ok) 55%, var(--line));
-		background: color-mix(in srgb, var(--ok) 14%, transparent);
+		border-color: var(--ok-edge);
+		background: var(--ok-tint);
 		color: var(--ok);
 	}
 	.out:hover:not(:disabled) {
@@ -2634,32 +2607,20 @@
 	.layer.is-hidden .count {
 		opacity: 0.55;
 	}
-	.tag.zicht {
-		color: var(--text-2);
-		font-weight: 400;
-	}
-	/* Air assist on: not a warning, so not in amber. A state you have to be able to see,
-	   in the ordinary text colour with a border around it. */
-	.tag.air {
-		color: var(--text-1);
-		font-weight: 400;
-		border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line));
-		border-radius: var(--radius-dot);
-		padding: 0 var(--space-2);
-		background: color-mix(in srgb, var(--accent) 14%, transparent);
+	/* Air assist: the shared chip, because it is a switch you press. On is a state, not a
+	   choice, so it does not take the chip's teal: the neutral fill of a badge in the
+	   ordinary ink — not a warning, so not in amber either. */
+	.chip.air[aria-checked='true'] {
+		background: var(--surface-2);
+		border-color: var(--line);
 	}
 	/* Off is not an empty spot but a struck-through word: doubly encoded, so that it can
 	   be read without a difference in colour too — and so that "this machine cannot do
 	   it" (no pill) stays something other than "it is switched off". */
-	.tag.air.off {
+	.chip.air.off {
 		color: var(--text-2);
-		border-color: var(--line);
 		background: transparent;
 		text-decoration: line-through;
-	}
-	.tag.air:hover:not(:disabled) {
-		border-color: var(--accent);
-		color: var(--text-1);
 	}
 	.memory {
 		margin: 0;
@@ -2672,91 +2633,63 @@
 		padding: var(--space-2);
 	}
 	.more {
-		flex: none;
-		width: 28px;
-		height: 28px;
-		border-radius: var(--radius-field);
 		color: var(--text-2);
-		line-height: 1;
 	}
-	.more:hover {
-		background: var(--surface-2);
+	.more:hover:not(:disabled) {
 		color: var(--text-1);
 	}
 	.vals {
 		display: flex;
 		flex-wrap: wrap;
-		align-items: center;
-		gap: 4px;
+		align-items: flex-end;
+		gap: var(--space-1);
 	}
 	/*
-	   A value with its unit as one thing: the field belongs with "mm/s", so they share a
-	   border and the unit cannot be clicked.
+	   A value with its unit as one thing: the global field, with the unit standing in it
+	   behind the number the way NumberField's compact form puts it there. It used to be
+	   bare until pointed at, with a border, a fill and a teal glow of its own on focus —
+	   a fourth face for a number in one panel. Now the well, its hover and its focus ring
+	   are the app's own; this only says how wide the number is and leaves room for the
+	   unit inside it.
 
-	   Bare until you point at it. Three framed pills per row turned a list of five layers
-	   into fifteen boxes — 44 buttons in the panel, and the numbers you want to compare
-	   with each other disappeared between the borders. They can still be changed on the
-	   spot (that is the reason this panel exists), but the border only comes when you are
-	   going to do something with it. On hover *and* on focus, so with the keyboard it is
-	   there too.
+	   One thing stays as it was decided (`tests/one-number-field.test.ts`, "reads as text
+	   until you point at it"): fifteen of these stand in a list of five layers and they
+	   are read far more often than changed, so at rest the well is put away — the same
+	   well, not a fourth face — and it comes back under the pointer and on focus.
 	*/
+	.layer .val input:not(:hover, :focus, :disabled) {
+		background: transparent;
+		border-color: transparent;
+	}
 	.val {
-		display: grid;
-		grid-template-columns: minmax(0, 1fr) auto;
-		align-items: center;
-		border: 1px solid var(--line);
-		border-radius: var(--radius-field);
-		background: var(--surface-1);
-		overflow: hidden;
-		transition: background var(--transition), border-color var(--transition);
+		min-width: 0;
 	}
-	.value-label { padding: 0 var(--space-1); grid-column: 1 / -1; font-family: var(--font-ui); color: var(--text-2); font-size: var(--text-xs); }
-	.val:hover {
-		border-color: var(--line);
-		background: var(--surface-2);
-	}
-	.val:focus-within {
-		border-color: var(--accent);
-		background: var(--surface-2);
-		box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent);
+	.val .well {
+		position: relative;
+		display: block;
 	}
 	.val input {
-		font: inherit;
-		font-family: var(--font-mono);
+		--unit-room: 1.1em;
+		width: calc(4.2em + var(--unit-room));
 		font-size: var(--text-sm);
-		font-variant-numeric: tabular-nums;
-		width: 4.2em;
-		min-width: 0;
 		text-align: right;
-		padding: var(--space-1) 2px var(--space-1) var(--space-2);
-		border: 0;
-		background: transparent;
-		color: var(--text-1);
-		outline: none;
+		padding-inline-end: calc(var(--space-2) + var(--unit-room));
+	}
+	.val.speed input {
+		--unit-room: 2.6em;
 	}
 	.val.narrow input {
-		width: 2.4em;
+		width: calc(2.4em + var(--unit-room));
 	}
-	/* The browser's own spinner is two pixels tall; with gloves on you cannot hit it and
-	   it eats the width the number needs. */
-	.val input::-webkit-outer-spin-button,
-	.val input::-webkit-inner-spin-button {
-		appearance: none;
-		margin: 0;
-	}
-	.val input[type='number'] {
-		appearance: textfield;
-		-moz-appearance: textfield;
-	}
-	.val span:not(.value-label) {
+	.val .suffix {
+		position: absolute;
+		inset-inline-end: var(--space-2);
+		top: 50%;
+		transform: translateY(-50%);
+		pointer-events: none;
 		font-size: var(--text-xs);
 		color: var(--text-2);
-		padding: 0 var(--space-2) 0 2px;
 		white-space: nowrap;
-	}
-	.tag {
-		color: var(--warn);
-		font-weight: 500;
 	}
 
 	/* The opener. Its face — marker, case, weight, 44 px under a glove — is the shared
@@ -2818,17 +2751,6 @@
 		color: var(--text-2);
 		white-space: nowrap;
 	}
-	.pill {
-		font-size: var(--text-xs);
-		padding: 4px 8px;
-		border-radius: var(--radius-field);
-		background: var(--surface-2);
-	}
-	.hint {
-		margin: 0;
-		font-size: var(--text-xs);
-		color: var(--text-2);
-	}
 	.section-head {
 		display: flex;
 		flex-wrap: wrap;
@@ -2836,7 +2758,7 @@
 		justify-content: space-between;
 		gap: var(--space-2);
 	}
-	.section-head .section-title { margin-bottom: 0; }
+
 	/* No nowrap: on a tablet this line is wider than the panel, and then it pushes the
 	   whole list sideways off screen instead of breaking. */
 	.order-note {
@@ -2847,19 +2769,19 @@
 	   global rule makes buttons 44 px tall but not wide enough, and the input fields fall
 	   outside it entirely. */
 	@media (max-width: 1199px), (pointer: coarse) {
-		.chip,
-		.out,
-		.more {
+		.layer-swatch,
+		.out {
 			width: 44px;
 			height: 44px;
 			min-height: 44px;
 		}
-		/* The grip is narrower than the rest but just as tall: it has to be grabbable
-		   with a finger without pushing the name out of the row. */
+		/* The grip makes the touch floor like everything else and hangs 20 px of it into
+		   the wider margin the row keeps for it here, so the name keeps the 24 px it had. */
 		.grip {
-			width: 26px;
-			height: 44px;
-			min-height: 44px;
+			width: var(--target-min);
+			height: var(--target-min);
+			min-height: var(--target-min);
+			margin-inline-start: -20px;
 		}
 		/* With a finger the grip is wider, so the margin it hangs in is too. The compact
 		   row hangs it in nothing — see its padding above — and below it has no grip at
@@ -2906,14 +2828,12 @@
 			overflow: hidden;
 			text-overflow: ellipsis;
 		}
+		/* The field makes 44 px from the touch floor; the number gets narrower. */
 		.val input {
-			/* 44 px tall, even though this is not a <button> and the global rule does not
-			   catch it. With a glove on you would otherwise bad-aim here. */
-			padding: var(--space-3) 2px var(--space-3) var(--space-2);
-			width: 3.6em;
+			width: calc(3.6em + var(--unit-room));
 		}
 		.val.narrow input {
-			width: 2.2em;
+			width: calc(2.2em + var(--unit-room));
 		}
 		/* Three 44 px touch targets beside a name do not fit in 290 px. The number of
 		   shapes goes first: that is also in the chip's tooltip and in the panel below
@@ -2935,7 +2855,7 @@
 			margin-top: var(--space-6);
 		}
 	}
-	.imagefx { display: grid; gap: 4px; min-width: 0; }
+	.imagefx { display: grid; gap: var(--space-1); min-width: 0; }
 	.fx-head { display: flex; align-items: center; gap: var(--space-2); }
 	/* min-width: 0 at every level, the way NumberField does it. `.selected > *` reaches
 	   only the card's own children, so without these the range input keeps its intrinsic
@@ -2945,46 +2865,31 @@
 	.fx {
 		border: 1px solid var(--line);
 		border-radius: var(--radius-field);
-		padding: 4px 8px;
+		padding: var(--space-1) var(--space-2);
 		min-width: 0;
 	}
-	.fx.on { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+	.fx.on { border-color: var(--accent-edge); }
 	.fx-toggle {
 		display: flex;
 		align-items: center;
-		gap: 8px;
+		gap: var(--space-2);
 		font-size: var(--text-xs);
 		color: var(--text-1);
 	}
 	.fx-value {
 		display: flex;
 		align-items: center;
-		gap: 8px;
-		margin-top: 4px;
+		gap: var(--space-2);
+		margin-top: var(--space-1);
 		font-size: var(--text-xs);
 		color: var(--text-2);
 		min-width: 0;
 	}
 	.fx-value input[type='range'] { flex: 1 1 0; min-width: 0; }
-	.fx-value select {
-		flex: 1 1 0;
-		min-width: 0;
-		font: inherit;
-		border: 1px solid var(--line);
-		border-radius: var(--radius-field);
-		background: var(--surface-2);
-		color: var(--text-1);
-	}
+	.fx-value select { flex: 1 1 0; }
 	.fx-num { min-width: 3em; text-align: right; }
-	.fx-actions { display: grid; gap: 4px; margin-top: 4px; }
-	.stray {
-		border: 1px solid color-mix(in srgb, var(--warn) 50%, var(--line));
-		border-radius: var(--radius-card);
-		background: color-mix(in srgb, var(--warn) 8%, transparent);
-		display: grid;
-		gap: 8px;
-	}
-	.stray p { margin: 0; font-size: var(--text-xs); color: var(--text-1); }
+	.fx-actions { display: grid; gap: var(--space-1); margin-top: var(--space-1); }
+	.stray p { margin: 0; }
 	/* The button under the sentence and no wider than its own words: the card is a grid,
 	   which stretched it to the full 245 px of the panel, and a full-width button in a
 	   warning card reads as a banner rather than as the way out. */
@@ -2994,35 +2899,15 @@
 	/* The read-back line under a text. Wraps rather than clips: it carries somebody's own
 	   name, and half a name is worse than two lines. */
 	.reads {
-		margin: 0;
-		font-size: var(--text-xs);
-		line-height: 1.45;
-		color: var(--text-2);
 		overflow-wrap: anywhere;
 	}
-	.tip {
-		margin: 0;
-		font-size: var(--text-xs);
-		line-height: 1.45;
-		color: var(--text-2);
-	}
-	/* A refusal has a colour. Grey is what the panel says about the normal state; the
-	   sentence that says a number was not taken wears the same warn as the pre-flight's
-	   notices and the Generators window's refusals — and only that, because the window's
-	   refusal hint is `--warn` at this size with no weight of its own, and one refused
-	   value should not read heavier in the panel than in the window. */
-	.tip.refused { color: var(--warn); }
+	/* A refusal has a colour: the sentence that says a number was not taken is
+	   `.help.warn`, the same warn as the pre-flight's notices and the Generators window's
+	   refusals, at the same weight. */
 	/* No margin of its own any more: the selection card is a grid with one gap, and a
 	   group that added its own spacing on top of it made the rhythm erratic *and* the
 	   panel longer. */
 
-	.rot-label {
-		font-size: var(--text-xs);
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		color: var(--text-2);
-		margin-right: var(--space-1);
-	}
 	.grid-row .grid-chip { background: var(--text-2); }
 	.cells {
 		display: flex;
@@ -3032,27 +2917,24 @@
 		border: 1px solid var(--line);
 		border-top: none;
 		border-radius: 0 0 var(--radius-field) var(--radius-field);
-		margin-bottom: 8px;
+		margin-bottom: var(--space-2);
 	}
 	.cell {
 		display: flex;
 		align-items: center;
-		gap: 4px;
+		gap: var(--space-1);
 		font-size: var(--text-xs);
 		color: var(--text-2);
-		padding: 2px 4px;
+		padding: 0 var(--space-1);
 		border-radius: var(--radius-field);
 		background: var(--surface-2);
 	}
-	.cell input { width: 12px; height: 12px; accent-color: var(--accent); }
 	/* Its own line (a basis of 100% breaks the row) but no wider than its words, for the
 	   same reason as the layer's own remove button above. */
 	.cells-remove {
 		flex-basis: 100%;
 		max-width: max-content;
 		margin-top: var(--space-1);
-		color: var(--danger);
-		border-color: color-mix(in srgb, var(--danger) 45%, var(--line));
 	}
 	/* The button names the outcome, not the action — see DESIGN-SYSTEM, "the primary
 	   button says *what* is coming". */
@@ -3076,36 +2958,14 @@
 		border-top: 0;
 		border-radius: 0 0 var(--radius-field) var(--radius-field);
 	}
-	/* Not the `.val` labels the compact fold takes over from the row: this rule (0,1,1)
-	   outranks `.val` (0,1,0), and with them in it the number and its unit broke in two,
-	   "12" over "mm/s", in the one place that promised the same fields one line lower.
-	   Measured before: the unit sat 2 px under its number and the three fields were
-	   43.9 px tall at 1440 x 900 (65.7 at 1024 x 768) against 25.9 (44.8) for the same
-	   fields in the roomy row. Excluded rather than overruled, so how a `.val` lays out
-	   is decided in one place only — the `.val` rule itself. Its number and unit carry
-	   their own font-size and colour, so they lose nothing here. */
-	.layer-edit label:not(.val) {
-		display: grid;
-		gap: 2px;
-		font-size: var(--text-xs);
-		color: var(--text-2);
-	}
 	.layer-edit .wide { grid-column: 1 / -1; }
 	.steppers { display: grid; gap: var(--space-2); }
 	.layer-edit label.check {
+		display: grid;
 		grid-template-columns: auto 1fr;
 		align-items: center;
 		gap: var(--space-2);
 		font-size: var(--text-xs);
-	}
-	.layer-edit input[type='text'] {
-		font: inherit;
-		width: 100%;
-		padding: var(--space-2);
-		border: 1px solid var(--line);
-		border-radius: var(--radius-field);
-		background: var(--surface-2);
-		color: var(--text-1);
 	}
 	/* Ten fixed colours, because a free colour picker produces tints that can no longer
 	   be told apart on the canvas. */
@@ -3115,7 +2975,7 @@
 		grid-column: 1 / -1;
 		display: grid;
 		grid-template-columns: repeat(5, minmax(0, 1fr));
-		gap: 4px;
+		gap: var(--space-1);
 	}
 	.swatch {
 		width: auto;
@@ -3135,7 +2995,7 @@
 		align-items: center;
 		gap: var(--space-1);
 	}
-	.order .rot-label {
+	.order .label-section {
 		grid-column: 1 / -1;
 		margin: 0;
 	}
@@ -3148,9 +3008,9 @@
 		gap: var(--space-2);
 		margin-top: var(--space-2);
 		padding: var(--space-2);
-		border: 1px solid color-mix(in srgb, var(--danger) 45%, var(--line));
+		border: 1px solid var(--danger-edge);
 		border-radius: var(--radius-field);
-		background: color-mix(in srgb, var(--danger) 8%, transparent);
+		background: var(--danger-tint);
 		font-size: var(--text-xs);
 		color: var(--text-1);
 	}
@@ -3160,11 +3020,7 @@
 	   empty panel to their right — measured at 1440 — while the same question about a
 	   sheet, a few hundred pixels away, was answered at the right-hand edge. */
 	.confirm .ask-actions { flex: 1; }
-	.drop { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, var(--line)); }
-	/* A red text link, not a filled button: which is why the class is not called
-	   `danger` — the safety net in tokens.css fills every `button.danger` solid red on
-	   hover, and that belongs to a button that erases straight away. This one opens a
-	   confirmation. */
+	/* The answer that removes is the shared `.btn.danger`: it erases straight away. */
 	/* A red-lettered button, not a filled one: which is why the class is not called
 	   `danger` — the safety net in tokens.css fills every `button.danger` solid red on
 	   hover, and that belongs to a button that erases straight away. This one opens a
@@ -3175,7 +3031,7 @@
 		justify-self: start;
 		margin-top: var(--space-2);
 		color: var(--danger);
-		border-color: color-mix(in srgb, var(--danger) 45%, var(--line));
+		border-color: var(--danger-edge);
 	}
 	/* Assign sits on the values line, not before the name: otherwise the whole row
 	   shifts as soon as you select something. */
@@ -3189,12 +3045,12 @@
 	.assign.in {
 		border-style: solid;
 		border-color: var(--accent);
-		background: color-mix(in srgb, var(--accent) 14%, transparent);
+		background: var(--accent-tint);
 		color: var(--accent);
 	}
 	.assign.partly {
 		border-style: solid;
-		border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+		border-color: var(--accent-edge);
 		color: var(--text-1);
 	}
 	.selected {
@@ -3252,16 +3108,16 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
-	.laagchip {
+	.layer-ref {
 		display: inline-flex;
 		align-items: center;
-		gap: 4px;
+		gap: var(--space-1);
 		max-width: 11ch;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
-	.laagchip + .laagchip::before {
+	.layer-ref + .layer-ref::before {
 		content: ',';
 		margin-right: 2px;
 	}
@@ -3270,7 +3126,7 @@
 	   would have stayed put on the screen you read at arm's length. The box is sized
 	   from the letters (em, so of this element's own font-size), not the letters from
 	   the box. */
-	.stip {
+	.layer-num {
 		flex: none;
 		display: inline-flex;
 		align-items: center;
@@ -3281,11 +3137,11 @@
 		border-radius: var(--radius-field);
 		font-size: var(--text-xs);
 		line-height: 1;
-		border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+		border: 1px solid var(--edge-on-color);
 	}
 	/* No layer means: this shape does not go into the machine. That is not an error, but
 	   it is the only case here where you have to do something. */
-	.geenlaag { color: var(--warn); }
+	.no-layer { color: var(--warn); }
 	.in-layers {
 		display: flex;
 		align-items: baseline;
@@ -3300,10 +3156,9 @@
 	}
 	/* The same colour the Layers row gives the layer it is about: a layer that does
 	   not burn is the one thing in this header you may have to act on. */
-	.laagchip.off { color: var(--warn); }
+	.layer-ref.off { color: var(--warn); }
 	.clear {
 		font-size: var(--text-xs);
-		color: var(--accent);
 		flex: none;
 		margin-left: auto;
 	}
@@ -3320,33 +3175,18 @@
 		gap: var(--space-1) var(--space-2);
 	}
 	.figures > :global(.field) { grid-column: 1; }
-	.figures .link {
+	/* The chain: an icon button that holds two values together, beside the pair. Linked
+	   is a chosen state, so it takes the tint a chosen thing takes; off, the shared
+	   button drains it like the fields beside it. */
+	.figures .chain {
 		grid-column: 2;
 		grid-row: 1 / span 2;
-		display: grid;
-		place-items: center;
-		width: 100%;
-		min-width: 1.6em;
-		height: 30px;
-		border: 1px solid transparent;
-		border-radius: var(--radius-field);
 		color: var(--text-2);
 	}
-	.figures .link[aria-pressed='true']:not(:disabled) {
+	.figures .chain[aria-pressed='true']:not(:disabled) {
 		color: var(--accent);
-		border-color: color-mix(in srgb, var(--accent) 40%, transparent);
-		background: color-mix(in srgb, var(--accent) 10%, transparent);
-	}
-	.figures .link:hover:not(:disabled) { background: var(--surface-2); }
-	/* Off is off, and it has to look it. The chain kept its teal pressed background and
-	   opacity 1 while the number fields beside it dropped — controls switched off by one
-	   lock, one of them still looking live. Same treatment as `.icon:disabled` below. */
-	.figures .link:disabled {
-		opacity: 0.4;
-		cursor: not-allowed;
-		color: var(--text-2);
-		border-color: transparent;
-		background: none;
+		background: var(--accent-tint);
+		border-color: var(--accent-edge);
 	}
 
 	/* The anchor: where you came from, and the way back. Neutral in colour — this is not
@@ -3371,7 +3211,7 @@
 	.anchor-back {
 		gap: var(--space-1);
 		flex: none;
-		color: var(--accent-text);
+		color: var(--accent);
 	}
 	.anchor-back:hover:not(:disabled) { border-color: var(--accent); }
 
@@ -3382,14 +3222,6 @@
 		padding-top: var(--space-2);
 		margin-top: calc(var(--space-1) * -1);
 	}
-	.fold-note {
-		font-weight: 400;
-		color: var(--text-2);
-	}
-	.fold-note.on {
-		color: var(--accent-text);
-		font-variant-numeric: tabular-nums;
-	}
 
 	/* Beside the machine with a finger. This block is deliberately right at the bottom:
 	   the rules above have the same specificity, so whoever comes first loses. */
@@ -3399,10 +3231,6 @@
 		   menu and the rotation steps became the angle field's own, this is only about the
 		   chain and the folds — the number fields bring their 44 px with them, from the one
 		   component they are all made of. */
-		.figures .link {
-			height: 44px;
-			min-height: 44px;
-		}
 		.figures { gap: var(--space-2) var(--space-3); }
 	}
 </style>

@@ -140,7 +140,7 @@ test('forgetting the alignment gives the ordinary job back', async (t) => {
 	// `job-quiet.test.ts` for why the panel stopped explaining what is switched off.
 	assert.match(await block(), /PRINT AND CUT Off /);
 	assert.equal(
-		await page.locator('p.hint.off[title]').last().getAttribute('title'),
+		await page.locator('p.help.off[title]').last().getAttribute('title'),
 		'Off. The work burns where you drew it. Pick the two marks that are on your material as well — printed crosses, drilled holes, an engraved corner — and point them out here.'
 	);
 	assert.equal((await (await fetch(`${BASE}/api/printcut`)).json()).aligned, false);

@@ -9,6 +9,7 @@
 		remainingSeconds,
 		transportAllowed,
 		machineName,
+		progressIsLive,
 		PAUSE_KEY,
 		STOP_KEY,
 		type Device,
@@ -25,6 +26,12 @@
 	import { rotary } from '$lib/rotary.svelte';
 	import type { RotaryState } from '$lib/rotary';
 	import Segmented from './Segmented.svelte';
+	import Notice from './Notice.svelte';
+	import Why from './Why.svelte';
+	import Icon from './Icon.svelte';
+	import EmptyState from './EmptyState.svelte';
+	import Menu from './Menu.svelte';
+	import type { Menu as MenuList } from '$lib/actions';
 
 	let {
 		control,
@@ -284,7 +291,7 @@
 	 * Does it fit on the bed, and does it fit on the sheet? (gaps J5 and C2)
 	 *
 	 * Both questions are answered by the server and not here: it measures them for the
-	 * canvas and the phone anyway, and three places computing it themselves can
+	 * canvas anyway, and two places computing it themselves can
 	 * disagree about the edge. `bounds` therefore belongs in `/api/job/layers` and not
 	 * only in `/api/job/estimate` — otherwise "falls off the bed" only appears once the
 	 * clock is back, and on a heavy design that can take seconds.
@@ -623,6 +630,33 @@
 	});
 	let remaining = $derived(phase === 'done' ? 0 : remainingSeconds(job));
 
+	/**
+	 * Is the card reporting, or remembering?
+	 *
+	 * The job keeps its state when the link to the controller drops, but then its figures
+	 * are the last thing we heard. A confident "Burning 42%" in the accent beside a
+	 * machine nobody can reach says the laser is doing something we do not know; so the
+	 * card says "last known" in muted ink, and the bar stands still. Stop is untouched:
+	 * `transportAllowed` decides that, here as in the top bar.
+	 */
+	let live = $derived(progressIsLive(device, connection.online));
+	let stale = $derived(!live && busyWithWork);
+	/** When we last heard, if anything says: the server's own outage clock, or how long
+	 *  the controller link has read the same. */
+	let heardAt = $derived.by(() => {
+		if (!connection.online) return connection.since;
+		const held = device?.connection?.held_ms;
+		return typeof held === 'number' ? Date.now() - held : null;
+	});
+	let lastKnown = $derived(
+		progressPart === null
+			? t('job.lastKnown.noProgress', { phase: phaseTitle(phase) })
+			: t('job.lastKnown', {
+					phase: phaseTitle(phase),
+					percent: i18n.number(Math.round(progressPart * 100))
+				})
+	);
+
 	// ------------------------------------------------ sending it to the machine
 
 	/**
@@ -746,24 +780,35 @@
 	 * start button keeps its two taps, so nothing about the safety rule changes.
 	 */
 	let moreOpen = $state(false);
-	let morePos = $state({ x: 0, y: 0 });
+	let morePos = $state({ x: 0, y: 0, upward: false });
 	let uploadOpen = $state(false);
-	const MORE_WIDTH = 260;
+	/** The menu is the shared context menu (`Menu.svelte`): the same keys, the same
+	 *  flip at an edge, the same reason in the tooltip of a row that cannot be done. */
+	let moreMenu = $derived<MenuList>([
+		{
+			items: [
+				{
+					id: 'upload',
+					label: t('job.upload'),
+					off: uploadOff,
+					explain: t('job.upload.why'),
+					run: chooseUpload
+				}
+			]
+		}
+	]);
 	function openMore(button: HTMLElement) {
 		if (moreOpen) {
 			moreOpen = false;
 			return;
 		}
 		const box = button.getBoundingClientRect();
-		// Aligned to the arrow's right edge, but never off screen; above the button when
-		// there is no room below it, which in the footer is the usual case.
-		const x = Math.max(8, Math.min(box.right - MORE_WIDTH, window.innerWidth - MORE_WIDTH - 8));
+		// Aligned to the arrow's right edge — the menu flips left of `x` when it meets the
+		// edge of the window — and above the button when there is no room below it.
 		const below = window.innerHeight - box.bottom > 120;
-		morePos = { x, y: below ? box.bottom + 6 : box.top - 6 };
-		moreUpward = !below;
+		morePos = { x: box.right, y: below ? box.bottom + 6 : box.top - 6, upward: !below };
 		moreOpen = true;
 	}
-	let moreUpward = $state(false);
 	function chooseUpload() {
 		moreOpen = false;
 		uploaded = null;
@@ -781,13 +826,14 @@
 <div class="section">
 	<!-- The heading said "Controls", and that is true: these are controls. But it
 	     says nothing about what is going on right now, and that is exactly what
-	     you come to this tab for. -->
-	<h2 class="section-title">
+	     you come to this tab for. A group label, the same one the Edit and Layers
+	     tabs head their groups with. -->
+	<h2 class="label-section job-heading">
 		{busyWithWork || phase === 'done' ? t('job.section.theJob') : t('job.section.preparing')}
 	</h2>
 
 	{#if control.canAdjust && Object.values(control.adjust).some(value => value !== null && value !== 1)}
-		<div class="pf-warn strong adjust-status" role="status">
+		<Notice tone="warn" live class="adjust-status">
 			<strong>{t('job.adjust.title')}</strong>
 			{#each ADJUSTABLE as axis (axis.what)}
 				{@const level = control.adjust[axis.what]}
@@ -795,7 +841,7 @@
 					<div>{t(axis.key)}: <span class="mono">{level > 1 ? '+' : '−'}{i18n.number(Math.abs(Math.round((level - 1) * 100)))}%</span></div>
 				{/if}
 			{/each}
-		</div>
+		</Notice>
 	{/if}
 
 	{#if control.tokenProbleem}
@@ -803,15 +849,16 @@
 		     read-only. A refused token counts too: it *was* in the browser, so this
 		     field disappeared and there was no way back — every action failed with a
 		     401 and there was nowhere to put a different token. -->
-		<div class="token" class:afgewezen={control.rejected}>
-			<label for="token">
+		<div class="card token" class:afgewezen={control.rejected}>
+			<label class="field-label" for="token">
 				{control.rejected ? t('job.token.rejected') : t('job.token.label')}
 			</label>
 			<div class="token-row">
 				<input id="token" type="password" bind:value={tokenDraft} placeholder={t('job.token.placeholder')} />
 				<button class="btn" onclick={() => control.saveToken(tokenDraft)}>{t('common.save')}</button>
 			</div>
-			<p class="hint">
+			<!-- An instruction: where to find the token. You need it to act, so it stays. -->
+			<p class="help">
 				{control.rejected
 					? t('job.token.rejectedHint')
 					: t('job.token.hint')}
@@ -823,213 +870,229 @@
 		<!--
 			The preparation is always there, not only after a click.
 
-			This block sat behind the "Start job" button: you pressed, and the whole panel
-			was replaced by an overview — "everything goes off screen", as the complaint
-			put it. While this is precisely the image you look at *before* you burn
-			anything. It is now open as long as nothing is in flight.
+			Top to bottom it is read the way you check a job: what it burns on (the
+			material line and where the work goes), what is wrong with it (the warnings),
+			the one action (Prepare job, with the time on it), and then the evidence you
+			can work down — the cut path, the layer table and the drawing.
 
-			The two deliberate taps stay: VEILIGHEID.md lays down that no single click
-			burns directly. "Start job" arms, "Start now" fires — and unlike before,
-			nothing disappears from view on that first tap.
+			The two deliberate taps stay: no single click burns. "Prepare job" arms,
+			"Start now" fires — and nothing disappears from view on that first tap.
 		-->
 		<div class="preflight" class:none={empty}>
-			<!-- A clock reading 0:00 above an empty bed reads as a job of zero seconds
-			     instead of as no job. With nothing to do the clock on the start button
-			     stays away — the guard on `estimate?.seconds` at the foot of this panel
-			     — and the message below speaks instead. -->
-			<!-- The numbers first and the drawing under them, against decision B8's
-			     order: see the block further down for the measurement that turned it
-			     round. On tablet and phone the canvas is not beside this panel, so the
-			     drawing has to be in the column — but at the end of it, where the
-			     sticky footer may cover it. -->
 			{#if !empty}
-				<!-- The converter that turns a grid area into laser lines lives in
-				     the wxPython version of the engine. When it is missing, the layer
-				     throws its own shapes away during planning and nothing comes out
-				     of the machine. The same words as the block in the test-grid
-				     wizard: whoever read them there recognises them here — and the
-				     other way round. -->
-				{#if rasterOff && blindLayers.length}
-					<p class="pf-no-raster" role="alert">
-						<strong>{t('job.noRaster.title')}</strong>
-						{blindLayers.length === 1
-							? t('job.noRaster.one', { label: blindLayers[0].label })
-							: t('job.noRaster.many', { n: blindLayers.length })}
-					</p>
-				{/if}
-				<!-- No "Estimated time" row here. The same minutes stand on the start
-				     button at the foot of the panel, and both were on screen at once,
-				     400 px apart — measured "Estimated time 2:31" at y 415 and
-				     "Start job 2:31" at y 816 at 1440 x 900. One of them had to go, and
-				     the one to keep is the one on the thing you press: it is never
-				     scrolled away, and the number is read at the moment it is acted on.
-				     While a new time is worked out the button says so on itself — see
-				     `.pf-start-busy`. -->
-				{#if seriesLeft}
-					<!-- The clock on the start button is one plate; a series of fifty must
-					     never show the time of one. Both numbers come off the estimate
-					     itself — see `seriesLeft` — so this line and that one cannot
-					     disagree. -->
-					<p class="pf-row series">{seriesLeft}</p>
-				{/if}
-				<!-- *What* is being burned, right above the settings it is burned
-				     with. Without it there is a table of numbers with no subject. -->
-				<!-- Always a line, even without material. Saying nothing reads as
-				     "not needed"; and then you run a birch preset on acrylic. -->
+				<!-- *What* is being burned, first. Always a line, even without material:
+				     saying nothing reads as "not needed", and then you run a birch preset on
+				     acrylic. -->
 				<div class="pf-time sheet" class:unknown={!sheetText}>
-					<span class="muted">{t('job.material')}</span>
+					<span class="field-label">{t('job.material')}</span>
 					<span class="v">{sheetText ?? t('job.material.none')}</span>
 				</div>
-					{#if control.origin}
-						<!-- Gap J12: a zero point moves the work on the bed, and the
-						     preflight is the last moment you can still see that. So it is
-						     here as a line of its own — saying nothing would mean the one
-						     screen before burning does not say *where* it burns. -->
-						<div class="pf-time sheet">
-							<span class="muted">{t('job.origin')}</span>
-							<span class="v mono"
-								>{size(control.origin.x_mm)},&#8239;{size(control.origin.y_mm)} mm</span
+				{#if control.origin}
+					<!-- Gap J12: a zero point moves the work on the bed, and the pre-flight
+					     is the last moment you can still see that. -->
+					<div class="pf-time sheet">
+						<span class="field-label">{t('job.origin')}</span>
+						<span class="v mono"
+							>{size(control.origin.x_mm)},&#8239;{size(control.origin.y_mm)} mm</span
+						>
+					</div>
+				{/if}
+				{#if cut?.aligned}
+					<div class="pf-time sheet">
+						<span class="field-label">{t('job.printcut')}</span>
+						<span class="v mono">{size(cut.offset_mm?.x_mm ?? 0)}, {size(cut.offset_mm?.y_mm ?? 0)} mm · {i18n.number(Math.round((cut.angle_deg ?? 0) * 100) / 100)}°</span>
+					</div>
+				{/if}
+
+				<!-- The warnings, heaviest first, all above the button they are about. -->
+				{#if rasterOff && blindLayers.length}
+					<!-- The converter that turns a raster area into laser lines lives in the
+					     wxPython version of the engine. The same words as the block in the
+					     test-grid wizard. -->
+					<Notice tone="danger" live>
+						<strong>{t('job.noRaster.title')}</strong>
+						<span>
+							{blindLayers.length === 1
+								? t('job.noRaster.one', { label: blindLayers[0].label })
+								: t('job.noRaster.many', { n: blindLayers.length })}
+						</span>
+					</Notice>
+				{/if}
+				{#if device?.connection?.state === 'disconnected'}
+					<!-- A confirmed disconnection blocks the final start. -->
+					<Notice tone="warn" live>{t('job.notResponding')}</Notice>
+				{/if}
+				{#if mismatch.length}
+					<!-- A setting from *other* material is not a matter of trust but of the
+					     wrong board, so it is named by layer. A measured value from the
+					     wrong material outranks a calculated value on the right one; when
+					     both stand here the badge says which to fix first. -->
+					<Notice tone="warn" live>
+						<ul class="pf-mismatch">
+							{#each mismatch as notice, i (i)}
+								<li class:lighter={notice.weight < 2}>
+									{#if i === 0 && firstWeighsMore}
+										<span class="badge warn">{t('job.first')}</span>
+									{/if}<strong>{notice.layer}</strong> — {notice.text}
+								</li>
+							{/each}
+						</ul>
+					</Notice>
+				{/if}
+				{#if rotaryText}
+					<!-- The rotary changes the shape of what comes out, and what it does to
+					     the frame is said with it. Two whole sentences beside each other,
+					     not two halves of one. -->
+					<Notice tone="warn">{rotaryText} {t('job.rotary.frame')}</Notice>
+					{#if overview?.rotary?.overlap}
+						<Notice tone="warn">
+							{t('rotary.overlap', {
+								work: i18n.number(overview.rotary.overlap.burns_mm),
+								circumference: i18n.number(overview.rotary.overlap.circumference_mm)
+							})}
+						</Notice>
+					{/if}
+				{/if}
+				{#if !cut?.aligned && cut?.lapsed}
+					<Notice tone="warn">{t(cut.lapsed === 'gone' ? 'job.printcut.lapsed.marks' : 'job.printcut.lapsed.machine')}</Notice>
+				{/if}
+				{#if pfLayers.length && risky.length}
+					<p class="help warn">{t('job.risky', { n: risky.length })}</p>
+				{/if}
+			{/if}
+
+			{#if empty && designLoaded}
+				<!-- No checklist, no start button: there is nothing to run through. -->
+				<EmptyState title={t('job.nothing.title')} text={t('job.nothing.body')} />
+			{:else if designLoaded}
+				<!--
+					The one action, directly under what it is about.
+
+					It sat in a sticky footer at the end of the column, because the column
+					was longer than the panel and the button stood last. It stands after the
+					warnings now, and stays sticky: should the warnings ever run past the
+					foot of the panel, the button stops at the bottom edge instead of
+					scrolling away.
+				-->
+				<div class="pf-stick">
+					<!-- The checklist comes up on the tap that arms the burn: between
+					     "Prepare job" and "Start now" is when you walk round the machine. -->
+					{#if preflight}
+						<div class="card inset pf-check">
+							<p class="label-section">{t('job.checklist.title')}</p>
+							<ul>
+								<li>{t('job.checklist.lid')}</li>
+								<li>{t('job.checklist.air')}</li>
+								<li>{t('job.checklist.workpiece')}</li>
+							</ul>
+						</div>
+					{/if}
+					<div class="pf-actions">
+					{#if preflight}
+						<!-- Two deliberate taps, in the same place. The first arms, the second
+						     fires. -->
+						<button class="btn" onclick={() => (preflight = false)}>{t('common.cancel')}</button>
+						<button
+							class="btn primary big"
+							onclick={confirmStart}
+							disabled={!actions?.start || blocked || seriesRunning || device?.connection?.state === 'disconnected'}
+							title={device?.connection?.state === 'disconnected' ? t('job.notResponding') : seriesRunning
+								? t('api.series.runGoing')
+								: connection.online
+									? undefined
+									: blockedReason}
+						>
+							{control.busy === 'start' ? t('job.starting') : t('job.startNow')}
+						</button>
+					{:else}
+						<!-- One control in two parts: the button that arms the burn — the one
+						     primary on this tab — and beside it, quiet, the arrow with the other
+						     thing you can do with a ready job: send it to the machine's memory. -->
+						<div class="pf-split">
+							<button
+								class="btn primary big"
+								disabled={!actions?.start || blocked || seriesRunning}
+								aria-busy={estimating}
+								title={seriesRunning ? t('api.series.runGoing') : blockedReason}
+								onclick={() => (preflight = true)}
 							>
+								<!-- The last known time stays while a new one is worked out; the
+								     ellipsis after it only turns visible, so the button does not
+								     change width on an edit. The word is for a reader who has no
+								     ellipsis to see. -->
+								{t('job.startJob')}{#if estimate?.seconds ?? job?.estimate_seconds}
+									<span class="pf-start-time"
+										>{formatDuration(estimate?.seconds ?? job?.estimate_seconds)}</span
+									><span class="pf-start-busy" class:rekent={estimating} aria-hidden="true"></span
+									>{/if}{#if estimating}<span class="pf-start-word">{t('job.estimating')}</span>{/if}
+							</button>
+							<button
+								class="btn big pf-more"
+								aria-haspopup="menu"
+								aria-expanded={moreOpen}
+								aria-label={t('job.more')}
+								title={t('job.more')}
+								onclick={(e) => openMore(e.currentTarget as HTMLElement)}
+							>
+								<Icon name="chevron-down" />
+							</button>
 						</div>
-					{/if}
-					{#if cut?.aligned}
-						<div class="pf-time sheet">
-							<span class="muted">{t('job.printcut')}</span>
-							<span class="v mono">{size(cut.offset_mm?.x_mm ?? 0)}, {size(cut.offset_mm?.y_mm ?? 0)} mm · {i18n.number(Math.round((cut.angle_deg ?? 0) * 100) / 100)}°</span>
-						</div>
-					{:else if cut?.lapsed}
-						<p class="pf-warn">{t(cut.lapsed === 'gone' ? 'job.printcut.lapsed.marks' : 'job.printcut.lapsed.machine')}</p>
-					{/if}
-					{#if rotaryText}
-						<!-- The rotary changes the shape of what comes out, so it belongs on
-						     the one screen you read before burning. A job that silently comes
-						     out stretched costs the workpiece, and you have one of those. -->
-						<!-- What the rotary does to the frame is said here, with the rest
-						     of what the rotary changes. It used to hang in the tooltip of a
-						     "Show frame" in the footer, and that button is gone: the top bar
-						     carries the one frame there is. A tooltip is no place for it on a
-						     tablet either. The sentence names the top bar itself, because the
-						     button it is about is three surfaces away from this line. Two
-						     whole sentences beside each other, not two halves of one: the
-						     rotary's own line comes from `job.rotary.chuck` or
-						     `job.rotary.roller` and reads on its own in any word order. -->
-						<p class="pf-warn strong">{rotaryText} {t('job.rotary.frame')}</p>
-						{#if overview?.rotary?.overlap}
-							<p class="pf-warn">
-								{t('rotary.overlap', {
-									work: i18n.number(overview.rotary.overlap.burns_mm),
-									circumference: i18n.number(overview.rotary.overlap.circumference_mm)
-								})}
-							</p>
+						{#if moreOpen}
+							<Menu
+								menu={moreMenu}
+								x={morePos.x}
+								y={morePos.y}
+								upward={morePos.upward}
+								onClose={() => (moreOpen = false)}
+							/>
 						{/if}
 					{/if}
-					<!-- No second line with the job size: the view above already puts
-				     "work 120 × 80 mm" under the drawing (decision B8). That same
-				     number again as a row of its own, ninety pixels lower, is not
-				     information but noise. What the view does *not* do is hold the work
-				     up against the bed — that is below. -->
-			{/if}
-			{#if !empty && device?.connection?.state === 'disconnected'}
-				<!-- A confirmed disconnection blocks the final start. -->
-				<p class="connection-note" role="status">{t('job.notResponding')}</p>
-			{/if}
-			{#if estimateSlow}
-				<p class="pf-row">{t('job.estimateSlow')}</p>
-			{/if}
-			<!-- Only shown when there is something in it: "In queue: 0" just before
-			     starting is the normal situation, and therefore not news. -->
-			{#if queued > 0}
-				<div class="pf-row">{t('job.queueAhead', { n: queued })}</div>
+					</div>
+				</div>
 			{/if}
 
-			<!-- What the machine is going to *do*. Time and count alone is theatre: a
-			     laser cutter checks speed, power and passes before putting anything in
-			     the machine. -->
-			{#if pfLayers.length}
-				<!-- The general warning above the table because it is read before the
-				     rows, not because it would otherwise be last: what is last in this
-				     column now is the drawing. One line saying that something is wrong
-				     with these settings is the sentence you want before you start
-				     reading numbers, and it is the only one of the three that says
-				     anything if you read nothing else.
-
-				     Measured on this build in the state the app opens in — four layers
-				     on unverified presets, no machine attached, so the "not responding"
-				     card stands above this line: the warning runs 202-282 at
-				     1440 x 900, 1366 x 768 and 1280 x 800 and 222-313 at 1024 x 768,
-				     against footer tops of 729, 671, 703 and 654, and
-				     `elementFromPoint` on its middle answers the paragraph itself at all
-				     four. (Before this round it stood under the footer: at 1024 x 768 its
-				     middle answered `BUTTON.btn` and at 1366 x 768 `SPAN.pf-head`.)
-
-				     The concrete objections stay below the table, beside the rows they
-				     name. So the order is: what is wrong in one line, the settings, then
-				     which layer is wrong and why. -->
-				{#if risky.length}
-					<p class="confidence-note">{t('job.risky', { n: risky.length })}</p>
+			{#if !empty}
+				<!-- What the time on the button does not say: the afternoon behind one
+				     plate, an estimate still on its way, jobs ahead in the queue. -->
+				{#if seriesLeft}
+					<p class="pf-series">{seriesLeft}</p>
 				{/if}
-				<!-- The button heads the table, as its caption: these are the layers,
-				     and this is the order they burn in. It stood under the drawing once
-				     and travelled to the end of the column with it, where the sticky
-				     footer lay over it (687-717 against a footer top of 671 at
-				     1366 x 768, 771-815 against 654 at 1024 x 768, `elementFromPoint`
-				     answering the footer's own button); then at the foot of the table,
-				     which held everywhere except the state with the most to say — with a
-				     rotary fitted the two extra sentences pushed it to 714-758 at
-				     1024 x 768, again under the footer at 654. Above the table it clears
-				     at every size in both states, because nothing that grows stands
-				     between it and the top of the column.
-
-				     It costs the table: at 1024 x 768 with a rotary the header row now
-				     sits where the first body row did. Prose under the footer you can
-				     still scroll to; a control under it cannot be pressed at all, so the
-				     button goes first. `tests/preflight-fold.test.ts` measures both.
-
-				     Deliberately *not* in the sticky row with the start button either:
-				     measured at 1440 px with three buttons in that row, "Start job 1:26"
-				     was clipped at the right edge of the panel — the primary action half
-				     off screen, which is the very thing the second usability round
-				     fixed. -->
-				{#if onCutPath}
-					<button class="btn mini pf-order" title={t('cutpath.show.title')} onclick={() => onCutPath?.()}>
-						{t('cutpath.show')}
-					</button>
+				{#if estimateSlow}
+					<p class="help">{t('job.estimateSlow')}</p>
 				{/if}
-				<table class="pf-layers">
-					<thead>
-						<tr><th>{t('job.layer')}</th><th>mm/s</th><th>%</th><th>×</th><th>{t('job.source')}</th></tr>
-					</thead>
-					<tbody>
-						<!-- Keyed on the index, not on the label: two operations of the same
-						     type are both called "Engrave", and a duplicate key makes Svelte
-						     update the table wrongly. -->
-						{#each pfLayers as layer, i (i)}
-							<tr>
-								<td class="pf-name" title={layer.label}>
-										<!-- Two cut layers are both called "Cut"; the chip is the only
-										     thing telling them apart, and it is the same colour as on the
-										     canvas and in the layer list.
+				{#if queued > 0}
+					<p class="help">{t('job.queueAhead', { n: queued })}</p>
+				{/if}
 
-										     Gap J7: with the layer number in it. The design system forbids
-										     information that lives in colour alone, and of ten layer
-										     colours two collide under deuteranopia. The number comes from
-										     `layerNumber()` — the same source as the chip in the layer panel
-										     and the digit beside the shape on the canvas, so they cannot
-										     drift apart. -->
+				<!-- What the machine is going to *do*: speed, power and passes, headed by
+				     the way in to the order they burn in. -->
+				{#if pfLayers.length}
+					{#if onCutPath}
+						<button class="btn mini pf-order" title={t('cutpath.show.title')} onclick={() => onCutPath?.()}>
+							{t('cutpath.show')}
+						</button>
+					{/if}
+					<table class="pf-layers">
+						<thead>
+							<tr><th>{t('job.layer')}</th><th>mm/s</th><th>%</th><th>{t('queue.passes')}</th><th>{t('job.source')}</th></tr>
+						</thead>
+						<tbody>
+							<!-- Keyed on the index, not on the label: two operations of the same
+							     type are both called "Engrave". -->
+							{#each pfLayers as layer, i (i)}
+								<tr>
+									<td class="pf-name" title={layer.label}>
+										<!-- Gap J7: the swatch carries the layer number from
+										     `layerNumber()`, the same source as the layer panel and
+										     the canvas, so colour is never the only signal. -->
 										{#if colorFor}
 											{@const number = layerNumber(design, layer.id)}
-											<!-- Without `aria-hidden` a screen reader would otherwise hear a
-											     bare digit in front of the layer name: "1 Cut". `role="img"`
-											     with a name turns it into "Layer 1, Cut"; without a role most
-											     screen readers ignore an aria-label on a span. With no number
-											     the chip is colour only, and therefore decoration — that one
-											     stays hidden. -->
 											{#if number === null}
-												<span class="chip mono" style:background={colorFor(layer.id)} aria-hidden="true"
+												<span class="swatch" style:background={colorFor(layer.id)} aria-hidden="true"
 												></span>
 											{:else}
 												<span
-													class="chip mono numbered"
+													class="swatch mono numbered"
 													style:background={colorFor(layer.id)}
 													style:color={inkOn(colorFor(layer.id))}
 													role="img"
@@ -1038,87 +1101,26 @@
 											{/if}
 										{/if}{layer.label}
 									</td>
-								<!-- A layer this engine does not carry out must not show speed and
-								     power as if something is going to happen. The provenance goes
-								     too: where the numbers come from is beside the point when they
-								     are not used. -->
-								{#if layer.burns === false}
-									<td class="pf-blind" colspan="4">{t('panel.tag.doesNotBurn')}</td>
-								{:else}
-									<td class="mono">{layer.speed_mm_s ?? '—'}</td>
-									<td class="mono">{layer.power_percent ?? '—'}</td>
-									<td class="mono">{layer.passes}</td>
-									<!-- "measured" in calm text above a setting that was measured on
-									     *other* material reassures where it should not. The line below
-									     says what is wrong with it; here the colour says at least that
-									     there is something. -->
-									<td class:unsure={layer.source !== 'testraster' || (layer.warnings?.length ?? 0) > 0}>
-										{source(layer)}
-									</td>
-								{/if}
-							</tr>
-						{/each}
-					</tbody>
-				</table>
-				<!-- The concrete objection first, the general one after. A setting from
-				     *other* material is not a matter of trust but of the wrong board:
-				     that belongs at the top, and by name.
-
-				     Within the list not everything weighs the same. A measured value
-				     from the wrong material outranks a calculated value on the right
-				     one, and when those two state side by side the tag says which to
-				     fix first. -->
-				{#if mismatch.length}
-					<ul class="pf-mismatch" role="alert">
-						{#each mismatch as notice, i (i)}
-							<li class:lighter={notice.weight < 2}>
-								{#if i === 0 && firstWeighsMore}
-									<span class="first">{t('job.first')}</span>
-								{/if}<strong>{notice.layer}</strong> — {notice.text}
-							</li>
-						{/each}
-					</ul>
+									<!-- A layer this engine does not carry out shows no speed and
+									     power as if something is going to happen. -->
+									{#if layer.burns === false}
+										<td class="pf-blind" colspan="4">{t('panel.tag.doesNotBurn')}</td>
+									{:else}
+										<td class="mono">{layer.speed_mm_s ?? '—'}</td>
+										<td class="mono">{layer.power_percent ?? '—'}</td>
+										<td class="mono">{layer.passes}</td>
+										<td class:unsure={layer.source !== 'testraster' || (layer.warnings?.length ?? 0) > 0}>
+											{source(layer)}
+										</td>
+									{/if}
+								</tr>
+							{/each}
+						</tbody>
+					</table>
 				{/if}
-			{/if}
 
-			<!-- The drawing comes after the numbers about it, and not before them
-			     (which is what decision B8 laid down). The reason is the footer: it is
-			     sticky, so whatever stands last in the column is what it lies over, and
-			     with the picture first the numbers stood last. Measured on this seed —
-			     four layers on unverified presets, no machine attached, which is the
-			     state the app opens in — the footer's top was at 660 (1440 x 900), 528
-			     (1366 x 768), 560 (1280 x 800) and 493 (1024 x 768), while the picture
-			     alone took 181 px at 1440 and 215 px at 1024 and the material row, both
-			     warnings and the table ran from 411 to 705 (1440) and 475 to 800
-			     (1024). So the picture is what the footer covers now, and the numbers
-			     are read where they stand. `tests/preflight-fold.test.ts` measures it.
-
-			     The bed and sheet messages travel with it, because they belong under
-			     the shape they are about (gaps J5 and C2), and the block's tail is what
-			     the footer lies over now. Measured on this build, as the panel opens:
-			     `.pf-beeld` runs 520-717 against a footer top of 671 at 1366 x 768 (46
-			     px under) and against 703 at 1280 x 800 (14 px under), and 580-814
-			     against 654 at 1024 x 768 (160 px under); at 1440 x 900 it is clear
-			     (520-717 against 729). The picture is itself the button that enlarges
-			     it, so at 1024 x 768 112 of its 186 px are covered and its middle
-			     answers `BUTTON.btn`.
-
-			     That is a covering and not a hiding. `.preflight` is not the last block
-			     in `.panel-scroll`, so the sticky footer lets go at its foot: scrolled
-			     until the pre-flight's bottom edge meets the bottom of the scroller, the
-			     drawing and the button in it stand clear and answer for themselves at
-			     all four sizes and with a rotary fitted too — measured 597-794 (1440),
-			     465-662 (1366), 497-694 (1280) and 411-644 (1024), footer tops 803, 671,
-			     703 and 654. A bottom padding the height of the footer was tried here
-			     and changes none of those numbers: it only makes the scroller 69 px
-			     longer, because the footer is already out of the way by then.
-			     `tests/preflight-fold.test.ts` measures both halves. -->
-			{#if !empty}
-				<!-- The messages about bed and sheet belong to the drawing and so
-				     live in it, right under the shape they are about (gaps J5 and C2).
-				     They used to be here as two equally red cards in a row; that made
-				     "there is no material there" as serious as "the head does not get
-				     there", and then neither carries any weight. -->
+				<!-- The drawing, with the bed and sheet messages under the shape they are
+				     about (gaps J5 and C2). -->
 				<JobPreview
 					design={design}
 					sheet={overview?.sheet ?? null}
@@ -1126,189 +1128,29 @@
 					{colorFor}
 				/>
 			{/if}
-
-			{#if empty && designLoaded}
-				<!-- No checklist, no start button: there is nothing to run through. -->
-				<div class="pf-empty">
-					<strong>{t('job.nothing.title')}</strong>
-					<p>{t('job.nothing.body')}</p>
-				</div>
-				<!-- This used to say "Back to the design", which was the only way out
-				     of an overview that had taken over the panel. The panel takes
-				     nothing over now, so there is nothing to return from. -->
-			{:else if designLoaded}
-			<!-- This used to be a second yellow block under the risk warning. Two
-			     warnings in a row of the same colour devalue each other: the routine
-			     check made the real message invisible. Neutral now, and as a list,
-			     because you work down it. -->
-			<!--
-				The buttons stick to the bottom of the panel.
-
-				Since the preparation is always open, the scroller it sits in is taller
-				than the panel is high. Measured on this build, on the seed of
-				`tests/preflight-fold.test.ts`: `.panel-scroll` holds 1,407 px of
-				content in 788 px at 1440 x 900 and 1,668 px in 630 px at 1024 x 768.
-				The pre-flight block itself now fits (`.preflight` is 673 px and 759 px
-				at those two sizes, against 804 and 906 before this repair), but the
-				scroller around it does not, so without this sticky footer the start
-				button would still scroll away — the primary action out of sight, which
-				is exactly what this round had to solve, not cause.
-
-				What sticks is only what you press. The footer was 211.6 px at 1440 and
-				230.5 px at 1024 — a quarter to a third of the panel — and it spent that
-				on a checklist whose eleven words never change and on a "Show frame" the
-				top bar carries as well. Both are gone from the resting state: the frame
-				stays in the bar (`topbar.frame`, always in reach and never scrolled
-				away), and the checklist appears on the arming step below, which is the
-				moment between the two taps when you actually walk round the machine.
-			-->
-			<div class="pf-stick">
-				<!-- The checklist travels with the button, and it comes up on the tap
-				     that arms the burn.
-
-				     It used to stand in the column above this footer, and with four
-				     layers the column is longer than the panel is high: measured at
-				     1440 x 900, "Extraction and air assist on" answered `DIV.pf-stick`
-				     under `elementFromPoint` and "Workpiece is clamped and flat"
-				     answered the start button itself. Three lines to work down, two of
-				     them under the thing you press. So it moved in here — and then it
-				     stood permanently over the table and the warnings instead, 90 px of
-				     a 211.6 px footer for eleven words that never change.
-
-				     Between "Start job" and "Start now" is where those words are read:
-				     the lid, the extraction, the clamp are things you get up for, and
-				     that is what the second tap waits for. Resting, the footer is the
-				     buttons alone; armed, the list stands directly above the button
-				     that fires — never scrolled away from it. -->
-				{#if preflight}
-					<div class="pf-check">
-						<span class="pf-head">{t('job.checklist.title')}</span>
-						<ul>
-							<li>{t('job.checklist.lid')}</li>
-							<li>{t('job.checklist.air')}</li>
-							<li>{t('job.checklist.workpiece')}</li>
-						</ul>
-					</div>
-				{/if}
-				<div class="pf-actions">
-				{#if preflight}
-					<!-- Two deliberate taps, in the same place: VEILIGHEID.md lays down that
-					     no single click burns. The first arms, the second fires — and unlike
-					     before, that first tap does not make anything disappear. -->
-					<button class="btn" onclick={() => (preflight = false)}>{t('common.cancel')}</button>
-					<button
-						class="btn primary big"
-						onclick={confirmStart}
-						disabled={!actions?.start || blocked || seriesRunning || device?.connection?.state === 'disconnected'}
-						title={device?.connection?.state === 'disconnected' ? t('job.notResponding') : seriesRunning
-							? t('api.series.runGoing')
-							: connection.online
-								? undefined
-								: blockedReason}
-					>
-						{control.busy === 'start' ? t('job.starting') : t('job.startNow')}
-					</button>
-				{:else}
-					<!-- No "Show frame" here. The top bar has the same button, on every
-					     tab and never scrolled away, and a second copy of it cost this
-					     footer a 44 px line of its own: measured, 211.6 px of footer at
-					     1440 x 900 with the table's rows underneath it. What the rotary
-					     changes about the frame is said with the rest of the rotary,
-					     above. -->
-					<!-- One control in two parts: the button that arms the burn, and beside it
-					     the arrow with the other thing you can do with a ready job — send it
-					     to the machine's memory. The two are one visual unit, so a hand finds
-					     the second where it looks for the first. -->
-					<div class="pf-split">
-						<button
-							class="btn primary big"
-							disabled={!actions?.start || blocked || seriesRunning}
-							aria-busy={estimating}
-							title={seriesRunning ? t('api.series.runGoing') : blockedReason}
-							onclick={() => (preflight = true)}
-						>
-							<!-- The last known time stays while a new one is being worked out.
-							     Hiding it during the recalculation made the button change width
-							     on every edit — a button that jumps under your cursor. The state
-							     is the ellipsis after it, which is in the button whether or not
-							     anything is being worked out and only turns visible: the number
-							     itself keeps the contrast it has at rest, and the width does not
-							     move either. The sentence stands outside that branch, because the
-							     first estimate of a fresh design is worked out while there is no
-							     number yet — the ellipsis has nothing to follow then, but the
-							     state is the same state, and `aria-busy` alone is a state without
-							     words. -->
-							{t('job.startJob')}{#if estimate?.seconds ?? job?.estimate_seconds}
-								<span class="pf-start-time"
-									>{formatDuration(estimate?.seconds ?? job?.estimate_seconds)}</span
-								><span class="pf-start-busy" class:rekent={estimating} aria-hidden="true">…</span
-								>{/if}{#if estimating}<span class="pf-start-word">{t('job.estimating')}</span>{/if}
-						</button>
-						<button
-							class="btn primary big pf-more"
-							aria-haspopup="menu"
-							aria-expanded={moreOpen}
-							aria-label={t('job.more')}
-							title={t('job.more')}
-							onclick={(e) => openMore(e.currentTarget as HTMLElement)}
-						>
-							<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
-						</button>
-					</div>
-					{#if moreOpen}
-						<!-- `position: fixed`, because the panel scrolls and would clip an
-						     absolute menu. The one line stays put when it cannot be done and
-						     says why in its tooltip, so there is a place to learn where it is. -->
-						<div class="cover" role="presentation" onclick={() => (moreOpen = false)}></div>
-						<div
-							class="pf-menu"
-							role="menu"
-							style="left: {morePos.x}px; {moreUpward ? `bottom: ${window.innerHeight - morePos.y}px` : `top: ${morePos.y}px`}"
-						>
-							<button
-								class="row"
-								role="menuitem"
-								type="button"
-								disabled={Boolean(uploadOff)}
-								title={uploadOff ?? t('job.upload.why')}
-								onclick={chooseUpload}
-							>
-								<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v3h16v-3"/></svg>
-								<span>{t('job.upload')}</span>
-							</button>
-						</div>
-					{/if}
-				{/if}
-				</div>
-			</div>
-			{/if}
 		</div>
 	{:else}
 		<!--
 			The progress block.
 
-			There used to be four buttons here (start, pause, clear queue, stop) plus
-			four lines explaining shortcuts, and they were there regardless of what the
-			machine was doing. Three of the four were dead as long as nothing was
-			running, and the moment something *was* running the only information that
-			then means anything — the progress — sat at 700px, under the jog buttons,
-			out of sight.
-
-			Now the phase leads (`jobPhase` in `$lib/api.ts`): what is going on is at
-			the top, with the buttons that do something at *this* moment. The shortcuts
-			are on the buttons themselves, because that is where you learn them.
+			The phase leads (`jobPhase` in `$lib/api.ts`): what is going on is at the top,
+			with the buttons that do something at *this* moment directly under the bar.
+			On a tablet beside the machine, Stop and Pause are on screen without
+			scrolling; the sentence about the phase stands under them.
 		-->
-		<div class="now" class:burns={phase === 'burning'} class:pause={phase === 'paused'}>
+		<div class="now" class:burns={live && phase === 'burning'} class:pause={live && phase === 'paused'} class:stale>
 			<div class="now-head">
-				<span class="now-phase">{phaseTitle(phase)}</span>
+				{#if stale}
+					<span class="now-phase">{lastKnown}</span>
+				{:else}
+					<span class="now-phase">{phaseTitle(phase)}</span>
+				{/if}
 				{#if job}
 					<span class="current-job mono" title={job.label}>{job.label}</span>
 				{/if}
 			</div>
 
 			{#if progressPart !== null}
-				<!-- The bar and the percentage belong together and so sit on one line;
-				     the times below in the same columns as always. -->
 				<div class="now-bar" role="progressbar" aria-valuenow={Math.round(progressPart * 100)} aria-valuemin="0" aria-valuemax="100" aria-label={t('job.progressAria')}>
 					<span class="now-vol" style="width: {Math.round(progressPart * 1000) / 10}%"></span>
 				</div>
@@ -1329,27 +1171,10 @@
 				</div>
 			{/if}
 
-			<p class="now-hint">{phaseBody(phase)}</p>
-
-			<!-- Gap J4, finished. The keys sit in the tooltips of the buttons they work,
-			     as a second line: what a key does is read on the thing it does it to.
-			     The paragraph that used to stand under this row said both keys again,
-			     in burning, paused, queued and done alike — 49.5 px of advice in the
-			     panel's most expensive place, under two buttons that already carried
-			     it. What only the second line can say is that the keys stop working
-			     outside this window, and that is the part you discover at the wrong
-			     moment — so where there is no pointer to read a second line with, the
-			     same sentence stands under the row. -->
+			<!-- Stop stands at the start of the row and pause at the end: the button that
+			     cannot be undone is never on the spot the eye and the thumb end at. The
+			     keys sit in the tooltips of the buttons they work. -->
 			<div class="now-actions">
-				<!-- Stop stands at the start of the row and pause at the end, and that is
-				     the same rule the ask row in tokens.css follows: the button that
-				     cannot be undone is never on the spot the eye and the thumb end at.
-				     It sat on the right — where the green "Start job" stood a moment
-				     earlier, at the same edge of the same panel — while the comment here
-				     claimed it was "away to the left". `.btn.stop` also still carried
-				     `grid-column: 1 / -1` and `margin-top: var(--space-6)` from the
-				     four-button grid this block replaced, and in a centred flex row that
-				     put stop 12 px below pause in every phase (measured at 1440). -->
 				<button
 					class="btn danger stop"
 					class:dood={!connection.online}
@@ -1359,9 +1184,7 @@
 						: `${blockedReason ?? t('job.stop.now')} · ${STOP_KEY}\n${t('job.keysHere')}`}
 					onclick={() => control.stop()}
 				>
-					<!-- One key, not two glued together: "Stop" plus "on the machine" only
-					     works in a language with this word order, and the top bar has had
-					     the whole sentence all along. -->
+					<!-- One key, not two glued together. -->
 					{connection.online ? t('transport.stop') : t('transport.stop.onMachine')}
 				</button>
 				<span class="now-stretch"></span>
@@ -1374,9 +1197,7 @@
 					>{t('transport.resume')}</button>
 				{:else}
 					<!-- On the phase and not on `job.running`: a job that has been spooled
-					     but not picked up sits at `running: false`, and then the top bar
-					     offered pause while this button was disabled. `pause` is a realtime
-					     command; it lands the moment the machine starts. -->
+					     but not picked up sits at `running: false`. -->
 					<button
 						class="btn"
 						disabled={!transportAllowed('pause', { able: actions, phase, blocked })}
@@ -1387,16 +1208,23 @@
 					>{t('transport.pause')}</button>
 				{/if}
 			</div>
+
+			{#if stale && heardAt}
+				<p class="help">{t('job.lastKnown.ago', { ago: i18n.ago(heardAt) })}</p>
+			{/if}
+			<p class="help">{phaseBody(phase)}</p>
+			<!-- Where there is no pointer the tooltips cannot be read, and the part only
+			     they carry — the keys stop working outside this window — is the part you
+			     discover at the wrong moment. -->
 			{#if screen.noHover}
-				<p class="toetsen">{t('job.keysHere')}</p>
+				<p class="toetsen help">{t('job.keysHere')}</p>
 			{/if}
 
-			<!-- As soon as there is anything in the queue. This used to say
-			     `queued > 1`, and then with exactly one job in the row the queue could
-			     not be cleared — an operation that disappeared instead of moving. -->
+			<!-- As soon as there is anything in the queue: with exactly one job in the row
+			     the queue must still be clearable. -->
 			{#if queued > 0}
 				<button
-					class="btn subtle wachtrij"
+					class="btn wachtrij"
 					disabled={!actions?.clear_queue || queued === 0 || blocked}
 					title={queued === 0 ? t('job.queueEmpty') : blockedReason}
 					onclick={() => control.clearQueue()}
@@ -1404,53 +1232,49 @@
 					{t('job.clearQueue', { n: queued })}
 				</button>
 			{/if}
-
 		</div>
-
 	{/if}
 
 	{#if !control.tokenProbleem}
 		<!--
 			The machine controls: moving, going to a point, the zero point, adjusting.
 
-			This is getting-ready work. It used to sit above the progress and, during a
-			running job, took up the whole visible panel — while its buttons are
-			precisely then disabled, because you do not jog with a burning laser. Now it
-			sits *under* what is happening, starts closed, and folds shut when work begins.
-			Shut and not gone: it has to be there the moment you need it again, and a
-			block that disappears is not one you learn to find back.
+			Getting-ready work. It sits *under* what is happening, starts closed, and folds
+			shut when work begins — shut and not gone, so it is there the moment you need
+			it again.
 		-->
 		<details class="fold machinevouw" bind:open={machineOpen}>
 			<summary>
 				{t('job.machineControls')}
-				{#if busyWithWork}<span class="why">— {t('job.machineControls.notNow')}</span>{/if}
+				{#if busyWithWork}<span class="group-value">{t('job.machineControls.notNow')}</span>{/if}
 			</summary>
 		<div class="motion">
-			<span class="rot-label">{t('job.move')}</span>
-			<!-- Inverted T, like the arrow keys on a keyboard: ↑ above ↓, with ← and →
-			     beside them. Home sits next to it and not in the middle, because it is
-			     not a direction. -->
+			<p class="label-section">{t('job.move')}</p>
+			<!-- Inverted T, like the arrow keys on a keyboard. Home sits next to it and not
+			     in the middle, because it is not a direction. -->
 			<div class="pad" class:metz={control.capabilities?.motion?.focus}>
-				<button class="btn jog up" aria-label={t('job.jog.up')} disabled={movingOff} title={movingBlocked} onclick={() => onJog?.(0, -step)}>↑</button>
-				<button class="btn jog left" aria-label={t('job.jog.left')} disabled={movingOff} title={movingBlocked} onclick={() => onJog?.(-step, 0)}>←</button>
-				<button class="btn jog down" aria-label={t('job.jog.down')} disabled={movingOff} title={movingBlocked} onclick={() => onJog?.(0, step)}>↓</button>
-				<button class="btn jog right" aria-label={t('job.jog.right')} disabled={movingOff} title={movingBlocked} onclick={() => onJog?.(step, 0)}>→</button>
+				<button class="btn jog up" aria-label={t('job.jog.up')} disabled={movingOff} title={movingBlocked} onclick={() => onJog?.(0, -step)}><Icon name="arrow-up" /></button>
+				<button class="btn jog left" aria-label={t('job.jog.left')} disabled={movingOff} title={movingBlocked} onclick={() => onJog?.(-step, 0)}><span class="turn-left"><Icon name="arrow-up" /></span></button>
+				<button class="btn jog down" aria-label={t('job.jog.down')} disabled={movingOff} title={movingBlocked} onclick={() => onJog?.(0, step)}><Icon name="arrow-down" /></button>
+				<button class="btn jog right" aria-label={t('job.jog.right')} disabled={movingOff} title={movingBlocked} onclick={() => onJog?.(step, 0)}><span class="turn-right"><Icon name="arrow-up" /></span></button>
 				<button class="btn jog home" disabled={movingOff} title={movingBlocked ?? (rotary.active ? t('rotary.safety.home') : undefined)} onclick={home}>{t('job.home')}</button>
 				{#if control.capabilities?.motion?.focus}
-					<!-- The Z axis is in the same pad as X and Y: it is the same operation
-					     with a third direction, and it follows the same step size. -->
+					<!-- The Z axis is in the same pad: the same operation with a third
+					     direction, and the same step size. -->
 					<button
 						class="btn jog zup"
 						disabled={movingOff}
+						aria-label={t('job.jog.z', { step, direction: t('job.jog.zUp') })}
 						title={movingBlocked ?? t('job.jog.z', { step, direction: t('job.jog.zUp') })}
 						onclick={() => onFocus?.(-step)}
-					>Z&nbsp;↑</button>
+					>Z<Icon name="arrow-up" /></button>
 					<button
 						class="btn jog zdown"
 						disabled={movingOff}
+						aria-label={t('job.jog.z', { step, direction: t('job.jog.zDown') })}
 						title={movingBlocked ?? t('job.jog.z', { step, direction: t('job.jog.zDown') })}
 						onclick={() => onFocus?.(step)}
-					>Z&nbsp;↓</button>
+					>Z<Icon name="arrow-down" /></button>
 				{/if}
 			</div>
 			<div class="steps">
@@ -1460,9 +1284,8 @@
 					bind:value={step}
 					options={[0.1, 1, 10, 50].map((size) => ({ value: size, label: `${size} mm` }))}
 				/>
-				<!-- The pair, not half of it: unlocking lets you push the head aside to lay
-				     material down, and until now the only way to make it hold again was to
-				     home the machine. Both hang on the same capability the driver reports. -->
+				<!-- The pair, not half of it: unlocking lets you push the head aside, and
+				     holding it again is the other half. -->
 				<button
 					class="btn mini"
 					disabled={movingOff || !control.capabilities?.motion?.unlock}
@@ -1481,9 +1304,7 @@
 				</button>
 			</div>
 
-			<!-- To a point instead of in a direction (gap J6). LightBurn's Move window
-			     has "Go to Origin" and saved positions; whoever has a jig on the bed
-			     otherwise jogs that corner together again every session. -->
+			<!-- To a point instead of in a direction (gap J6). -->
 			{#if control.capabilities?.motion?.move}
 				<details class="fold machine-group points">
 					<summary>{t('job.toPoint')}<span class="group-value mono">{posities.length}</span></summary>
@@ -1506,21 +1327,16 @@
 									onclick={() => control.moveTo(place.x_mm, place.y_mm)}
 								>
 									{place.name}
-									<!-- The coordinates with it, not only in the tooltip: on a touch
-									     screen there is no hover, and then a saved position is a name
-									     without a place. LightBurn puts them in a column of their own;
-									     there is no column for that here, so they sit muted behind the
-									     name in the same chip. -->
+									<!-- The coordinates with it, not only in the tooltip: on a
+									     touch screen there is no hover. -->
 									<span class="coord mono">{size(place.x_mm)},&#8239;{size(place.y_mm)}</span>
 								</button>
-								<!-- Discarding is in the button itself, not in a menu: there are at
-								     most twelve of them and you do it rarely. -->
 								<button
 									class="btn mini gone"
 									aria-label={t('job.forgetSpotAria', { name: place.name })}
 									title={t('job.forgetSpot')}
 									onclick={() => vergeet(place.name)}
-								>×</button>
+								><Icon name="close" /></button>
 							</span>
 						{/each}
 					</div>
@@ -1560,22 +1376,14 @@
 					{/if}
 				</details>
 			{/if}
-			<!-- The zero point (gap J12). LightBurn has Set Origin / Clear Origin / Go
-			     to Origin; here "To origin" was literally 0,0 of the bed and there was
-			     no way to set a zero point of your own. That is daily work: the offcut
-			     lies where it lies, and you do not want to drag your whole drawing to
-			     get it onto the board.
-
-			     Deliberately a block of its own under "To a point" and not among them:
-			     the saved positions say "go there", this says "measure from there".
-			     Among the spots it would read as one more spot. -->
+			<!-- The zero point (gap J12): "measure from there", where the saved positions
+			     say "go there". When it is set the group says so with a badge — a state
+			     you see at the edge of your eye without reading the numbers. -->
 			{#if control.capabilities?.motion?.move}
-				<details class="fold machine-group origin" class:gezet={control.origin !== null} open={control.origin !== null}>
-					<summary>{t('job.workOrigin')}<span class="group-value mono">{control.origin ? `${size(control.origin.x_mm)}, ${size(control.origin.y_mm)} mm` : t('job.state.off')}</span></summary>
+				<details class="fold machine-group card inset origin" class:gezet={control.origin !== null} open={control.origin !== null}>
+					<summary>{t('job.workOrigin')}{#if control.origin}<span class="group-value"><span class="badge mono">{size(control.origin.x_mm)}, {size(control.origin.y_mm)} mm</span></span>{:else}<span class="group-value">{t('job.state.off')}</span>{/if}</summary>
 					{#if control.origin}
-						<!-- The number is always with it. A zero point you cannot read off is
-						     a setting that quietly moves your work, and that is exactly the
-						     kind of surprise that makes a laser expensive. -->
+						<!-- The number is always with it. -->
 						<p class="originPoint">
 							<span class="mono"
 								>{size(control.origin.x_mm)},&#8239;{size(control.origin.y_mm)} mm</span
@@ -1583,21 +1391,10 @@
 							— {t('job.origin.here')}
 						</p>
 					{:else}
-						<!-- Not set: a value, the way the layer table says a number, with the
-						     sentence behind it. It used to be that whole sentence at every
-						     width — 54 characters, 31.9 px — under a label that already says
-						     what a zero point is, and beside a print-and-cut card saying
-						     "Off." for the same state in different words.
-
-						     Where a pointer can hover, that is all: the dotted underline says a
-						     sentence is behind it. Where one cannot — `screen.noHover`, the
-						     rule this branch wrote down itself — the sentence is the line,
-						     because a finger has no way to open a title. Not a second line
-						     under the value: both these sentences open with the state word,
-						     so "Off" above "Off: the work burns…" says it twice and measured
-						     144.4 px of fold at 1024 against 119.5 px for the sentence
-						     alone. -->
-						<p class="hint" class:off={!screen.noHover} title={t('job.origin.off')}>{screen.noHover ? t('job.origin.off') : t('job.state.off')}</p>
+						<!-- Not set: a value with the sentence behind it. Where a pointer can
+						     hover the dotted underline says a sentence is there; where one
+						     cannot, the sentence is the line. -->
+						<p class="help" class:off={!screen.noHover} title={t('job.origin.off')}>{screen.noHover ? t('job.origin.off') : t('job.state.off')}</p>
 					{/if}
 					<div class="puntrij">
 						<button
@@ -1632,17 +1429,12 @@
 				</details>
 			{/if}
 
-			<!-- Print and cut (gap H2). The same family as the zero point above and
-			     deliberately right under it: both answer "where does the work go", and
-			     they are mutually exclusive — with a measured pose the zero point stays
-			     out of it, because doing both shifts twice.
-
-			     The marks come from the canvas selection: pointing out two shapes is
-			     something you do on the drawing, and a second shape picker inside this
-			     panel would be a second way to do one thing. -->
+			<!-- Print and cut (gap H2). The same family as the zero point and right under
+			     it: both answer "where does the work go". The marks come from the canvas
+			     selection. -->
 			{#if control.capabilities?.motion?.move}
-				<details class="fold machine-group origin printcut" class:gezet={cut?.aligned === true} open={Boolean(cut?.aligned || cut?.lapsed || cutMarks.length)}>
-					<summary>{t('job.printcut')}<span class="group-value">{cut?.aligned ? t('job.printcut.pose', { angle: i18n.number(Math.round((cut.angle_deg ?? 0) * 100) / 100) }) : cutMarks.length ? `${cut?.marks.filter((m) => m.measured).length ?? 0} / 2` : t('job.state.off')}</span></summary>
+				<details class="fold machine-group card inset origin printcut" class:gezet={cut?.aligned === true} open={Boolean(cut?.aligned || cut?.lapsed || cutMarks.length)}>
+					<summary>{t('job.printcut')}{#if cut?.aligned}<span class="group-value"><span class="badge">{t('job.printcut.pose', { angle: i18n.number(Math.round((cut.angle_deg ?? 0) * 100) / 100) })}</span></span>{:else}<span class="group-value">{cutMarks.length ? `${cut?.marks.filter((m) => m.measured).length ?? 0} / 2` : t('job.state.off')}</span>{/if}</summary>
 					{#if cut?.aligned}
 						<p class="originPoint">
 							<span class="mono"
@@ -1652,26 +1444,20 @@
 								angle: i18n.number(Math.round((cut.angle_deg ?? 0) * 100) / 100)
 							})}
 						</p>
-						<p class="hint">{t('job.printcut.instead')}</p>
+						<Why><p>{t('job.printcut.instead')}</p></Why>
 					{:else if cut?.lapsed === 'gone'}
-						<p class="hint">{t('job.printcut.lapsed.marks')}</p>
+						<p class="help warn">{t('job.printcut.lapsed.marks')}</p>
 					{:else if cut?.lapsed === 'machine'}
-						<p class="hint">{t('job.printcut.lapsed.machine')}</p>
+						<p class="help warn">{t('job.printcut.lapsed.machine')}</p>
 					{:else if cutMarks.length === 2}
-						<p class="hint">
+						<!-- An instruction: what to do next. It stays. -->
+						<p class="help">
 							{t('job.printcut.driveTo', {
 								n: cut?.marks.filter((m) => m.measured).length ?? 0
 							})}
 						</p>
 					{:else}
-						<!-- The same value in the same words as the zero point above: both
-						     answer "where does the work go", and both were off in prose of
-						     their own — this one 171 characters over 63.8 px, explaining at
-						     length a feature whose only button was dead. And the same rule as
-						     the zero point above: the value where a pointer can hover and
-						     read the sentence behind it, the sentence itself where one
-						     cannot. -->
-						<p class="hint" class:off={!screen.noHover} title={t('job.printcut.off')}>{screen.noHover ? t('job.printcut.off') : t('job.state.off')}</p>
+						<p class="help" class:off={!screen.noHover} title={t('job.printcut.off')}>{screen.noHover ? t('job.printcut.off') : t('job.state.off')}</p>
 					{/if}
 					<div class="puntrij">
 						{#if cutMarks.length === 2}
@@ -1711,31 +1497,19 @@
 							>
 								{t('job.printcut.use')}
 							</button>
-							<!-- Why the button is dead, on the screen and not only in its
-							     tooltip. On a touch screen there is no hover, and this fold is
-							     the one you use standing at the machine with a tablet — the
-							     same reason the saved positions carry their coordinates in the
-							     chip. On a desk the tooltip is enough and the line stays off,
-							     because a reason nobody needs is the prose this panel has too
-							     much of. -->
+							<!-- Why the button is dead, on the screen where a tooltip cannot be
+							     read. On a desk the tooltip is enough. -->
 							{#if screen.noHover && selectedIds.length !== 2}
-								<p class="reason">{t('job.printcut.needsTwo')}</p>
+								<p class="help reason">{t('job.printcut.needsTwo')}</p>
 							{/if}
 						{/if}
 					</div>
 				</details>
 			{/if}
 
-			<!-- Adjusting during a running job (gap J11).
-			     LightBurn has two columns here, "Adjust Speed" and "Adjust Power", with
-			     which you *save* a job instead of redoing it: you see it going too dark
-			     and dial ten per cent back without stopping.
-
-			     Only visible when the driver can do it, and that is not tidiness but
-			     necessity: only grbl has realtime overrides (0x90/0x99); the Ruida sets
-			     speed and power per cut segment from the settings. A button that does
-			     nothing next to a burning laser is worse than no button. See
-			     FEATURE-GAPS J11. -->
+			<!-- Adjusting during a running job (gap J11). Only where the driver can do it:
+			     only grbl has realtime overrides; a button that does nothing next to a
+			     burning laser is worse than no button. -->
 			{#if control.canAdjust}
 				<details class="fold machine-group bijstellen" open={Object.values(control.adjust).some(value => value !== null && value !== 1)}>
 					<summary>{t('job.adjust.title')}</summary>
@@ -1745,8 +1519,6 @@
 							<div class="stelrij">
 								<span class="stelnaam">
 									{t(axis.key)}
-									<!-- Only the number in mono; "as designed" is a phrase, and in a
-									     figure font it sits oddly measured out. -->
 									<span class="stelwaarde" class:mono={level !== 1}
 										>{level === 1
 											? t('job.adjust.asDesigned')
@@ -1778,36 +1550,32 @@
 							</div>
 						{/if}
 					{/each}
-					<p class="hint">{t('job.adjust.hint')}</p>
+					<Why><p>{t('job.adjust.hint')}</p></Why>
 				</details>
 			{/if}
 			{#if !control.capabilities?.motion?.focus && profile?.has_z}
-				<!-- The profile says this machine has a Z axis, but the engine's driver
-				     has no command for it. That is not a missing button but missing
-				     support; say so. -->
-				<p class="hint">{t('job.zAxis.noCommand')}</p>
+				<!-- The profile says Z, the driver has no command for it: missing support,
+				     said once. -->
+				<p class="help">{t('job.zAxis.noCommand')}</p>
 			{/if}
 			{#if profile?.has_autofocus}
-				<!-- MeerK40t has no command to start an autofocus. A button that does
-				     something *else* instead is worse than no button — so we say where it
-				     is, in one sentence. -->
-				<p class="hint">{t('job.autofocus')}</p>
+				<!-- MeerK40t has no command to start an autofocus; we say where it is. -->
+				<p class="help">{t('job.autofocus')}</p>
 			{/if}
 		</div>
 		</details>
 	{/if}
 
 	{#if actions && !actions.pause}
-		<p class="hint">{t('job.noPause')}</p>
+		<p class="help no-pause">{t('job.noPause')}</p>
 	{/if}
 
-	<!-- The error message now lives in the status bar, visible on every tab. Once more
-	     here would show it twice whenever you happen to be on Job. -->
+	<!-- The error message lives in the status bar, visible on every tab. -->
 </div>
 
 <!-- Homing with the rotary in the bed. The head goes to the corner over the place where
      the rotary stands, so this is a question and not a confirmation of a click. -->
-<Dialog title={t('job.home.rotary.title')} bind:open={askHome} width="440px">
+<Dialog title={t('job.home.rotary.title')} bind:open={askHome} size="s">
 	<p class="dialog-text">{t('job.home.rotary.body')}</p>
 	{#snippet footer()}
 		<button class="btn" onclick={() => (askHome = false)}>{t('job.home.rotary.cancel')}</button>
@@ -1823,23 +1591,20 @@
 
 
 <!-- Sending the job to the machine's memory instead of burning it: one tap, not two.
-     VEILIGHEID.md asks for two deliberate taps for everything that burns; this puts a
-     file down and moves nothing, and a confirmation in front of something that sets
-     nothing in motion only teaches people to click through confirmations. The window
-     holds what the fold in the footer used to hold, and it is a window so that it has
-     room on a tablet and cannot be clipped by the panel it came from. -->
-<Dialog title={t('job.upload')} bind:open={uploadOpen} width="420px">
-	<p class="pf-row">{t('job.upload.why')}</p>
+     This puts a file down and moves nothing, and a confirmation in front of something
+     that sets nothing in motion only teaches people to click through confirmations. -->
+<Dialog title={t('job.upload')} bind:open={uploadOpen} size="s">
+	<Why><p>{t('job.upload.why')}</p></Why>
 	<div class="pf-uploadrow">
-		<label class="name">
+		<label class="field-label">
 			<span>{t('job.upload.name')}</span>
-			<!-- Cut to what the machine keeps while you type, not afterwards: the panel of
-			     the machine shows eight capitals without spaces, and the first place to
-			     find that out is the keyboard, not the machine. -->
+			<!-- Cut to what the machine keeps while you type: eight capitals, no spaces.
+			     The capitals are shown, not stored — see `nameTyped`. -->
 			<input
 				class="mono"
 				type="text"
 				maxlength="8"
+				style:text-transform="uppercase"
 				value={fieldText}
 				disabled={Boolean(uploadOff)}
 				title={uploadOff ?? t('job.upload.name')}
@@ -1862,102 +1627,94 @@
 		</button>
 	</div>
 	{#if uploaded}
-		<!-- `role="status"` and not `alert`: this is the answer to something that went
-		     well, and it says where the job is now — on the machine, waiting for a hand
-		     on its own panel. -->
-		<p class="pf-row good" role="status">{t('job.upload.done', { name: uploaded })}</p>
+		<!-- `role="status"`: the answer to something that went well. -->
+		<Notice tone="ok" live>{t('job.upload.done', { name: uploaded })}</Notice>
 	{/if}
 </Dialog>
 
 <style>
-	.connection-note { margin: var(--space-3) 0; padding-left: var(--space-3); border-left: 3px solid var(--warn-solid); font-size: var(--text-sm); color: var(--text-2); }
-	.confidence-note { margin: var(--space-2) 0; font-size: var(--text-xs); color: var(--warn); }
+	/* The face of every notice, badge, help line, label and button here is the shared
+	   one in tokens.css; this block says only where things sit and how wide they are. */
+	.job-heading {
+		margin-bottom: var(--space-3);
+	}
+	.section > :global(.notice) {
+		margin-bottom: var(--space-3);
+	}
 	.dialog-text {
 		margin: 0 0 var(--space-4);
 		font-size: var(--text-sm);
 	}
-	.section-title {
-		font-size: var(--text-md);
-		font-weight: 600;
-		color: var(--text-2);
-		margin: 0 0 var(--space-2);
-	}
-	/* Below 1200px start and pause live in the top bar and this block largely
-	   disappears (see `.dubbel` further down). But a touch screen can be *wider* than
-	   1200, and there everything sat at 8px — below the 12px DESIGN-SYSTEM sets as the
-	   floor for touch targets.
 
-	   Rows count as much as columns: "Pause" and "Clear queue" sit *under* each other
-	   and are both usable during a job, and that second button throws your whole queue
-	   away. So `gap`, not `column-gap`. (The start and pause buttons beside each other
-	   are never usable at the same time, by the way — there the distance protects
-	   against nothing. This one does.) Introduced by the tablet agent, widened here to
-	   both axes. */
-	@media (pointer: coarse) {
+	/* ── The pre-flight ──────────────────────────────────────────────────────── */
+	.preflight {
+		display: grid;
+		gap: var(--space-2);
 	}
-	.btn.danger {
-		background: var(--danger-solid);
-		border-color: var(--danger-solid);
-		color: var(--on-color);
+	/* A label and its value on one line: the material, the zero point, print and cut. */
+	.pf-time {
+		display: flex;
+		justify-content: space-between;
+		align-items: baseline;
+		gap: var(--space-3);
 	}
-	.btn.subtle {
-		grid-column: 1 / -1;
+	.pf-time .v {
+		font-size: var(--text-sm);
+		text-align: right;
 	}
-	/* The reference exists only on tablet; on the desktop the buttons are here. */
-	/* Gap J9. This was `@media (max-width: 1199px)` here and a JS prop in TopBar: two
-	   sources for one agreement, which can drift apart with the worst outcome being
-	   that the pause button sits nowhere or twice. Both now read
-	   `screen.controlsInBar`; the class below is the consequence, not the rule. */
-	/* A way in, not a command: this opens a window, it does not do anything to the
-	   machine. So it is a quiet full-width row heading the layer table rather than a
-	   third button competing with "Start job". */
-	/* The shared small button, across the width of the table it heads. Width is the one
-	   thing it says for itself; the face comes from `.btn.mini` like every other button
-	   in this panel. */
+	/* A missing material is a gap, not a material called "not filled in". */
+	.pf-time.unknown .v {
+		color: var(--text-2);
+		font-style: italic;
+	}
+	.pf-mismatch {
+		margin: 0;
+		padding: 0;
+		list-style: none;
+		display: grid;
+		gap: var(--space-1);
+	}
+	.pf-mismatch .badge {
+		margin-right: var(--space-1h);
+	}
+	/* The mildest objection — calculated, but on the right material — belongs here and
+	   must not shout as loudly as the wrong plate. */
+	.pf-mismatch .lighter {
+		color: var(--text-2);
+	}
+	.pf-mismatch .lighter strong {
+		color: var(--text-1);
+		font-weight: 500;
+	}
+	/* The afternoon behind the plate is not an aside: it is the number somebody plans
+	   their evening around. */
+	.pf-series {
+		margin: 0;
+		font-size: var(--text-sm);
+	}
 	.pf-order {
 		width: 100%;
-		margin: 0 0 var(--space-3);
+		margin-top: var(--space-2);
 	}
-	.preflight { padding: 0; }
-	.machine-group > summary { display: flex; align-items: baseline; gap: var(--space-2); }
-	.group-value { margin-left: auto; color: var(--text-2); font-size: var(--text-xs); font-weight: 400; }
-	.machine-group > summary ~ :global(*) { margin-top: var(--space-3); }
 	.pf-layers {
 		width: 100%;
 		border-collapse: collapse;
 		font-size: var(--text-xs);
-		margin: 8px 0;
 	}
 	.pf-layers th {
 		text-align: left;
 		font-weight: 500;
 		color: var(--text-2);
 		border-bottom: 1px solid var(--line);
-		padding-bottom: 2px;
+		padding: 0 var(--space-1) var(--space-1) 0;
 	}
-	.pf-layers td { padding: 2px 0; }
-	.pf-layers td.mono { text-align: right; padding-right: 8px; font-variant-numeric: tabular-nums; }
-	.chip {
-		display: inline-block;
-		width: 8px;
-		height: 8px;
-		border-radius: var(--radius-sharp);
-		margin-right: var(--space-1h);
-		vertical-align: baseline;
+	.pf-layers td {
+		padding: var(--space-1) var(--space-1) var(--space-1) 0;
 	}
-	/* With a number in it the chip is no longer a dot but a small block (gap J7). As
-	   wide as it is tall and with tabular figures, so that a 1 and a 10 do not make the
-	   column jump. The ink (black or white) comes from `inkOn`: on yellow, white is
-	   1.58:1 and then you simply cannot read the figure. */
-	.chip.numbered {
-		width: 15px;
-		height: 15px;
-		line-height: 15px;
-		text-align: center;
-		font-size: var(--text-xs);
+	.pf-layers td.mono {
+		text-align: right;
+		padding-right: var(--space-2);
 		font-variant-numeric: tabular-nums;
-		border-radius: var(--radius-field);
-		vertical-align: -3px;
 	}
 	.pf-name {
 		max-width: 9em;
@@ -1965,502 +1722,106 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
-	.unsure { color: var(--warn); }
-	/* A layer that does nothing, in the calm tone: there is nothing to check, so this
-	   is a statement and not an alarm. The alarm is above it. */
+	/* The layer's colour, small; with its number in it a square block (gap J7). The ink
+	   on it comes from `inkOn`. */
+	.swatch {
+		display: inline-block;
+		width: 8px;
+		height: 8px;
+		border-radius: var(--radius-sharp);
+		margin-right: var(--space-1h);
+		vertical-align: baseline;
+	}
+	.swatch.numbered {
+		width: 16px;
+		height: 16px;
+		line-height: 16px;
+		text-align: center;
+		font-size: var(--text-xs);
+		font-variant-numeric: tabular-nums;
+		border-radius: var(--radius-sharp);
+		vertical-align: -3px;
+	}
+	.unsure {
+		color: var(--warn);
+	}
+	/* A layer that does nothing, in the calm tone, directly beside its name. */
 	.pf-blind {
 		color: var(--text-2);
 		font-style: italic;
-		/* Left, directly beside the layer name: this is about the layer and not about a
-		   column. Right-aligned it sat loose on the other side of the row, where the
-		   reader expects a number. */
 		text-align: left;
-		padding-left: 8px;
-	}
-	.pf-warn.strong { color: var(--warn); font-weight: 500; }
-	/* A kind of its own, not the fourth yellow wash. The left bar in the danger colour
-	   says "this does not work" as against "watch out for this"; the text itself keeps
-	   the ordinary colour, because --danger on this wash does not make the contrast
-	   (the same measurement as at .pf-mismatch below). */
-	.pf-no-raster {
-		margin: var(--space-2) 0;
-		padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
-		border-left: 4px solid var(--danger-solid);
-		border-radius: 0 var(--radius-field) var(--radius-field) 0;
-		background: color-mix(in srgb, var(--danger) 16%, transparent);
-		font-size: var(--text-xs);
-		color: var(--text-1);
-	}
-	.pf-time {
-		display: flex;
-		justify-content: space-between;
-		align-items: baseline;
-		padding-bottom: var(--space-2);
-		margin-bottom: 8px;
-		border-bottom: 1px solid var(--line);
-	}
-	.pf-time .v {
-		font-size: var(--text-md);
-	}
-	.pf-row {
-		color: var(--text-2);
-		font-size: var(--text-xs);
-		padding: var(--space-1) 0;
-	}
-	/* The afternoon behind the plate is not an aside: it is the number somebody plans
-	   their evening around, so it reads as text and not as fine print. */
-	.pf-row.series {
-		color: var(--text-1);
-		margin: 0;
-	}
-	/* ── Sending it to the machine ─────────────────────────────────────────── */
-	/* Folded shut: it is the other thing you can do with a ready job, not a second
-	   start button, so it must not compete with the one on the footer below it. */
-	/* No border and no margin of its own: it sits inside the footer, whose own top
-	   border and gap already separate it from the column above. */
-	.pf-uploadrow {
-		display: flex;
-		align-items: flex-end;
-		gap: var(--space-2);
-		margin-top: var(--space-1h);
-	}
-	.pf-uploadrow .name {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-1);
-		font-size: var(--text-xs);
-		color: var(--text-2);
-	}
-	/* The eight characters as the machine writes them: a fixed pitch, spaced out, so
-	   that what stands here reads as one label on a panel and not as a word. */
-	.pf-uploadrow input {
-		width: 11ch;
-		font-family: var(--font-mono);
-		font-size: var(--text-sm);
-		letter-spacing: 0.08em;
-		text-transform: uppercase;
-		padding: var(--space-1) var(--space-1h);
-		border: 1px solid var(--line);
-		border-radius: var(--radius-field);
-		background: var(--surface-1);
-		color: var(--text-1);
-	}
-	.pf-row.good {
-		color: var(--ok);
-	}
-	.pf-warn {
-		margin: var(--space-2) 0;
-		padding: var(--space-2);
-		border-radius: var(--radius-field);
-		background: color-mix(in srgb, var(--warn) 14%, transparent);
-		font-size: var(--text-xs);
-	}
-	/* The only message here that is about a concrete mix-up, and therefore the only one
-	   with a left bar: heavier than the general "not measured" note below it, and not in
-	   the same flat yellow tone, because then they would weigh the same. */
-	.pf-mismatch {
-		margin: var(--space-2) 0;
-		padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
-		list-style: none;
-		border-left: 4px solid var(--warn-solid);
-		border-radius: 0 var(--radius-field) var(--radius-field) 0;
-		background: color-mix(in srgb, var(--warn) 22%, transparent);
-		font-size: var(--text-xs);
-		display: grid;
-		gap: var(--space-1);
-	}
-	/* The mildest objection — calculated but on the right material — belongs there but
-	   must not shout as loudly as the wrong plate. */
-	.pf-mismatch .lighter { color: var(--text-2); }
-	.pf-mismatch .lighter strong { color: var(--text-1); font-weight: 500; }
-	/* Not a filled pill: according to tokens.css --warn-solid is a surface colour and
-	   with white on it only reaches 3.25:1 (measured ourselves: 2.22 in dark). --warn
-	   as text also stuck at 3.73 on this wash. So the border carries the colour and the
-	   word the ordinary text colour — measured 9.79:1 light, 14.5:1 dark. */
-	.first {
-		display: inline-block;
-		margin-right: var(--space-1h);
-		padding: 0 var(--space-1h);
-		border-radius: var(--radius-dot);
-		border: 1px solid var(--warn-solid);
-		color: var(--text-1);
-		font-size: var(--text-xs);
-		font-weight: 700;
-		text-transform: uppercase;
-		letter-spacing: 0.04em;
-	}
-	/* The size is secondary but has to stay readable; no separate tone. */
-	.pf-time.sheet { border-bottom: none; padding-bottom: 0; margin-bottom: var(--space-2); }
-	.pf-time.sheet .v { font-size: var(--text-sm); }
-	/* A missing material is not a fault but is a gap: the same muted tone as the
-	   labels, so that it reads as "something still belongs here" and not as a material
-	   called "not filled in". */
-	.pf-time.sheet.unknown .v { color: var(--text-2); font-style: italic; }
-	.pf-check {
-		margin: var(--space-3) 0;
-		padding: var(--space-2) var(--space-3);
-		border-radius: var(--radius-field);
-		background: var(--surface-2);
-		font-size: var(--text-xs);
-	}
-	.pf-head {
-		display: block;
-		font-weight: 600;
-		color: var(--text-2);
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		margin-bottom: var(--space-1);
-	}
-	.pf-check ul {
-		margin: 0;
-		padding-left: 1.1em;
-		color: var(--text-1);
-	}
-	.pf-check li { padding: 1px 0; }
-	/* The pre-flight's border is neutral; on "nothing to do" it may say so without
-	   raising an alarm — this is not a fault, only an empty tray. */
-	.preflight.none { border-color: var(--warn); }
-	.pf-empty { margin-bottom: var(--space-3); }
-	.pf-empty strong {
-		display: block;
-		font-size: var(--text-sm);
-		margin-bottom: 2px;
-	}
-	.pf-empty p {
-		margin: 0;
-		font-size: var(--text-xs);
-		color: var(--text-2);
-	}
-	.muted {
-		color: var(--text-2);
-	}
-	.token {
-		border: 1px solid var(--warn);
-		border-radius: var(--radius-card);
-		padding: var(--space-3);
-		margin-bottom: var(--space-3);
-	}
-	.token label {
-		display: block;
-		font-weight: 500;
-		margin-bottom: var(--space-2);
-	}
-	.token-row {
-		display: flex;
-		gap: var(--space-2);
-	}
-	.token input {
-		flex: 1;
-		min-width: 0;
-		font: inherit;
-		padding: 8px 8px;
-		border: 1px solid var(--line);
-		border-radius: var(--radius-field);
-		background: var(--surface-2);
-		color: var(--text-1);
-	}
-	.token.afgewezen { border-color: var(--danger-solid); }
-	.motion { margin-top: var(--space-4); }
-	.rot-label {
-		font-size: var(--text-xs);
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		color: var(--text-2);
-	}
-	.pad {
-		display: grid;
-		/* Four columns; the fifth exists only when there is a Z axis, otherwise an
-		   empty column sits there taking up room. */
-		grid-template-columns: repeat(4, 40px);
-		/* The rows take the height the shared button has, rather than fixing one of
-		   their own: 34 px here against 36.8 everywhere else was one of the nine sizes
-		   this panel had for the same thing. */
-		grid-template-rows: repeat(2, auto);
-		gap: 4px;
-		margin: var(--space-2) 0;
-	}
-	/* Placed explicitly: with implicit placement ↓ slid into the first column instead
-	   of below ↑. */
-	.pad .up { grid-area: 1 / 2; }
-	.pad .left { grid-area: 2 / 1; }
-	.pad .down { grid-area: 2 / 2; }
-	.pad .right { grid-area: 2 / 3; }
-	.pad .home { grid-area: 1 / 4 / 3 / 5; }
-	.pad.metz { grid-template-columns: repeat(5, 40px); }
-	.pad .zup { grid-area: 1 / 5; }
-	.pad .zdown { grid-area: 2 / 5; }
-	/* The Z buttons carry a letter *and* an arrow; that does not fit at 15px. */
-	.pad .zup, .pad .zdown { font-size: var(--text-xs); }
-	/* The shared button in a 40 px grid column: only the air beside the arrow comes off,
-	   so that the arrow keeps the column. Disabled is the shared button's own — visibly
-	   off, which these buttons need most: they were blocked and looked identical, so you
-	   kept pressing them and nothing happened. */
-	.jog {
-		padding-left: 0;
-		padding-right: 0;
-	}
-	.jog.home { font-size: var(--text-xs); }
-	.steps { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
-	/* The same resting state as in the top bar: recognisable as the stop button (red
-	   border, red square) without raising an alarm all day. */
-	/* The same dead state as in the top bar: dashed border, no red, and readable — here
-	   the text *is* the message, so it must not fade. */
-	.btn.danger.dood {
-		background: transparent;
-		border: 1px dashed color-mix(in srgb, var(--text-2) 55%, transparent);
-		color: var(--text-2);
-	}
-	.btn.danger.dood:disabled { opacity: 1; }
-	.hint {
-		margin: var(--space-2) 0 0;
-		font-size: var(--text-xs);
-		color: var(--text-2);
-	}
-	/* The state of a feature nobody has switched on: a word, in the same grey as the
-	   coordinates that stand there when it *is* on. The dotted underline — currentColor,
-	   the same idiom as `.afwachtend` in StatusBar — says the sentence behind it can be
-	   read, so it is only worn where a pointer can hover; at `screen.noHover` this same
-	   paragraph *is* the sentence, and a cue pointing at a hover would promise
-	   nothing. */
-	.hint.off {
-		text-decoration: underline dotted;
-		text-underline-offset: 3px;
-		cursor: help;
-	}
-	/* The keys under the two transport buttons, where their tooltips cannot be read.
-	   Not in the row itself: it is about both buttons, not about one of them. */
-	.toetsen {
-		margin: var(--space-2) 0 0;
-		font-size: var(--text-xs);
-		line-height: 1.5;
-		color: var(--text-2);
-	}
-	/* Why a button in this block is dead — only where a tooltip cannot be read. */
-	.reason {
-		flex-basis: 100%;
-		margin: var(--space-1h) 0 0;
-		font-size: var(--text-xs);
-		color: var(--text-2);
-	}
-	/* ── The progress block ───────────────────────────────────────────────────
-	   What is going on *now*, at the top of the panel. The sizes are generous: this is
-	   the block you look at from two metres away while standing at the machine, not
-	   something you read from close up. */
-	.now {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-2);
-		padding: var(--space-3);
-		border: 1px solid var(--line);
-		border-radius: var(--radius-card);
-		background: var(--surface-1);
-	}
-	/* Only a running job gets the accent. A paused one gets the warning colour, because
-	   standing still with work in the machine is a state you have to do something
-	   about. */
-	.now.burns { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
-	.now.pause { border-color: color-mix(in srgb, var(--warn-solid) 55%, var(--line)); }
-	.now-head {
-		display: flex;
-		align-items: baseline;
-		gap: var(--space-2);
-	}
-	.now-phase {
-		font-size: var(--text-md);
-		font-weight: 600;
-		color: var(--text-1);
-	}
-	.now.burns .now-phase { color: var(--accent); }
-	.now.pause .now-phase { color: var(--warn); }
-	.current-job {
-		flex: 1;
-		min-width: 0;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-		text-align: right;
-		font-size: var(--text-xs);
-		color: var(--text-2);
-	}
-	.now-bar {
-		height: 8px;
-		border-radius: 999px;
-		background: var(--surface-2);
-		overflow: hidden;
-	}
-	.now-vol {
-		display: block;
-		height: 100%;
-		border-radius: 999px;
-		background: var(--accent);
-		transition: width var(--transition);
-	}
-	.now.pause .now-vol { background: var(--warn-solid); }
-	.now-figures {
-		display: flex;
-		align-items: baseline;
-		gap: var(--space-3);
-		font-size: var(--text-xs);
-		color: var(--text-2);
-	}
-	/* The percentage is the number you read from a distance; the rest is caption. */
-	.now-pct {
-		font-size: var(--text-lg);
-		font-weight: 600;
-		color: var(--text-1);
-		font-variant-numeric: tabular-nums;
-	}
-	.now-step,
-	.now-pass { font-variant-numeric: tabular-nums; }
-	.now-time {
-		display: flex;
-		justify-content: space-between;
-		gap: var(--space-3);
-		font-size: var(--text-xs);
-		color: var(--text-2);
-	}
-	.now-rest { color: var(--text-1); font-weight: 500; }
-	.now-hint {
-		margin: 0;
-		font-size: var(--text-xs);
-		line-height: 1.5;
-		color: var(--text-2);
-	}
-	.now-actions {
-		display: flex;
-		align-items: center;
-		gap: var(--space-2);
-		margin-top: var(--space-1);
-	}
-	/* Stop keeps its distance from pause: a bad-tap here costs the workpiece. */
-	.now-stretch { flex: 1; min-width: var(--space-6); }
-	.now-actions .btn { min-height: 40px; padding: 0 var(--space-4); }
-	.wachtrij { align-self: flex-start; }
-
-	/* The machine controls below the progress, closed while work is in flight. */
-	.machinevouw {
-		margin-top: var(--space-4);
-		border-top: 1px solid var(--line);
-		padding-top: var(--space-3);
-	}
-	/* The summary line itself is the shared fold in tokens.css — marker, case, weight,
-	   and 44 px under a glove, which this fold did not have: measured 18.8 px at 1024,
-	   in the block you reach for to move the head. */
-	.machinevouw .why {
-		font-weight: 400;
-		color: var(--text-2);
 	}
 
-	/* The button bar sticks to the bottom of the panel: the column is longer than the
-	   panel and the primary action must never sit below the fold. Negative margins
-	   around `.panel-scroll`'s padding, so the bar runs edge to edge and nothing shows
-	   underneath it. */
+	/*
+	 * The action row. Sticky at the bottom of the panel, though it no longer stands at
+	 * the end of the column: where it fits, it stays where it is; when the warnings above
+	 * it run past the foot of the panel, it stops at the bottom edge instead of scrolling
+	 * away. Edge to edge, around `.panel-scroll`'s padding, so nothing shows beside it.
+	 */
 	.pf-stick {
 		position: sticky;
 		bottom: calc(-1 * var(--space-4));
 		z-index: 2;
-		/* A column now: the checklist above the buttons. Both travel with the footer,
-		   because the three lines are the last thing you read before you press and
-		   they used to scroll out from under the button they belong to. */
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-2);
-		margin: var(--space-3) calc(-1 * var(--space-4)) calc(-1 * var(--space-4));
+		margin: var(--space-1) calc(-1 * var(--space-4));
 		padding: var(--space-3) var(--space-4);
 		background: var(--surface-1);
-		border-top: 1px solid var(--line);
+	}
+	.pf-check ul {
+		margin: var(--space-1) 0 0;
+		padding-left: 1.1em;
+		font-size: var(--text-sm);
 	}
 	.pf-actions {
 		display: flex;
-		/* The row may fold. Measured with the panel as it opens: the row is 221 px wide
-		   and its two buttons need 243 px in English and 264 px in Dutch, so the start
-		   button ran 9 px past the panel in English — unseen — and 30 px in Dutch, which
-		   cut the time off the end of "Job starten". Folding puts the start button on a
-		   line of its own, at the full width of the row, and the time stays on it.
-		   `tests/footer-fit.test.ts` measures this in both languages. */
+		/* The row may fold rather than run past the panel: `tests/footer-fit.test.ts`
+		   measures it in both languages. */
 		flex-wrap: wrap;
 		gap: var(--space-2);
 	}
-	/* Inside the footer the checklist carries no margin of its own: the footer's gap
-	   already sets the distance to the buttons. */
-	.pf-stick .pf-check {
-		margin: 0;
+	.pf-actions .btn {
+		flex: 1 1 auto;
+		white-space: nowrap;
 	}
-	/* Neither button breaks its words; both stretch to the line they are on. Measured
-	   after the fold: the row is 221 px and the pair needs 243 px (English) or 264 px
-	   (Dutch), so they always land on two lines here — "Show frame" above, the start
-	   button below, each the full width of the row. */
-	.pf-actions .btn { flex: 1 1 auto; white-space: nowrap; }
-	/* The start button and its arrow are one unit: joined corners, one line. The unit
-	   takes the width the start button had. */
-	.pf-split { display: flex; flex: 1 1 auto; }
-	.pf-split .btn.primary { flex: 1 1 auto; border-radius: var(--radius-field) 0 0 var(--radius-field); }
-	.pf-split .btn.primary.pf-more {
-		/* One width in every language: the arrow does not grow with the words beside
-		   it. Measured before this: 52 px in Dutch and 62 px in English, because the
-		   row's rule lets every button stretch. 48 px is a glove-sized target with the
-		   14 px arrow centred in it. */
+	/* The start button and its arrow are one unit: joined corners, one line. The arrow
+	   is the quiet half — a second verb, not a second primary. */
+	.pf-split {
+		display: flex;
+		flex: 1 1 auto;
+	}
+	.pf-split .btn.primary {
+		flex: 1 1 auto;
+		border-radius: var(--radius-field) 0 0 var(--radius-field);
+	}
+	.pf-split .btn.pf-more {
+		/* One width in every language; a glove-sized target. */
 		flex: 0 0 48px;
 		min-width: 48px;
 		padding-left: 0;
 		padding-right: 0;
-		border-left: 1px solid color-mix(in srgb, var(--accent-ink) 35%, transparent);
+		border-left: none;
 		border-radius: 0 var(--radius-field) var(--radius-field) 0;
 	}
-	.cover {
-		position: fixed;
-		inset: 0;
-		z-index: 39;
-	}
-	.pf-menu {
-		position: fixed;
-		width: 260px;
-		padding: var(--space-2);
-		background: var(--surface-1);
-		border: 1px solid var(--line);
-		border-radius: var(--radius-card);
-		box-shadow: var(--shadow-float);
-		z-index: 40;
-	}
-	.pf-menu .row {
-		display: flex;
-		align-items: center;
-		gap: var(--space-3);
-		width: 100%;
-		/* Reachable with a glove on as well. */
-		min-height: 44px;
-		padding: var(--space-2) var(--space-3);
-		border: 0;
-		border-radius: var(--radius-field);
-		background: none;
-		color: var(--text-1);
-		font: inherit;
-		text-align: left;
-		cursor: pointer;
-	}
-	.pf-menu .row svg { flex: none; color: var(--text-2); }
-	.pf-menu .row:hover:not(:disabled),
-	.pf-menu .row:focus-visible { background: var(--surface-2); }
-	.pf-menu .row:disabled { color: var(--text-2); opacity: 0.6; cursor: not-allowed; }
-
-	/* The start button says what it is going to do, with the time in it. */
-	.btn.big { min-height: 44px; font-size: var(--text-md); }
+	/* The time on the start button: what it is going to do, and for how long. */
 	.pf-start-time {
-		margin-left: 6px;
+		margin-left: var(--space-1h);
 		font-size: var(--text-xs);
 		font-weight: 400;
 		opacity: 0.85;
 	}
-	/* A new time is being worked out. The last one stays where it is, at the contrast
-	   it has at rest — dimming the one number on the button was the state carried by
-	   nothing but colour. The ellipsis stands in the button at every moment and only
-	   becomes visible, so the button cannot change width on an edit. */
+	/* A new time is being worked out. The ellipsis is always in the button and only
+	   becomes visible, so the button cannot change width on an edit. It is punctuation
+	   after a number, not an icon, so it is written as content rather than as a glyph in
+	   the markup. */
 	.pf-start-busy {
-		margin-left: 2px;
 		font-size: var(--text-xs);
 		font-weight: 400;
-		opacity: 0.85;
 		visibility: hidden;
+	}
+	.pf-start-busy::after {
+		content: '\2026';
 	}
 	.pf-start-busy.rekent {
 		visibility: visible;
@@ -2474,81 +1835,297 @@
 		clip-path: inset(50%);
 	}
 
-	/* Jumping to a point, beside the direction buttons above. */
-	.points { margin-top: var(--space-3); }
+	/* ── The token ──────────────────────────────────────────────────────────── */
+	.token {
+		display: grid;
+		gap: var(--space-2);
+		margin-bottom: var(--space-3);
+		border-color: var(--warn-edge);
+	}
+	.token.afgewezen {
+		border-color: var(--danger-edge);
+	}
+	.token-row {
+		display: flex;
+		gap: var(--space-2);
+	}
+	.token-row input {
+		flex: 1;
+	}
+
+	/* ── The progress block ─────────────────────────────────────────────────
+	   What is going on *now*. Sizes are generous: this is read from two metres away. */
+	.now {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+		padding: var(--space-3);
+		border: 1px solid var(--line);
+		border-radius: var(--radius-card);
+		background: var(--surface-1);
+	}
+	/* Burning: the accent edge and tint. Paused: the warning edge and tint, because
+	   standing still with work in the machine is a state you have to act on. Last
+	   known: neither — muted, and the bar stands still. */
+	.now.burns {
+		border-color: var(--accent-edge);
+	}
+	.now.pause {
+		border-color: var(--warn-edge);
+		background: var(--warn-tint);
+	}
+	.now-head {
+		display: flex;
+		align-items: baseline;
+		gap: var(--space-2);
+	}
+	.now-phase {
+		font-size: var(--text-md);
+		font-weight: 600;
+		color: var(--text-1);
+	}
+	.now.burns .now-phase {
+		color: var(--accent);
+	}
+	.now.pause .now-phase {
+		color: var(--warn);
+	}
+	.now.stale .now-phase {
+		color: var(--text-2);
+		font-weight: 500;
+	}
+	.current-job {
+		flex: 1;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		text-align: right;
+		font-size: var(--text-xs);
+		color: var(--text-2);
+	}
+	.now-bar {
+		height: 8px;
+		border-radius: var(--radius-dot);
+		background: var(--surface-2);
+		overflow: hidden;
+	}
+	.now-vol {
+		display: block;
+		height: 100%;
+		border-radius: var(--radius-dot);
+		background: var(--accent);
+		transition: width var(--transition);
+	}
+	.now.pause .now-vol {
+		background: var(--warn-solid);
+	}
+	.now.stale .now-vol {
+		background: var(--text-2);
+		transition: none;
+	}
+	.now-figures {
+		display: flex;
+		align-items: baseline;
+		gap: var(--space-3);
+		font-size: var(--text-xs);
+		color: var(--text-2);
+	}
+	/* The percentage is the number you read from a distance; the rest is caption. */
+	.now-pct {
+		font-size: var(--text-lg);
+		font-weight: 500;
+		color: var(--text-1);
+		font-variant-numeric: tabular-nums;
+	}
+	.now.stale .now-pct {
+		color: var(--text-2);
+	}
+	.now-step,
+	.now-pass {
+		font-variant-numeric: tabular-nums;
+	}
+	.now-time {
+		display: flex;
+		justify-content: space-between;
+		gap: var(--space-3);
+		font-size: var(--text-xs);
+		color: var(--text-2);
+	}
+	.now-rest {
+		color: var(--text-1);
+		font-weight: 500;
+	}
+	.now-actions {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+	}
+	/* Stop keeps its distance from pause: a bad tap here costs the workpiece. */
+	.now-stretch {
+		flex: 1;
+		min-width: var(--space-6);
+	}
+	/* 40 on a desk; the touch floor beside the machine — Stop is the one button that
+	   may never be smaller than a glove. */
+	.now-actions .btn {
+		min-height: max(40px, var(--target-min));
+		padding: 0 var(--space-4);
+	}
+	/* The stop button in the job block is solid red, like the one in the top bar. */
+	.now-actions .btn.danger {
+		background: var(--danger-solid);
+		border-color: var(--danger-solid);
+		color: var(--on-color);
+	}
+	/* The server is gone: the button says where to stop instead, and is drained to a
+	   dashed outline — readable, because here the text *is* the message. */
+	.now-actions .btn.danger.dood,
+	.now-actions .btn.danger.dood:disabled {
+		background: transparent;
+		border: 1px dashed var(--text-2);
+		color: var(--text-2);
+	}
+	.wachtrij {
+		align-self: flex-start;
+	}
+
+	/* ── The machine controls ───────────────────────────────────────────────── */
+	.machinevouw {
+		margin-top: var(--space-4);
+		border-top: 1px solid var(--line);
+		padding-top: var(--space-3);
+	}
+	.machine-group > summary {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+	}
+	.group-value {
+		margin-left: auto;
+		color: var(--text-2);
+		font-size: var(--text-xs);
+		font-weight: 400;
+	}
+	.machinevouw > summary .group-value {
+		margin-left: 0;
+	}
+	.motion {
+		display: grid;
+		gap: var(--space-2);
+	}
+	.pad {
+		display: grid;
+		/* Four columns; the fifth only when there is a Z axis. */
+		grid-template-columns: repeat(4, max(40px, var(--target-min)));
+		grid-template-rows: repeat(2, auto);
+		gap: var(--space-1);
+	}
+	/* Placed explicitly: with implicit placement ↓ slid into the first column. */
+	.pad .up { grid-area: 1 / 2; }
+	.pad .left { grid-area: 2 / 1; }
+	.pad .down { grid-area: 2 / 2; }
+	.pad .right { grid-area: 2 / 3; }
+	.pad .home { grid-area: 1 / 4 / 3 / 5; }
+	.pad.metz { grid-template-columns: repeat(5, max(40px, var(--target-min))); }
+	.pad .zup { grid-area: 1 / 5; }
+	.pad .zdown { grid-area: 2 / 5; }
+	.jog {
+		padding-left: 0;
+		padding-right: 0;
+		gap: 0;
+	}
+	.jog.home,
+	.jog.zup,
+	.jog.zdown {
+		font-size: var(--text-xs);
+	}
+	/* One arrow, turned: left and right are the up arrow on its side. */
+	.turn-left,
+	.turn-right {
+		display: inline-flex;
+	}
+	.turn-left { transform: rotate(-90deg); }
+	.turn-right { transform: rotate(90deg); }
+	.steps {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--space-2);
+	}
+	.machine-group {
+		margin-top: var(--space-1);
+	}
 	.puntrij {
 		display: flex;
 		flex-wrap: wrap;
 		gap: var(--space-2);
 		margin: var(--space-2) 0;
 	}
-	/* Name and cross are one thing with two targets; the seam between them is a
-	   hairline, so it reads as one chip and not as two loose buttons. */
-	.place { display: inline-flex; }
-	.place .name { border-radius: var(--radius-field) 0 0 var(--radius-field); }
+	/* Name and cross are one thing with two targets, joined by a hairline. */
+	.place {
+		display: inline-flex;
+	}
+	.place .name {
+		border-radius: var(--radius-field) 0 0 var(--radius-field);
+	}
 	.place .gone {
 		border-left: none;
 		border-radius: 0 var(--radius-field) var(--radius-field) 0;
-		padding: 4px var(--space-2);
+		padding: 0 var(--space-2);
 		color: var(--text-2);
 	}
-	.place .gone:hover { color: var(--danger); }
-	/* On a touch screen a 20px cross is a mistake waiting to happen: one bad-aimed tap
-	   and your saved position is gone. It is
-	   recoverable (jog there, save again) and therefore not worth a confirmation, but
-	   the target may well be glove-sized. */
-	@media (pointer: coarse) {
-		.place .name,
-		.place .gone { min-height: 44px; }
-		.place .gone { padding: 0 var(--space-3); }
+	.place .gone:hover:not(:disabled) {
+		color: var(--danger);
 	}
-	/* Muted and a size smaller: the name is what you aim at, the coordinates are the
-	   confirmation that it is the right place. */
-	.coord { color: var(--text-2); margin-left: var(--space-1h); }
+	.coord {
+		color: var(--text-2);
+		margin-left: var(--space-1h);
+	}
 	.bewaarrij {
 		display: flex;
 		flex-wrap: wrap;
 		gap: var(--space-2);
 		align-items: center;
 	}
-	/* ── The zero point (gap J12) ─────────────────────────────────────────────
-	   A little block of its own with a calm border around it: this is a state that is
-	   on or off and that moves your work. Without the frame it reads as yet another row
-	   of buttons among the saved places, and then you do not see that something is
-	   on. */
-	.origin {
-		margin-top: var(--space-3);
-		padding: var(--space-2h) var(--space-3);
-		border: 1px solid var(--line-1);
-		border-radius: var(--radius-card);
-		background: var(--surface-2);
+	.naamveld {
+		flex: 1;
+		min-width: 10ch;
 	}
-	/* When a zero point is set, the left border carries that — so you see it at the
-	   edge of your eye without reading the text. In the accent and not in a warning
-	   colour: this is not dangerous, it is on. */
-	.origin.gezet {
-		border-left: 3px solid var(--accent);
+	/* The state of a feature nobody switched on: a word with a sentence behind it. The
+	   dotted underline says the sentence can be read, so only where a pointer hovers. */
+	.help.off {
+		text-decoration: underline dotted;
+		text-underline-offset: 3px;
+		cursor: help;
+	}
+	.reason {
+		flex-basis: 100%;
 	}
 	.originPoint {
-		margin: var(--space-1h) 0 0;
+		margin: 0;
 		font-size: var(--text-xs);
-		line-height: 1.45;
 		color: var(--text-2);
 	}
 	.originPoint .mono {
 		color: var(--text-1);
 		font-variant-numeric: tabular-nums;
 	}
+	/* The zero point and print and cut sit in a sunken group, because each is a state
+	   that moves your work. Set, the group takes the accent tint as a chosen thing does. */
+	.origin.gezet {
+		background: var(--accent-tint);
+	}
 	/* ── Adjusting during the job (gap J11) ────────────────────────────────── */
-	.bijstellen { margin-top: var(--space-3); }
-	.stelrij { margin-top: var(--space-2); }
+	.stelrij {
+		margin-top: var(--space-2);
+	}
 	.stelnaam {
 		display: flex;
 		justify-content: space-between;
 		align-items: baseline;
 		gap: var(--space-2);
 		font-size: var(--text-xs);
-		color: var(--text-1);
 	}
 	.stelwaarde {
 		color: var(--text-2);
@@ -2559,27 +2136,33 @@
 		gap: var(--space-1h);
 		margin-top: var(--space-1h);
 	}
-	/* Five buttons on one row in a 280 px panel: each may shrink, but the text stays on
-	   the type scale — only the air around it comes off. */
-	/* Five buttons in a 280 px panel: each may shrink, so the air beside the number comes
-	   off. The number itself is in mono — `.btn.mono`, the modifier the shared button has
-	   for a label that is a value — because +1% and +10% otherwise jump in width. */
+	/* Five buttons in a narrow panel: each may shrink; the air beside the number comes
+	   off, the number stays on the type scale. */
 	.adjust {
 		flex: 1;
 		min-width: 0;
-		padding-left: 2px;
-		padding-right: 2px;
+		padding-left: var(--space-1);
+		padding-right: var(--space-1);
 	}
-	.adjust.terug { flex: 1.3; }
-	.naamveld {
-		flex: 1;
-		min-width: 10ch;
-		font: inherit;
-		font-size: var(--text-xs);
-		padding: 4px 8px;
-		border: 1px solid var(--line);
-		border-radius: var(--radius-field);
-		background: var(--surface-2);
-		color: var(--text-1);
+	.adjust.terug {
+		flex: 1.3;
+	}
+	.no-pause {
+		margin-top: var(--space-3);
+	}
+
+	/* ── Sending it to the machine ─────────────────────────────────────────── */
+	.pf-uploadrow {
+		display: flex;
+		align-items: flex-end;
+		gap: var(--space-2);
+		margin: var(--space-3) 0;
+	}
+	/* The eight characters as the machine writes them: a fixed pitch, spaced out. The
+	   capitals themselves are a `style:` on the field — shown, not stored. */
+	.pf-uploadrow input {
+		width: 11ch;
+		font-family: var(--font-mono);
+		letter-spacing: 0.08em;
 	}
 </style>

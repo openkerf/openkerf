@@ -36,7 +36,6 @@
 import Series from '$components/Series.svelte';
 	import SheetTabs from '$components/SheetTabs.svelte';
 	import SheetMaterial from '$components/SheetMaterial.svelte';
-	import PhoneView from '$components/PhoneView.svelte';
 	import JobStart from '$components/JobStart.svelte';
 	import { SheetStore } from '$lib/sheets.svelte';
 	import { CameraStore } from '$lib/camera.svelte';
@@ -48,6 +47,7 @@ import { SeriesStore } from '$lib/series.svelte';
 	import TopBar from '$components/TopBar.svelte';
 	import ActionBar from '$components/ActionBar.svelte';
 	import Menu from '$components/Menu.svelte';
+	import Icon from '$components/Icon.svelte';
 	import CornersDialog from '$components/CornersDialog.svelte';
 	import StencilDialog from '$components/StencilDialog.svelte';
 	import Offset from '$components/Offset.svelte';
@@ -109,11 +109,10 @@ import { SeriesStore } from '$lib/series.svelte';
 	// Cropping: the next drag frame crops the selected image.
 	let cropping = $state(false);
 
-	// Three devices, three apps (DESIGN-SYSTEM v2). Not a shrunken desktop but a
-	// shape of its own: below 768px this is a monitor with an emergency stop.
+	// Below 1200px the app takes the tablet layout: larger text, a panel that folds
+	// away, the machine buttons in the top bar.
 	let width = $state(1440);
-	let onPhone = $derived(width < 768);
-	let tablet = $derived(width >= 768 && width < 1200);
+	let tablet = $derived(width < 1200);
 	// Below this width the file buttons no longer fit *beside* the machine controls in
 	// the top bar; they move to the rail menu then. Since the sheet's material is in
 	// the bar (decision B1) that bound is no longer at 950 but at the whole tablet
@@ -169,7 +168,7 @@ import { SeriesStore } from '$lib/series.svelte';
 	control.onStarted = celebrate;
 	$effect(() => {
 		const now = Boolean(status.activeJob?.running);
-		// It should celebrate even when somebody else started it (phone, console).
+		// It should celebrate even when somebody else started it (another browser, the console).
 		if (now && !wasRunning) celebrate();
 		wasRunning = now;
 	});
@@ -240,6 +239,8 @@ import { SeriesStore } from '$lib/series.svelte';
 	}
 	/** The hidden file field behind Upload…, clicked from the project menu. */
 	let fileInput = $state<HTMLInputElement | null>(null);
+	/** And the one behind Import…, which adds to the sheet instead of replacing the work. */
+	let importInput = $state<HTMLInputElement | null>(null);
 	// Work from a previous session. Never restore it silently: anybody who wants to
 	// start with an empty canvas must be able to.
 	let recovery = $state<{ exists: boolean; when: string | null } | null>(null);
@@ -799,6 +800,36 @@ import { SeriesStore } from '$lib/series.svelte';
 		syncUrl();
 	}
 
+	/** The panel's three tabs, in order. One list for the buttons and for the keys. */
+	let TABS = $derived<{ id: 'design' | 'layers' | 'job'; label: string }[]>([
+		{ id: 'design', label: t('tabs.edit') },
+		{ id: 'layers', label: t('tabs.layers') },
+		{ id: 'job', label: t('tabs.job') }
+	]);
+	/**
+	 * The tabs pattern: one tab stop for the row, the arrows walk it and choose as they
+	 * go, Home and End jump to the ends. Tab then goes on into the panel itself. Three
+	 * buttons that were each a stop of their own put three presses between the keyboard
+	 * and the first field of the panel.
+	 */
+	function tabKeys(event: KeyboardEvent) {
+		const at = TABS.findIndex((item) => item.id === tab);
+		const to =
+			event.key === 'ArrowRight'
+				? (at + 1) % TABS.length
+				: event.key === 'ArrowLeft'
+					? (at - 1 + TABS.length) % TABS.length
+					: event.key === 'Home'
+						? 0
+						: event.key === 'End'
+							? TABS.length - 1
+							: -1;
+		if (to < 0) return;
+		event.preventDefault();
+		selectTab(TABS[to].id);
+		document.getElementById(`paneltab-${TABS[to].id}`)?.focus();
+	}
+
 	function syncUrl() {
 		const url = new URL(window.location.href);
 		url.searchParams.set('tab', tab);
@@ -810,11 +841,6 @@ import { SeriesStore } from '$lib/series.svelte';
 	let preflight = $state(false);
 
 	let device = $derived(status.device);
-	let phonePosition = $derived(
-		device?.position.mm
-			? `${device.position.mm[0].toFixed(1)}, ${device.position.mm[1].toFixed(1)} mm`
-			: '—'
-	);
 	// Do not call it `state`: `$state` would then be read as a store reference.
 	let machine = $derived(machineState(device, status.connected));
 	/**
@@ -911,7 +937,7 @@ import { SeriesStore } from '$lib/series.svelte';
 		watchdog.status(status.device, status.connected);
 	});
 	// The same socket carries the state of a running tile series; the top bar, the
-	// canvas and the phone all read this one source.
+	// canvas and the Job panel all read this one source.
 	$effect(() => {
 		tiling.adopt(status.snapshot?.tiling ?? null);
 	});
@@ -1190,7 +1216,14 @@ import { SeriesStore } from '$lib/series.svelte';
 		saveProject,
 		saveProjectAs,
 		downloadProject,
-		uploadProject: () => fileInput?.click()
+		uploadProject: () => fileInput?.click(),
+		importFile: () => importInput?.click(),
+		// The sheet as SVG — MeerK40t's own writer, so the layers come back on reload.
+		// Through `saveFile`, and a reload after it: the server declares the design
+		// clean on this route, and the dot beside the project name has to hear that.
+		exportSheet: async () => {
+			if (await saveFile('/api/design/export.svg', 'design.svg')) await design.load();
+		}
 	};
 
 	/**
@@ -1280,13 +1313,18 @@ import { SeriesStore } from '$lib/series.svelte';
 	});
 
 	/**
-	 * The project menu: New, Open…, Save and Save as… stand above the separator,
-	 * Download and Upload… below — the same split the six rows always had, now built
-	 * from `projectActions` instead of being written out by hand in `TopBar.svelte`.
+	 * The project menu: New, Open…, Save and Save as… stand above the first separator,
+	 * Download and Upload… below it, and Import… and Export — the sheet in hand rather
+	 * than the whole project — close the list. Built from `projectActions` instead of
+	 * being written out by hand in `TopBar.svelte`.
 	 */
 	let projectMenu = $derived.by<MenuList>(() => {
 		const rows = projectActions(actionContext, handlers);
-		return [{ items: [...rows.slice(0, 4), 'separator', ...rows.slice(4)] }];
+		return [
+			{
+				items: [...rows.slice(0, 4), 'separator', ...rows.slice(4, 6), 'separator', ...rows.slice(6)]
+			}
+		];
 	});
 
 	/**
@@ -1487,16 +1525,6 @@ import { SeriesStore } from '$lib/series.svelte';
 		}
 	}
 
-	function requestStart() {
-		selectTab('job');
-		preflight = true;
-	}
-
-	function toggleTheme() {
-		const root = document.documentElement;
-		root.dataset.theme = root.dataset.theme === 'light' ? 'dark' : 'light';
-	}
-
 	/** Closing the tab with unsaved work asks too — the browser's own wording, not
 	 *  ours, but the same question `hasUnsavedWork` asks in front of New, Open and
 	 *  Upload: untitled work that is not `dirty` still has nowhere else it lives. */
@@ -1514,36 +1542,10 @@ import { SeriesStore } from '$lib/series.svelte';
 
 <svelte:window bind:innerWidth={width} onkeydown={sneltoets} />
 
-{#if onPhone}
-	<!-- The phone is an app of its own: monitor and emergency stop. See DESIGN-SYSTEM v2,
-	     "Drie apparaten, drie apps". -->
-	<PhoneView
-		{device}
-		state={machine}
-		job={status.activeJob}
-		{control}
-		{camera}
-		{notifications}
-		{watchdog}
-		connected={status.connected}
-		position={phonePosition}
-		{design}
-		sheet={sheets.active
-			? {
-					name: sheets.active.name,
-					width_mm: sheets.active.width_mm,
-					height_mm: sheets.active.height_mm
-				}
-			: null}
-	/>
-{:else}
 <AlarmCard watchdog={watchdog} />
 <TopBar
 	{device}
 	state={machine}
-	canStart={(control.capabilities?.actions.start ?? false) &&
-		!control.needsToken &&
-		!workUnderWay}
 	canStop={transportAllowed('stop', { able: control.capabilities?.actions, phase, blocked: control.needsToken })}
 	stopArmed={workUnderWay}
 	mayLeave={mayLeaveWorkArea(phase)}
@@ -1554,10 +1556,7 @@ import { SeriesStore } from '$lib/series.svelte';
 	paused={phase === 'paused'}
 	onPause={() => control.pause()}
 	onResume={() => control.resume()}
-	onStart={requestStart}
 	onStop={() => control.stop()}
-	onOpenFile={openFile}
-	onSaved={() => design.load()}
 	material={sheetMaterial}
 	thicknessMm={sheets.active?.thickness_mm ?? null}
 	onOpenMaterial={() => (materialOpen = true)}
@@ -1570,7 +1569,6 @@ import { SeriesStore } from '$lib/series.svelte';
 		// controller, so that a complaining machine gets on screen.
 		control.frame();
 	}}
-	onToggleTheme={toggleTheme}
 	projectName={projects.current?.name ?? null}
 	dirty={design.dirty}
 	{projectMenu}
@@ -1592,6 +1590,22 @@ import { SeriesStore } from '$lib/series.svelte';
 	}}
 />
 
+<!-- Import…: the project menu's row clicks this. Adds to the sheet; the file types are
+     the ones the engine reads. -->
+<input
+	bind:this={importInput}
+	type="file"
+	style="position: absolute; width: 0; height: 0; opacity: 0;"
+	aria-label={t('topbar.import.aria')}
+	accept=".svg,.dxf,.rd,.egv,.gcode,.nc,.lbrn,.lbrn2,.ezd,.xcs,.png,.jpg,.jpeg,.gif,.bmp"
+	onchange={(e) => {
+		const input = e.currentTarget as HTMLInputElement;
+		const file = input.files?.[0];
+		input.value = '';
+		if (file) openFile(file);
+	}}
+/>
+
 <div class="main">
 	<ToolRail
 		writeOff={writeRefusal(actionContext)}
@@ -1606,7 +1620,6 @@ import { SeriesStore } from '$lib/series.svelte';
 		onOpenClipart={() => (clipartOpen = true)}
 		onOpenSeries={() => (seriesOpen = true)}
 		onPlaceImage={placeImage}
-		onOpenFile={openFile}
 		{projectMenu}
 	/>
 	<!-- Sheets above the canvas: every sheet is a document of its own, so this is also
@@ -1723,7 +1736,7 @@ import { SeriesStore } from '$lib/series.svelte';
 		     thumb needs that, but it is transparent: collapsed, a blank 44px strip
 		     otherwise stayed along the edge (gap B6), and that reads as a render fault
 		     rather than as something to push at. -->
-		<span class="pill" aria-hidden="true">{panelOpen ? '›' : '‹'}</span>
+		<span class="pill" class:closed={!panelOpen} aria-hidden="true"><Icon name="chevron-right" /></span>
 		<span class="vw">{panelOpen ? t('panel.collapse') : t('panel.expand')}</span>
 	</button>
 {/if}
@@ -1732,56 +1745,39 @@ import { SeriesStore } from '$lib/series.svelte';
 		     tablist may only contain tabs, and axe otherwise counted the bell as a
 		     missing child (aria-required-children). -->
 		<div class="tabsrij">
-		<div class="tabs" role="tablist">
-			<button
-				class="tab"
-				role="tab"
-				aria-selected={tab === 'design'}
-				onclick={() => selectTab('design')}
-			>
-				{t('tabs.edit')}
-				{#if tab === 'design'}
-					<svg aria-hidden="true"
-						><line x1="0" y1="1" x2="100%" y2="1" stroke="var(--accent)" stroke-width="1" stroke-dasharray="6 4" class="kerf-anim" /></svg
-					>
-				{/if}
-			</button>
-			<button
-				class="tab"
-				role="tab"
-				aria-selected={tab === 'layers'}
-				onclick={() => selectTab('layers')}
-			>
-				{t('tabs.layers')}
-				{#if tab === 'layers'}
-					<svg aria-hidden="true"
-						><line x1="0" y1="1" x2="100%" y2="1" stroke="var(--accent)" stroke-width="1" stroke-dasharray="6 4" class="kerf-anim" /></svg
-					>
-				{/if}
-			</button>
-			<button class="tab" role="tab" aria-selected={tab === 'job'} onclick={() => selectTab('job')}>
-				{t('tabs.job')}
-				{#if tab === 'job'}
-					<svg aria-hidden="true"
-						><line x1="0" y1="1" x2="100%" y2="1" stroke="var(--accent)" stroke-width="1" stroke-dasharray="6 4" class="kerf-anim" /></svg
-					>
-				{/if}
-			</button>
+		<!-- The chosen tab carries a solid 2px rule in the accent: it is the current
+		     selection, which is what the accent is for. It was the marching kerf line,
+		     and that motion means "the laser is burning" — under a tab it was
+		     decoration, and it taught the eye to stop seeing it. -->
+		<div class="tabs" role="tablist" aria-label={t('panel.aria')}>
+			{#each TABS as item (item.id)}
+				<button
+					class="tab"
+					role="tab"
+					id="paneltab-{item.id}"
+					aria-selected={tab === item.id}
+					aria-controls="panel-tabpanel"
+					tabindex={tab === item.id ? 0 : -1}
+					onclick={() => selectTab(item.id)}
+					onkeydown={tabKeys}
+				>
+					{item.label}
+				</button>
+			{/each}
 		</div>
 			<!-- The fixed place for notifications. Beside the tabs and not floating above
 			     the canvas: this panel is about *this* machine, and that is exactly what a
 			     notification is about. The bell carries its own state — off or blocked is
 			     something you have to be able to see without clicking. -->
 			<button
-				class="bell"
+				class="btn ghost icon bell"
 				class:quiet={!notifications.active}
 				aria-haspopup="dialog"
 				title={notifications.active ? t('tabs.notifications.on') : t('tabs.notifications.off')}
 				aria-label={notifications.active ? t('tabs.notifications.onAria') : t('tabs.notifications.offAria')}
 				onclick={() => (notificationsOpen = true)}
 			>
-				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"
-					stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+				<svg class="icon-svg" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
 					<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
 					<path d="M13.7 21a2 2 0 0 1-3.4 0" />
 					{#if !notifications.active}
@@ -1790,7 +1786,7 @@ import { SeriesStore } from '$lib/series.svelte';
 				</svg>
 			</button>
 		</div>
-		<div class="panel-scroll">
+		<div class="panel-scroll" role="tabpanel" id="panel-tabpanel" aria-labelledby="paneltab-{tab}">
 			{#if tab === 'design' || tab === 'layers'}
 				<DesignPanel
 					show={tab === 'layers' ? 'layers' : 'selection'}
@@ -1880,13 +1876,13 @@ import { SeriesStore } from '$lib/series.svelte';
 {#if camera.state.available}
 	<div class="camstrip">
 		<button
-			class="cam"
+			class="btn ghost mini cam"
 			aria-pressed={camera.shown && camera.state.running}
 			disabled={camera.busy || !canEdit}
 			title={canEdit ? t('camera.title') : t('reason.needsToken')}
 			onclick={() => (camera.state.running && camera.shown ? camera.stop() : camera.start())}
 		>
-			<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h4l2-2h6l2 2h4v11H3z"/><circle cx="12" cy="13" r="3.5"/></svg>
+			<svg class="icon-svg" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8h4l2-2h6l2 2h4v11H3z"/><circle cx="12" cy="13" r="3.5"/></svg>
 			{t('camera.button')}
 		</button>
 		{#if camera.shown && camera.state.running}
@@ -1898,7 +1894,7 @@ import { SeriesStore } from '$lib/series.svelte';
 				aria-label={t('camera.opacity')}
 				bind:value={camera.opacity}
 			/>
-			<button class="cam" onclick={() => (calibrateOpen = true)}>
+			<button class="btn ghost mini cam" onclick={() => (calibrateOpen = true)}>
 				{camera.state.calibrated ? t('camera.recalibrate') : t('camera.calibrate')}
 			</button>
 		{/if}
@@ -1906,9 +1902,15 @@ import { SeriesStore } from '$lib/series.svelte';
 	{#if camera.error}
 		<!-- A long message does not belong in a pill-shaped bar: it becomes a blob then.
 		     Its own frame, a readable line width, and dismissible. -->
-		<div class="camerror" role="alert">
-			<p class="wrap">{camera.error}</p>
-			<button aria-label={t('common.dismiss')} onclick={() => (camera.error = null)}>×</button>
+		<div class="camerror notice danger" role="alert">
+			<span class="notice-icon"><Icon name="danger" /></span>
+			<p class="notice-body wrap">{camera.error}</p>
+			<button
+				class="btn ghost icon"
+				aria-label={t('common.dismiss')}
+				title={t('common.dismiss')}
+				onclick={() => (camera.error = null)}><Icon name="close" /></button
+			>
 		</div>
 	{/if}
 {/if}
@@ -1924,7 +1926,6 @@ import { SeriesStore } from '$lib/series.svelte';
 	{edits}
 	actions={!tablet}
 />
-{/if}
 
 <!-- Libraries and tools as dialogs of their own: in 280px you cannot search and
      compare. See DESIGN-SYSTEM.md. -->
@@ -1947,7 +1948,7 @@ import { SeriesStore } from '$lib/series.svelte';
 <Dialog
 	title={t('recovery.title')}
 	open={recovery?.exists === true}
-	width="420px"
+	size="s"
 >
 	<p class="ask">
 		{t('recovery.body', { when: i18n.dateTime(recovery?.when) })}
@@ -2026,7 +2027,7 @@ import { SeriesStore } from '$lib/series.svelte';
 <!-- What lies on top of what: the count, why it matters, and one button that does
      it. A confirm and not a straight action, because the drawing looks identical
      afterwards — the only proof is the sentence in the notice. -->
-<Dialog title={t('duplicates.title')} open={duplicates !== null} width="470px">
+<Dialog title={t('duplicates.title')} open={duplicates !== null} size="s">
 	{#if duplicates}
 		<p class="ask">
 			{duplicates.stacks === 0
@@ -2056,13 +2057,13 @@ import { SeriesStore } from '$lib/series.svelte';
 
 <!-- The prompt card floats and does not block: a job has just started, and that
      must not disappear behind a modal window. -->
-{#if !onPhone && promptOpen && notifications.shouldAsk}
+{#if promptOpen && notifications.shouldAsk}
 	<div class="vraagkaart" class:job-panel={tab === 'job'}>
 		<NotificationCard {notifications} variant="prompt" onDone={() => (promptOpen = false)} />
 	</div>
 {/if}
 
-<Dialog title={t('notifications.title')} bind:open={notificationsOpen} width="460px">
+<Dialog title={t('notifications.title')} bind:open={notificationsOpen} size="s">
 	<NotificationCard {notifications} />
 </Dialog>
 
@@ -2186,7 +2187,7 @@ import { SeriesStore } from '$lib/series.svelte';
 <!-- The sheet's material: a small dialog, two choices. It cannot be in the top bar —
      that scrolls horizontally and clips every dropdown — and on a tablet a dialog can
      be operated with a finger as well. -->
-<Dialog title={t('sheetMaterial.title')} bind:open={materialOpen} width="440px">
+<Dialog title={t('sheetMaterial.title')} bind:open={materialOpen} size="s">
 	{#if sheets.active}
 		<SheetMaterial
 			{sheets}
@@ -2201,7 +2202,7 @@ import { SeriesStore } from '$lib/series.svelte';
      materials on the left, settings on the right — 640 is just too narrow: the setting
      itself kept 380px and then thickness, values, source and the button squeeze onto one
      line. -->
-<Dialog title={t('library.title')} bind:open={libraryOpen} width="1120px">
+<Dialog title={t('library.title')} bind:open={libraryOpen} size="xl">
 	<MaterialLibrary
 		{library}
 		operations={design.operations}
@@ -2228,7 +2229,7 @@ import { SeriesStore } from '$lib/series.svelte';
 	/>
 </Dialog>
 
-<Dialog title={t('testgrid.title')} bind:open={gridOpen} width="860px">
+<Dialog title={t('testgrid.title')} bind:open={gridOpen} size="l">
 	<TestGrid
 		{device}
 		{library}
@@ -2271,8 +2272,8 @@ import { SeriesStore } from '$lib/series.svelte';
 		display: flex;
 		align-items: center;
 		gap: var(--space-2);
-		padding: 4px 8px;
-		border-radius: 999px;
+		padding: var(--space-1) var(--space-2);
+		border-radius: var(--radius-dot);
 		border: 1px solid var(--line);
 		background: color-mix(in srgb, var(--surface-1) 92%, transparent);
 		backdrop-filter: blur(6px);
@@ -2290,53 +2291,28 @@ import { SeriesStore } from '$lib/series.svelte';
 			bottom: calc(var(--statusbar-height) + var(--space-3) + 108px + var(--palette-height, 0px));
 		}
 	}
+	/* The shared ghost button, shaped to the pill it sits in. On is the current
+	   choice, so its word may take the accent. */
 	.cam {
-		display: flex;
-		align-items: center;
-		gap: 4px;
-		font-size: var(--text-xs);
-		padding: 4px 8px;
-		border-radius: 999px;
-		color: var(--text-2);
+		gap: var(--space-1);
+		border-radius: var(--radius-dot);
 	}
-	.cam:hover:not(:disabled) { background: var(--surface-2); color: var(--text-1); }
-	.cam:disabled { opacity: 0.45; cursor: not-allowed; }
 	.cam[aria-pressed='true'] { color: var(--accent); }
 	.camstrip input[type='range'] { width: 90px; }
+	/* The shared danger notice (tokens.css), placed and lifted off the stage. */
 	.camerror {
 		position: absolute;
 		left: calc(var(--rail-width) + var(--space-4));
 		bottom: calc(var(--statusbar-height) + var(--space-3) + 40px + var(--palette-height, 0px));
 		z-index: 5;
-		display: flex;
-		align-items: flex-start;
-		gap: var(--space-2);
 		max-width: 42ch;
-		padding: var(--space-3);
-		border: 1px solid color-mix(in srgb, var(--danger) 40%, var(--line));
-		border-radius: var(--radius-card);
-		background: var(--surface-1);
 		box-shadow: var(--shadow-float);
 	}
-	.camerror p {
-		margin: 0;
-		font-size: var(--text-xs);
-		line-height: 1.5;
-		color: var(--text-1);
-	}
+	.camerror p { margin: 0; }
 	/* The message contains a command on a line of its own; that must not be glued
 	   together as one long slab of text. */
-	.camerror .wrap { white-space: pre-wrap; }
-	.camerror button {
-		flex: none;
-		width: 20px;
-		height: 20px;
-		border-radius: var(--radius-field);
-		color: var(--text-2);
-		font-size: 15px;
-		line-height: 1;
-	}
-	.camerror button:hover { background: var(--surface-2); color: var(--text-1); }
+	.camerror .wrap { white-space: pre-wrap; flex: 1; }
+	.camerror .btn.icon { margin: calc(-1 * var(--space-1)) calc(-1 * var(--space-1)) 0 0; }
 
 	/* Bottom right, but *beside* the panel and not over it: that is exactly where the
 	   spooler card with the progress of the job that has just started sits, and covering
@@ -2372,7 +2348,7 @@ import { SeriesStore } from '$lib/series.svelte';
 		flex-direction: column;
 		min-height: 0;
 	}
-	/* On tablet and phone the text is one step larger (15px instead of 13), but the
+	/* On a tablet the text is one step larger (15px instead of 13), but the
 	   panel stayed 280px — which fits a fifth less on a line than on the desktop and
 	   breaks layer names in the middle of a word. 280 × 15/13 ≈ 323: the same number of
 	   characters per line as on the desktop.
@@ -2402,7 +2378,6 @@ import { SeriesStore } from '$lib/series.svelte';
 		border: none;
 		background: transparent;
 		color: var(--text-2);
-		font-size: var(--text-md);
 	}
 	.panelgrip .pill {
 		display: grid;
@@ -2410,12 +2385,13 @@ import { SeriesStore } from '$lib/series.svelte';
 		width: 24px;
 		height: 56px;
 		border: 1px solid var(--line);
-		border-radius: 999px;
+		border-radius: var(--radius-dot);
 		background: var(--surface-1);
 		box-shadow: var(--lift-1);
-		line-height: 1;
 		transition: background var(--transition), color var(--transition);
 	}
+	/* Closed, the chevron points back towards the panel it opens. */
+	.panelgrip .pill.closed :global(svg) { transform: rotate(180deg); }
 	.panelgrip:hover .pill { background: var(--surface-2); color: var(--text-1); }
 	.panelgrip:focus-visible { outline: none; }
 	.panelgrip:focus-visible .pill { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -2437,35 +2413,38 @@ import { SeriesStore } from '$lib/series.svelte';
 	}
 	.tab {
 		flex: 1;
-		padding: 8px 0 8px;
+		min-height: max(36px, var(--target-min));
+		padding: var(--space-2) 0;
 		font-weight: 500;
 		color: var(--text-2);
 		position: relative;
+		transition: color var(--transition);
+	}
+	.tab:hover {
+		color: var(--text-1);
 	}
 	.tab[aria-selected='true'] {
 		color: var(--text-1);
 	}
-	.tab svg {
+	/* The current tab: a solid rule in the accent, on the row's own hairline. */
+	.tab[aria-selected='true']::after {
+		content: '';
 		position: absolute;
 		left: var(--space-4);
+		right: var(--space-4);
 		bottom: -1px;
-		width: calc(100% - var(--space-8));
 		height: 2px;
+		border-radius: var(--radius-sharp);
+		background: var(--accent);
+	}
+	/* The focus ring sits inside the row, so the panel edge does not clip it. */
+	.tab:focus-visible {
+		outline-offset: -2px;
 	}
 	.bell {
-		flex: none;
-		width: 36px;
-		display: grid;
-		place-items: center;
+		align-self: center;
+		margin-right: var(--space-1);
 		color: var(--text-2);
-	}
-	.bell svg {
-		width: 17px;
-		height: 17px;
-	}
-	.bell:hover {
-		color: var(--text-1);
-		background: var(--surface-2);
 	}
 	/* Off is a state, not a fault: the struck-through bell already says so. No red,
 	   because nothing is broken. */
@@ -2489,8 +2468,7 @@ import { SeriesStore } from '$lib/series.svelte';
 		padding: var(--space-4);
 	}
 
-	/* On tablet/phone the app is primarily monitor + photo input: the panel folds below
-	   the canvas, the rail disappears. */
+	/* In a narrow window the panel folds below the canvas, the rail disappears. */
 	@media (max-width: 720px) {
 		.main {
 			flex-direction: column;

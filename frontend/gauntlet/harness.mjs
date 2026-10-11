@@ -9,7 +9,7 @@ import { scratchFetch as fetch, assertScratch } from './scratch.mjs';
 import { chromium } from 'playwright';
 
 export const BASE = process.env.OK_BASE ?? 'http://127.0.0.1:8092';
-export const WIDTHS = { desktop: 1440, tablet: 1024, phone: 390 };
+export const WIDTHS = { desktop: 1440, tablet: 1024 };
 
 export async function browser() {
 	return chromium.launch();
@@ -27,27 +27,14 @@ export async function reset() {
 	await fetch(`${BASE}/api/design/clear`, { method: 'POST' });
 }
 
-export async function open(b, { width = 1440, theme = 'light', path = '/' } = {}) {
+export async function open(b, { width = 1440, path = '/' } = {}) {
 	await assertScratch(BASE);
 	const context = await b.newContext({
-		viewport: { width, height: width === 390 ? 844 : 900 },
+		viewport: { width, height: 900 },
 		deviceScaleFactor: 1,
-		colorScheme: theme === 'dark' ? 'dark' : 'light'
+		colorScheme: 'light'
 	});
 	const page = await context.newPage();
-	// Set the theme before anything is drawn. Switching afterwards means
-	// measuring during the transition, and then you read mixed colours halfway —
-	// which produced "contrast faults" that went away by themselves after a
-	// second.
-	if (theme === 'dark') {
-		await page.addInitScript(() => {
-			// An init script runs before <html> exists; documentElement is null
-			// then and setAttribute throws.
-			const set = () => document.documentElement?.setAttribute('data-theme', 'dark');
-			set();
-			document.addEventListener('DOMContentLoaded', set);
-		});
-	}
 	const problems = [];
 	page.on('console', (m) => {
 		if (m.type() === 'error') problems.push(m.text().slice(0, 160));

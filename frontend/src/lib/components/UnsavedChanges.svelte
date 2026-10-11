@@ -21,7 +21,7 @@
 	}: { open: boolean; name: string | null; onSave: () => void; onDiscard: () => void } = $props();
 </script>
 
-<Dialog title={t('unsaved.title')} bind:open width="420px">
+<Dialog title={t('unsaved.title')} bind:open size="s">
 	<p>{t('unsaved.body', { name: name ?? t('topbar.project.untitled') })}</p>
 	{#snippet footer()}
 		<button class="btn" onclick={() => (open = false)}>{t('common.cancel')}</button>

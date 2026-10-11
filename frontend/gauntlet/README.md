@@ -62,8 +62,8 @@ Documentation helpers that dismiss prompts are unsuitable for warning-state revi
 
 Use the authorised browser-control tool for actual browser interaction in an agent
 session. Capture complete screens at 1440×900, dense states at 1366×768, and a wide
-canvas check at 1920×1080. Check Dutch and English labels and the other theme for
-regressions. Record revision, fixture, CSS viewport, language/theme and exact steps.
+canvas check at 1920×1080. Check Dutch and English labels for regressions. Record
+revision, fixture, CSS viewport, language and exact steps.
 
 The engineer supplies before/after images. A separate senior reviewer must open
 those actual images and record observations, then check relevant interactions and

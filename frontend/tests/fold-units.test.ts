@@ -99,9 +99,10 @@ for (const [width, height] of SIZES) {
 				const edit = document.querySelector('.layer-edit')!;
 				const fields = [...edit.querySelectorAll('.vals .val')].map((field) => {
 					const number = field.querySelector('input')!.getBoundingClientRect();
-					const unit = field.querySelector('span')!.getBoundingClientRect();
+					// The unit is the field's `.suffix`; the first span is the word over it.
+					const unit = field.querySelector('.suffix')!.getBoundingClientRect();
 					return {
-						unit: (field.querySelector('span')!.textContent ?? '').trim(),
+						unit: (field.querySelector('.suffix')!.textContent ?? '').trim(),
 						gapLeft: Math.round((unit.left - number.right) * 10) / 10,
 						dropBelow: Math.round((unit.top - number.bottom) * 10) / 10,
 						lineHeight: Math.round(number.height * 10) / 10

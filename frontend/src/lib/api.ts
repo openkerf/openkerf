@@ -195,8 +195,40 @@ export function machineState(device: Device | null, connected: boolean): Machine
 	if (device?.laser_status === 'pause' || device?.laser_status === 'paused' || device?.paused)
 		return 'paused';
 	if (isStalled(job)) return 'paused';
-	if (device?.laser_status === 'active' || job || device?.spooler.idle === false) return 'busy';
+	if (device?.laser_status === 'active') return 'busy';
+	// A finished job that lingers in the queue keeps the spooler from reading idle, but
+	// the machine is not working on it: the chip says what the job card says, "done"
+	// leaves the machine ready. One reading, `isFinished`, for both surfaces.
+	if (isFinished(job)) return 'ready';
+	if (job || device?.spooler.idle === false) return 'busy';
 	return 'ready';
+}
+
+/**
+ * Has this job burned everything it will burn?
+ *
+ * The same bound `jobPhase` calls "done", so the machine chip and the job card cannot
+ * disagree about a finished job again.
+ */
+export function isFinished(job: Job | null): boolean {
+	if (!job || job.running || isPaused(job)) return false;
+	return (job.progress ?? 0) >= DONE;
+}
+
+/**
+ * Is what the job card shows live, or the last thing we heard?
+ *
+ * The job's own state is kept when the link to the controller drops (reachability is
+ * independent of the job), but then its progress is a memory, not a report. The card
+ * must say so rather than keep showing a confident "Burning 42%" in the accent colour.
+ */
+export function progressIsLive(device: Device | null, serverConnected: boolean): boolean {
+	if (!serverConnected || !device) return false;
+	// A driver that never reports its link (no `connection` at all) is not a link that
+	// was lost: its progress is still the engine's own, live. Only a reported
+	// disconnection or an explicitly unknown link turns the card into a memory.
+	if (!device.connection) return true;
+	return device.connection.state === 'connected';
 }
 
 export function runningJob(device: Device | null): Job | null {
@@ -250,12 +282,12 @@ export function currentJob(device: Device | null): Job | null {
  * anyway (FEATURE-GAPS P3). A job that exists but is not running is standing still —
  * which is what you want to see on screen.
  *
- * **This is the only definition** (gap J8). PhoneView had a variant of its own —
- * `Boolean(job) && (!running || machineState === 'paused')` — that dropped the
- * requirement "there was progress already". Consequence: a freshly spooled job is not
- * running yet and was shown there as "Paused" for one poll round, while the rest of
- * the app simply saw it in the queue. Two screens side by side saying something
- * anders zeggen over dezelfde job.
+ * **This is the only definition** (gap J8). A second screen once had a variant of
+ * its own — `Boolean(job) && (!running || machineState === 'paused')` — that dropped
+ * the requirement "there was progress already". Consequence: a freshly spooled job is
+ * not running yet and was shown there as "Paused" for one poll round, while the rest
+ * of the app simply saw it in the queue. Two screens side by side saying different
+ * things about the same job.
  *
  * Whoever also wants the device side (`laser_status === "pause"`, so a machine that
  * pauses itself without the job reporting anything) does not take this function but
@@ -266,6 +298,10 @@ export function isStalled(job: Job | null): boolean {
 	if (!job) return false;
 	if (isPaused(job)) return true;
 	if (job.running) return false;
+	// A job the engine never takes out of the queue (it tops out at 0.998, see CLAUDE.md
+	// "A job never reaches 100%") is finished, not standing still. Without this the top
+	// bar said "Paused" beside a job card that said "Done 100%".
+	if (isFinished(job)) return false;
 	// Started but standing still = paused. Nothing done yet = waiting its turn.
 	// Without that distinction the top bar jumped to "Paused" for one poll round just
 	// after starting, because a freshly spooled job is not running either.
@@ -321,8 +357,8 @@ export function remainingSeconds(job: Job | null): number | null {
  *
  * The engine calls a nameless job `Spooler:3 items` (spoolers.py:612 — the class
  * name plus the length of the command list). That is an internal tally, not a
- * name, and it appeared in three places: the Job panel, the status bar and the
- * phone view. Each of those needed its own detour; hence the wording lives here,
+ * name, and it appeared in more than one place: the Job panel and the status
+ * bar. Each of those needed its own detour; hence the wording lives here,
  * once.
  *
  * `openkerf_api.commands.start_job` now gives a job we spool a real name, so this
@@ -341,7 +377,7 @@ export function jobLabel(job: Job | null): string {
  * A movement job carries no name but its first instruction.
  *
  * Show frame spools a single movement, and the engine uses the repr of the Python
- * tuple as its label. So the Job panel and the phone view showed literally
+ * tuple as its label. So the Job panel showed literally
  * `('move_abs', 114.7544mm, 80.0mm)` under a moving head. What it says is true —
  * it really is the command that is running — but it is the engine's language, and
  * it does not belong on screen.
@@ -432,7 +468,7 @@ export function jobPhase(device: Device | null, job: Job | null, designEmpty: bo
 	if (!job) return designEmpty ? 'nothing' : 'ready';
 	if (isPaused(job) || device?.paused || device?.laser_status === 'pause' || device?.laser_status === 'paused') return 'paused';
 	if (job.running) return 'burning';
-	if ((job.progress ?? 0) >= DONE) return 'done';
+	if (isFinished(job)) return 'done';
 	// Started but standing still is a pause; nothing done yet is waiting its turn.
 	// The same bound as `isStalled`, because two bounds for the same distinction is
 	// how the surfaces drifted apart in the first place.
@@ -448,10 +484,10 @@ export function jobBusy(phase: JobPhase): boolean {
 /**
  * May this transport command be offered right now?
  *
- * Four surfaces asked this in four ways. The page asked the capabilities and the
- * token; the Job panel asked the capabilities, the phase and its own `blocked`; the
- * phone asked whether a job existed, the token and the connection — and never the
- * capabilities, so a driver that cannot pause still got a pause button on the phone.
+ * Several surfaces asked this in their own ways. The page asked the capabilities and
+ * the token; the Job panel asked the capabilities, the phase and its own `blocked`;
+ * a third surface asked whether a job existed, the token and the connection — and
+ * never the capabilities, so a driver that cannot pause still got a pause button.
  * The status bar kept a fourth copy that its template no longer read at all.
  *
  * `blocked` is what each surface already knows about itself: no token, no connection,
@@ -601,13 +637,9 @@ export function formatDuration(seconds: number | null | undefined): string {
  * The three quantities of a test grid, and how they are written down.
  *
  * Since decision B12 the user picks which two go on the axes; the third is fixed.
- * A summary that assumes "speed × power" therefore lies about an interval grid —
- * which is what happened on the phone, where "1×3 · 200–200 mm/s" appeared for a
- * grid whose axis was the interval.
  *
- * Name and unit live here because more than one screen needs them: the wizard
- * that makes the grid, and the photo list that finds it again. Two copies of the
- * same unit is two chances to drift.
+ * Name and unit live here, beside the type, so the wizard that makes the grid
+ * reads them from one place. Two copies of the same unit is two chances to drift.
  */
 export type GridAxis = 'speed' | 'power' | 'interval';
 
@@ -621,61 +653,6 @@ export const AXIS_UNIT: Record<GridAxis, string> = {
 	power: '%',
 	interval: 'mm'
 };
-
-/** The least a grid row has to carry to be summarised. */
-export type GridAxes = {
-	row_axis?: GridAxis | null;
-	column_axis?: GridAxis | null;
-	rows?: number | null;
-	columns?: number | null;
-	speed_steps?: number | null;
-	power_steps?: number | null;
-} & Partial<Record<`${GridAxis}_min` | `${GridAxis}_max`, number | null>>;
-
-/** No "0.10" and no "5.00": as many decimals as the value needs. */
-function short(value: number): string {
-	return String(Number(value.toFixed(3)));
-}
-
-/**
- * The range of one axis, with its unit: `5–20 mm/s`, `0.05–0.25 mm`.
- *
- * When the quantity is not on an axis, min equals max and this yields a single
- * value instead of a range from nothing to nothing.
- */
-export function axisRange(grid: GridAxes, axis: GridAxis): string {
-	const min = grid[`${axis}_min`] ?? null;
-	const max = grid[`${axis}_max`] ?? null;
-	if (min === null && max === null) return '—';
-	const unit = AXIS_UNIT[axis];
-	if (min === null || max === null || min === max)
-		return `${short((min ?? max) as number)} ${unit}`;
-	return `${short(min)}–${short(max)} ${unit}`;
-}
-
-/**
- * The matrix size, whichever quantity sits where.
- *
- * `rows`/`columns` were filled from `speed_steps`/`power_steps` by the migration
- * for older grids; that fallback stays for a server older than the migration.
- */
-export function gridSize(grid: GridAxes): string {
-	const rows = grid.rows ?? grid.speed_steps ?? 0;
-	const columns = grid.columns ?? grid.power_steps ?? 0;
-	return `${rows}×${columns}`;
-}
-
-/**
- * One line saying what this grid varies: the size plus the two axes.
- *
- * The fixed quantity is not in it — that is engraved on the board, and on a
- * 240 px phone line space is the scarce thing.
- */
-export function gridSummary(grid: GridAxes): string {
-	const row = grid.row_axis ?? 'speed';
-	const column = grid.column_axis ?? 'power';
-	return `${gridSize(grid)} · ${axisRange(grid, row)} · ${axisRange(grid, column)}`;
-}
 
 /** Only a confirmed disconnection blocks a burn; unknown drivers may auto-connect. */
 export function machineDisconnected(device: Device | null): boolean {

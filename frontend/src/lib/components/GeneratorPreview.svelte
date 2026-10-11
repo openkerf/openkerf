@@ -195,7 +195,7 @@
 			{/each}
 			{#if kolommen > 1}
 				<line class="size" x1={12 + 76 / kolommen - 76 / kolommen / 4} y1="8" x2={12 + 76 / kolommen} y2="8" />
-				<text class="bij" x={12 + 76 / kolommen - 76 / kolommen / 8} y="6"
+				<text class="bij" font-size="7.5" x={12 + 76 / kolommen - 76 / kolommen / 8} y="6"
 					>{t('genPreview.space')}</text
 				>
 			{/if}
@@ -278,8 +278,9 @@
 	}
 	.size { stroke: var(--text-2); stroke-width: 0.8; vector-effect: non-scaling-stroke; }
 	/* @svg-space: this fallback sketch computes in viewBox units (100 wide on
-	   190 px), niet in CSS-pixels. */
-	.bij { font-size: 7.5px; fill: var(--text-2); font-family: var(--font-mono); }
+	   190 px), not in CSS pixels — so its size is the text's own `font-size`
+	   attribute, in those units, and not a pixel size here. */
+	.bij { fill: var(--text-2); font-family: var(--font-mono); }
 	figcaption { font-size: var(--text-xs); color: var(--text-2); text-align: center; }
 	.figures { display: flex; gap: var(--space-2); justify-content: center; flex-wrap: wrap; }
 	.figures .mono { color: var(--text-1); font-family: var(--font-mono); }

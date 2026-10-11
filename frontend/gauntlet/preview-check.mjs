@@ -12,7 +12,7 @@ import { scratchFetch as fetch } from './scratch.mjs';
 import { browser, open, BASE } from './harness.mjs';
 
 const b = await browser();
-const page = await open(b, { width: 1440, theme: 'light' });
+const page = await open(b, { width: 1440 });
 
 // ------------------------------------------------------------------ the flash
 await page.click('body', { position: { x: 700, y: 400 } }).catch(() => {});

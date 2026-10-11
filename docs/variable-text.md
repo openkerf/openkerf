@@ -133,7 +133,7 @@ to start". There is no keyboard shortcut; none of the five workspace windows has
 The window has two halves. On the left, what this list makes. On the right, where the rows
 come from and what OpenKerf decided about them.
 
-![The Series window over the canvas. On the left a numbered burn list — 1 Anna, 2 Bram, 3 Cees, 4 Daan, 5 Eva — with a search box above it, the line "This list makes 5 burns out of 5 rows." and the file it came from; burn 1 carries the chip "On the bed". On the right the two-way control for where the rows come from, set to A file rather than Numbers, with "Choose another file" and "Reading names.csv." beside it; the block "The first rows, as this app reads them" with the first row read as Column names, "Separated by Commas", "Read as utf-8" and a five-row preview table of name and room; the table "The columns in this list" giving name with the placeholder {name} and the badge "In use" and room with none; then the tick "Skip a row with an empty cell" and a "Start at row" field reading 1. The window's own body scrolls under an action row that stays put, with "Take the list away" and "Use this list instead" in it.](images/35-series.png)
+![The Series window over the canvas. On the left a numbered burn list — 1 Anna, 2 Bram, 3 Cees, 4 Daan, 5 Eva — with a search box above it, the line "This list makes 5 burns out of 5 rows." and the file it came from; burn 1 carries the badge "On the bed" and its row is tinted as the current one. On the right the two-way control for where the rows come from, set to A file rather than Numbers, with "Choose another file" and "Reading names.csv." beside it; the block "The first rows, as this app reads them" with the first row read as Column names, "Separated by Commas", "Read as utf-8" and a five-row preview table of name and room; the table "The columns in this list" giving name with the placeholder {name} and the badge "In use" and room with none; then the tick "Skip a row with an empty cell" and a "Start at row" field reading 1. The window's own body scrolls under an action row that stays put, with "Take the list away" and "Use this list instead" in it.](images/35-series.png)
 
 **On the left: the burns.** One numbered row per burn, in the order they will be made, with
 what that burn engraves beside the number. Above them a search box, **Search the names**, for
@@ -269,7 +269,7 @@ before every burn and never read back, and what you see is what the head cuts.
 
 Where the number is said, and each of these reads the same one:
 
-- the **On the bed** chip in the burn list;
+- the **On the bed** badge in the burn list;
 - the panel line under a selected text, "For the burn now on the bed this reads “Anna”.";
 - the heading in the Job panel, "Burn 3 of 5".
 
@@ -512,9 +512,9 @@ Said plainly, because the alternative is finding out on material.
 - **OpenKerf does not lay fifty pieces out on a plank for you.** Repeat with **Each copy takes
   the next name from the list** gives each copy the next row and you place them, which is also
   the only way to lay tags around a knot in the wood.
-- **The window is a desktop window.** It stacks on a narrow screen and it works, but the phone
-  view has no Series window at all. The run block in the Job panel is the part you need
-  standing at the machine, and that one is built for a small screen.
+- **The window is a desktop window.** It stacks on a narrow screen and it works. The run block
+  in the Job panel is the part you need standing at the machine, and that one is built for a
+  small screen.
 - **A project file carries the list.** Mailing a project mails the names in it, which is what
   makes a project openable at the other end — and worth remembering when the names are
   somebody's customers. What does not travel is the run: the receiver gets the list, not your

@@ -130,7 +130,7 @@ test('every key is used somewhere', () => {
 	// their keys never appear as a literal. Those are listed here by prefix, and the
 	// prefix itself has to be built somewhere, otherwise a whole family could go
 	// unnoticed.
-	const DYNAMIC = ['machine.state.', 'machine.hint.', 'job.phase.', 'axis.', 'panel.type.', 'notify.permission.', 'notify.state.', 'count.'];
+	const DYNAMIC = ['machine.state.', 'machine.hint.', 'job.phase.', 'axis.', 'panel.type.', 'notify.permission.', 'count.'];
 	for (const prefix of DYNAMIC)
 		assert.ok(CODE.includes(`${prefix}$`), `nothing composes ${prefix}… any more — drop it here`);
 	const unused = Object.keys(en).filter(
@@ -535,13 +535,12 @@ test('a refusal with a code is said in the reader’s language', async () => {
 });
 
 test('the one refusal a reader has to act on is not summarised away', () => {
-	// `apiError` only helps where somebody calls it. These two screens are the pair that
-	// did not: both upload a photograph of a test board, and the refusal on that route is
+	// `apiError` only helps where somebody calls it. These handlers were the ones that
+	// did not: they upload a photograph of a test board, and the refusal on that route is
 	// the one the board code exists to make — "the code in this photograph says board
 	// FR5B R74F; you picked 6Y0Y JKS2" — where the answer is inside the sentence and the
 	// board is still on the bench. Measured in a browser against an engine of its own:
-	// before, the desktop panel said "Saving the photo failed." and the phone said "Photo
-	// saved. You get the preset out of it on the desktop."; after, both say the sentence
+	// before, the panel said "Saving the photo failed."; after, it says the sentence
 	// above verbatim. Nothing in the suite noticed the difference — putting the summary
 	// back left all 73 tests green and svelte-check at 0 — so it is noticed here.
 	//
@@ -555,7 +554,6 @@ test('the one refusal a reader has to act on is not summarised away', () => {
 	// refusal a reader has to act on. Anchoring on the string made the test read whichever
 	// happened to come first in the file, which is how a third one could slip in unread.
 	const handlers: [string, string][] = [
-		['PhoneView.svelte', 'async function upload'],
 		['TestGridResult.svelte', 'async function uploadPhoto'],
 		['TestGridResult.svelte', 'async function readBoardFromPhoto']
 	];
@@ -662,26 +660,6 @@ test('a label the interface reads follows a language switch', async () => {
 	assert.notEqual(dutch.means, english.means, 'the explanation did not follow the language');
 });
 
-test('the notification state says its word in the reader’s language', async () => {
-	// Measured on the phone view at 390 wide with the app in English: the chip beside
-	// "Notifications" read "geblokkeerd". `PhoneView` chose between 'geblokkeerd', 'aan'
-	// and 'uit' itself and used that same value as a CSS class, so the word could not be
-	// translated without breaking the styling. The desktop said a whole sentence through
-	// `permissionText()` at the same moment. One state, two surfaces, one function.
-	const { bindLanguage } = await import('../src/lib/i18n/core.ts');
-	const { notifyState } = await import('../src/lib/notifications.svelte.ts');
-	bindLanguage(() => 'en');
-	const english = notifyState('denied', false);
-	bindLanguage(() => 'nl');
-	const dutch = notifyState('denied', false);
-	bindLanguage(() => 'en');
-	assert.equal(english.name, 'blocked', 'the class name is not a word on screen');
-	assert.equal(dutch.name, english.name, 'the class name followed the language');
-	assert.notEqual(dutch.text, english.text, 'the word on screen did not follow the language');
-	assert.equal(notifyState('granted', true).name, 'on');
-	assert.equal(notifyState('granted', false).name, 'off');
-});
-
 test('a measurement on screen is written the way the reader writes numbers', async () => {
 	// `formatMm` was `value.toFixed(1)` — an English full stop, whatever the language.
 	// It feeds the head position and the mouse position in the status bar, so with the
@@ -702,7 +680,7 @@ test('one English word does not quietly become two Dutch ones', () => {
 	// The translation may not split what the source language keeps together: two keys
 	// with the same English text and two different Dutch texts means the same button
 	// says something else depending on the screen. Measured before this round: sixteen
-	// such groups, among them "Resume" as *Hervatten* twice and *Hervat* on the phone,
+	// such groups, among them "Resume" as *Hervatten* twice and *Hervat* once,
 	// and "Paused" as *Pauze* in the top bar and *Gepauzeerd* in the panel.
 	//
 	// Eight of the sixteen are right, because English is the ambiguous one there: "Cut"

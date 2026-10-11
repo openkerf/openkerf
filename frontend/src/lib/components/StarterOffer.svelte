@@ -30,6 +30,8 @@
 	 * with a ten-second timeout. Hanging the opening of the material library on that is
 	 * how a feature gets switched off.
 	 */
+	import Notice from './Notice.svelte';
+	import Why from './Why.svelte';
 	import NumberField from './NumberField.svelte';
 	import { i18n, t } from '$lib/i18n/index.svelte';
 	import { StarterStore, operationName, type StarterRow } from '$lib/library.svelte';
@@ -52,8 +54,19 @@
 		 * every machine that has been used — and with it on the wizard's last step the
 		 * catalogue would be furniture on a page about a first cut.
 		 */
-		door = false
-	}: { onTestGrid?: () => void; onChanged?: () => void; door?: boolean } = $props();
+		door = false,
+		framed = true
+	}: {
+		onTestGrid?: () => void;
+		onChanged?: () => void;
+		door?: boolean;
+		/**
+		 * Whether the offer draws its own card. In the library window it stands on the
+		 * window's body and needs one; on the last step of setup the host is already a
+		 * card, and a card inside a card is the one nesting the system refuses.
+		 */
+		framed?: boolean;
+	} = $props();
 
 	const starter = new StarterStore(() =>
 		typeof localStorage === 'undefined' ? '' : (localStorage.getItem('openkerf.token') ?? '')
@@ -166,7 +179,7 @@
 	     One button written once, because it is rendered from two places: on the line above
 	     the list while the list is open, and on a row of its own where there is no such
 	     line. -->
-	<button class="btn subtle" onclick={() => (looking = false)}>{t('starter.hide')}</button>
+	<button class="btn ghost" onclick={() => (looking = false)}>{t('starter.hide')}</button>
 {/snippet}
 
 {#snippet tookLines()}
@@ -184,7 +197,7 @@
 			{#each starter.imports as done (done.batch)}
 				<li>
 					<span>{t('starter.took', { n: done.presets, material: done.material })}</span>
-					<button class="btn subtle mini" onclick={() => undo(done.batch)} disabled={starter.busy} title={starter.busy ? t('reason.busy') : undefined}>
+					<button class="btn ghost mini" onclick={() => undo(done.batch)} disabled={starter.busy} title={starter.busy ? t('reason.busy') : undefined}>
 						{t('starter.undo')}
 					</button>
 				</li>
@@ -199,7 +212,7 @@
 		     CC BY means the credit travels with the row or the copy is not licensed,
 		     so it stands here — at the moment of copying, where a reader looking for
 		     it will look. -->
-		<p class="source muted">
+		<p class="source help">
 			{#if starter.catalogue.from_seed}
 				{starter.catalogue.error ? t('starter.from.seedOffline') : t('starter.from.seed')}
 			{:else if copied}
@@ -212,18 +225,18 @@
 			{/if}
 		</p>
 		{#if starter.catalogue.very_stale}
-			<p class="muted why">
+			<p class="help">
 				{t('starter.from.old')}
-				<button class="btn subtle mini" onclick={() => look(true)} disabled={starter.busy} title={starter.busy ? t('reason.busy') : undefined}>
+				<button class="btn ghost mini" onclick={() => look(true)} disabled={starter.busy} title={starter.busy ? t('reason.busy') : undefined}>
 					{t('starter.refresh')}
 				</button>
 			</p>
 		{/if}
 		{#if view.powerUnknown}
-			<p class="muted why">{t('starter.powerUnknown.note')}</p>
+			<p class="help">{t('starter.powerUnknown.note')}</p>
 		{/if}
 		{#if starter.catalogue.skipped}
-			<p class="muted why">{t('starter.skipped', { n: starter.catalogue.skipped })}</p>
+			<p class="help">{t('starter.skipped', { n: starter.catalogue.skipped })}</p>
 		{/if}
 		{#if allStartingPoints && !view.suggestTestGrid}
 			<!-- Said once rather than badged on every row. Every entry that exists
@@ -237,7 +250,7 @@
 			<!-- Announced, because the button that was pressed removes itself and takes the
 			     focus with it. This one sentence is the answer to the press, so it is what a
 			     reader who cannot see the list arrive should hear. -->
-			<p class="muted why" role="status">
+			<p class="help" role="status">
 				{t('starter.rows.count', { n: starter.perMaterial.length })}
 			</p>
 			<ul class="materials">
@@ -266,19 +279,23 @@
 											power: i18n.number(row.power_percent)
 										})}
 									</span>
+									<!-- The tier is a label and a sort order, never a filter: every
+									     entry that exists today is a starting point, so a default
+									     that hid them would make this card empty on the day it
+									     ships. A state, so a badge. -->
 									{#if row.tier === 'measured'}
-										<span class="tier ok">{t('starter.tier.measured')}</span>
+										<span class="badge ok">{t('starter.tier.measured')}</span>
 									{:else if !allStartingPoints}
 										<!-- Only where it distinguishes: in a list that is all
 										     starting points the sentence above says it once. -->
-										<span class="tier">{t('starter.tier.startingPoint')}</span>
+										<span class="badge">{t('starter.tier.startingPoint')}</span>
 									{/if}
 									{#if row.power_unmatched && !view.powerUnknown}
 										<!-- Again only where it distinguishes. When this machine has said
 										     it does not know its own tube power, every row is unmatched on
 										     power and the note above says so once; 26 amber pills would
 										     read as 26 faults rather than as one caveat. -->
-										<span class="tier warn">{t('starter.row.unmatched')}</span>
+										<span class="badge warn">{t('starter.row.unmatched')}</span>
 									{/if}
 								</li>
 							{/each}
@@ -294,7 +311,7 @@
 {/snippet}
 
 {#if view.needed}
-	<section class="offer" aria-label={t('starter.region')}>
+	<section class="offer" class:card={framed} aria-label={t('starter.region')}>
 		<div class="head">
 			<!-- The heading is the question the card is actually asking. Two of them for
 			     `askMachine`, because that state has two causes and asking the wrong one is
@@ -303,14 +320,14 @@
 			     missing, and the card still headed itself "What kind of laser is this?"
 			     with the kind read back two lines below it. The column's default gives
 			     every machine a kind, so that is the common case, not the rare one. -->
-			<h2>
+			<h2 class="title">
 				{#if view.state === 'askMachine'}
 					{view.needsKind ? t('starter.title.askMachine') : t('starter.title.askWatt')}
 				{:else if view.state === 'unburned'}{t('starter.title.unburned')}
 				{:else}{t('starter.title.nothing')}{/if}
 			</h2>
 			<button
-				class="btn subtle away"
+				class="btn ghost away"
 				onclick={() => starter.say('dismissed')}
 				title={t('starter.away.why')}
 			>
@@ -351,7 +368,7 @@
 		     heading with "Not now" and a material with "Add these". -->
 		{#if coverage}
 			<div class="state">
-				<p class="has muted">
+				<p class="has help">
 					{#if view.state === 'unburned'}
 						{t('starter.has.unburned', { n: coverage.mine })}
 					{:else if !coverage.materials_known}
@@ -372,11 +389,11 @@
 		{#if view.state === 'askMachine'}
 			<!-- Not a dead end: the two fields are here, beside the sentence that says
 			     why they matter, and "I am not sure" is a real third answer. -->
-			<fieldset class="laser">
+			<fieldset class="laser card inset">
 				<legend>{t('setup.laser')}</legend>
-				<p class="muted why">{t('starter.ask.body')}</p>
+				<Why>{t('starter.ask.body')}</Why>
 				<div class="pair">
-					<label class="choice">
+					<label class="field-label choice">
 						<span>{t('setup.laser.kind')}</span>
 						<select bind:value={kind}>
 							<option value="">{t('laser.kind.unknown')}</option>
@@ -396,7 +413,7 @@
 				</div>
 				<div class="buttons">
 					<button
-						class="btn subtle"
+						class="btn ghost"
 						onclick={notSure}
 						disabled={starter.busy || !kind}
 						title={kind ? undefined : t('starter.ask.kindFirst')}
@@ -418,7 +435,7 @@
 				     unknown kind is a miss in `matching.fits` on purpose — and then said
 				     the catalogue held nothing for this laser, which was not true. A
 				     disabled button that says why beats a fetch that lies. -->
-				<p class="muted why">
+				<p class="help">
 					{kind ? t('starter.ask.notSure.body') : t('starter.ask.kindFirst')}
 				</p>
 			</fieldset>
@@ -451,7 +468,7 @@
 					{starter.busy ? t('starter.looking') : t('starter.look')}
 				</button>
 			</div>
-			{#if !looking && !starter.busy}<p class="muted why">{t('starter.look.hint')}</p>{/if}
+			{#if !looking && !starter.busy}<p class="help">{t('starter.look.hint')}</p>{/if}
 		{:else if canFold && !coverage}
 			<!-- No coverage line to hang the fold on — a machine the server described
 			     without one. Then it keeps its own row: an empty band is better than no way
@@ -461,7 +478,7 @@
 
 		{@render catalogueRows()}
 
-		{#if starter.error}<p class="failure" role="alert">{starter.error}</p>{/if}
+		{#if starter.error}<Notice tone="danger" live>{starter.error}</Notice>{/if}
 	</section>
 {:else if door && machine}
 	<!-- The door, for when there is nothing to offer.
@@ -481,34 +498,28 @@
 			     reason as the button in the offer above: the catalogue can take seconds, and
 			     a button that vanishes on the press leaves nothing on screen and no focus. -->
 			{#if looking && !starter.busy}
-				<button class="btn subtle" onclick={() => (looking = false)}>{t('starter.hide')}</button>
+				<button class="btn ghost" onclick={() => (looking = false)}>{t('starter.hide')}</button>
 			{:else}
-				<button class="btn subtle" onclick={() => look()} disabled={starter.busy} title={starter.busy ? t('reason.busy') : undefined}>
+				<button class="btn ghost" onclick={() => look()} disabled={starter.busy} title={starter.busy ? t('reason.busy') : undefined}>
 					{starter.busy ? t('starter.looking') : t('starter.door')}
 				</button>
 			{/if}
-			<span class="muted why">{t('starter.door.body', { machine: machine.name ?? '' })}</span>
+			<span class="help">{t('starter.door.body', { machine: machine.name ?? '' })}</span>
 		</div>
 		{@render tookLines()}
 		{@render catalogueRows()}
-		{#if starter.error}<p class="failure" role="alert">{starter.error}</p>{/if}
+		{#if starter.error}<Notice tone="danger" live>{starter.error}</Notice>{/if}
 	</section>
 {/if}
 
 <style>
 	/* A card and not a banner: it says something about this machine, it has buttons of
-	   its own, and it lives at the top of two different surfaces. The accent on the left
-	   edge is the same mark the sheet question in setup uses — something to decide, not
-	   something broken. */
+	   its own, and it lives at the top of two different surfaces. The face is `.card`;
+	   here only where it sits. */
 	.offer {
 		display: grid;
 		gap: var(--space-2);
 		margin: 0 0 var(--space-4);
-		padding: var(--space-3) var(--space-4);
-		border: 1px solid var(--line);
-		border-left: 3px solid var(--accent);
-		border-radius: var(--radius-card);
-		background: var(--surface-2);
 	}
 	/* The door is not a card: no accent edge, no fill, no border. It is one line of
 	   furniture at the top of a window, and the whole point of this round was that the
@@ -516,10 +527,6 @@
 	   and then it is the same list the offer shows. */
 	.offer.quiet {
 		margin: 0 0 var(--space-3);
-		padding: 0;
-		border: 0;
-		border-radius: 0;
-		background: none;
 	}
 	.door {
 		display: flex;
@@ -534,9 +541,6 @@
 	}
 	h2 {
 		flex: 1;
-		margin: 0;
-		font-size: var(--text-sm);
-		font-weight: 600;
 	}
 	p {
 		margin: 0;
@@ -561,27 +565,17 @@
 	.says dd {
 		margin: 0;
 	}
-	.muted {
-		color: var(--text-2);
-	}
 	.advice {
 		color: var(--text-1);
-	}
-	.failure {
-		color: var(--danger);
 	}
 
 	.laser {
 		margin: var(--space-2) 0 0;
-		padding: var(--space-3);
-		border: 1px solid var(--line);
-		border-radius: var(--radius-field);
-		background: var(--surface-1);
 		display: grid;
 		gap: var(--space-2);
 	}
 	.laser legend {
-		padding: 0 4px;
+		padding: 0;
 		font-size: var(--text-xs);
 		color: var(--text-2);
 	}
@@ -592,24 +586,6 @@
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 		gap: var(--space-3);
 		align-items: end;
-	}
-	.choice {
-		display: grid;
-		gap: 4px;
-		min-width: 0;
-	}
-	.choice > span {
-		font-size: var(--text-xs);
-		color: var(--text-2);
-	}
-	.choice select {
-		font: inherit;
-		min-height: 40px;
-		padding: 8px;
-		border: 1px solid var(--line);
-		border-radius: var(--radius-field);
-		background: var(--surface-2);
-		color: var(--text-1);
 	}
 
 	/* The machine's state with its control at the end of the line, not on a line of its
@@ -633,20 +609,12 @@
 		gap: var(--space-3);
 		margin-top: var(--space-1h);
 	}
-	.btn.subtle {
-		background: none;
-		border-color: transparent;
-		color: var(--text-2);
-	}
 	.away {
 		flex: none;
 	}
 
 	.source {
 		margin-top: var(--space-2);
-	}
-	.why {
-		font-size: var(--text-xs);
 	}
 
 	/* A bounded list rather than a page that grows with the catalogue. Fifteen
@@ -681,7 +649,7 @@
 	}
 	.rows {
 		gap: 2px;
-		margin-top: 4px;
+		margin-top: var(--space-1);
 	}
 	.rows > li {
 		display: flex;
@@ -693,23 +661,6 @@
 	}
 	.values {
 		color: var(--text-1);
-	}
-	/* The tier is a label and a sort order, never a filter: every entry that exists
-	   today is a starting point, so a default that hid them would make this card empty
-	   on the day it ships. */
-	.tier {
-		padding: 1px 6px;
-		border: 1px solid var(--line);
-		border-radius: var(--radius-dot);
-		font-size: var(--text-xs);
-	}
-	.tier.ok {
-		color: var(--ok);
-		border-color: var(--ok);
-	}
-	.tier.warn {
-		color: var(--warn);
-		border-color: var(--warn);
 	}
 	.took > li {
 		display: flex;
@@ -723,9 +674,6 @@
 
 	/* With a glove on, 32px is too little, and this card lives on a tablet too. */
 	@media (max-width: 1199px), (pointer: coarse) {
-		.choice select {
-			min-height: 44px;
-		}
 		.pair {
 			grid-template-columns: minmax(0, 1fr);
 		}

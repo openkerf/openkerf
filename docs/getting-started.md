@@ -100,11 +100,13 @@ engine and that OpenKerf cannot work out for you:
 
 **Kind of laser** arrives filled in — worked out from the model you picked a screen ago —
 with the six answers "CO2 with a glass tube", "CO2 with an RF metal tube", "Diode",
-"Fibre", "UV" and "I do not know". The hint says how far to trust the prefill:
+"Fibre", "UV" and "I do not know". How far to trust the prefill is behind the fold
+**Glass tube or RF?**:
 
-> Filled in from the model you picked. A glass tube and an RF metal tube cannot be told apart from that, so correct it if you know better.
+> Check the machine specifications for a glass CO₂ tube or an RF metal tube. The model alone may not distinguish them; choose unknown if you are unsure.
 
-**Tube power** in watts is the one nobody else can know:
+**Tube power** in watts is the one nobody else can know. Why it matters waits behind
+**Why?** under the tick box below the field:
 
 > The number on the tube or on the invoice. It decides which settings can be a starting point for this laser: the same percentage on twice the power chars and burns through.
 
@@ -130,9 +132,10 @@ following literally: "The connection to the laser is only made at the first job.
 Do that first time with the lid open and without a workpiece — then you see whether
 the head moves as you expect without anything being able to burn."
 
-If the sheet you have does not match the new bed, it offers "Does your sheet come
-along to this bed?" with **Set the sheet to the bed size** or **Leave it** — and
-the reminder that a sheet is the piece of material you put in, not the bed itself.
+If the sheet you have does not match the new bed, it asks "Does your sheet come
+along to this bed?" with **Leave it** or **Set the sheet to the bed size**. Why the two
+may rightly differ — a sheet is the piece of material you put in, not the bed itself —
+is behind **Why?**.
 
 **And an offer, on the same screen.** A machine that has just been created has no settings,
 so the last step says so and offers to fetch some that would suit it:
@@ -156,8 +159,8 @@ Out of the wizard: **Another machine** or **To the work area**.
 
 The work area opens with an empty bed, drawn to scale, with rulers in millimetres
 along the top and the left, and its size printed in the corner ("bed 500 × 300
-mm"). In the middle it says "Empty bed" and, under that, "Use Import in the top
-bar for an existing design, or pick a shape on the left and click the bed."
+mm"). In the middle it says "Empty bed" and, under that, "Use Import… in the
+project menu for an existing design, or pick a shape on the left and click the bed."
 
 ![The empty work area: the tool rail on the left, the action bar and the sheet bar above the canvas, the bed drawn with millimetre rulers, and the words "Empty bed" in the middle.](images/05-canvas-empty.png)
 
@@ -203,9 +206,10 @@ to rotate; the arrow keys move 0.1 mm, and 1 mm with shift held.
 > the Job tab of the right-hand panel, under "Token for write actions"; the engine
 > prints it in its own window when the API starts.
 
-**Import it.** **Import** in the top bar reads a file into the sheet you are
+**Import it.** **Project → Import…** reads a file into the sheet you are
 working on: SVG, DXF, RD, EGV, G-code, LBRN, EZD, XCS and the common image
-formats.
+formats. The top bar keeps the machine's verbs; what you do with files lives in
+the project menu.
 
 Importing **adds**. It does not empty the bed, and nothing you already drew is
 thrown away — a sheet is a plate, and a plate holds more than one part. What
@@ -228,13 +232,15 @@ after that **Save project** (⌘S) just saves. The top bar reads "Project ·
 {name}", and a dot after the name means there are changes that are not saved.
 
 **Project → Open…** (⌘O) shows every project on this server, newest first, the
-open one marked "(current)". Open one with its **Open** button or a double
-click. Behind ⋮ on a row sit **Rename** and **Delete**; deleting asks first:
+open one marked "(current)". On a server where nothing has been saved yet the window says
+so — "Nothing has been saved on this server yet." — and offers **Save as…**, which turns
+the same window into its save mode. Open one with its **Open** button or a double
+click. Behind ⋯ on a row sit **Rename** and **Delete**; deleting asks first:
 "Delete "{name}"? This cannot be undone."
 
 ![The Projects window: the title Projects, a Name and Saved column heading, and
 two rows below it — Kastje, marked (current), and Box panels, saved in the same
-minute — each with an Open button and a ⋮ button.](images/47-projects.png)
+minute — each with an Open button and a ⋯ button.](images/47-projects.png)
 
 If the work has changes that are not saved, **New project**, **Open…** and
 **Upload…** ask first, in a window titled "Unsaved changes": "The changes in
@@ -257,11 +263,12 @@ uploaded file becomes a project here under its own name.
 
 ![The top bar with the project button reading Project · Kastje, then a dot and
 a downward arrow, and its menu open underneath, over the sheet tab and canvas:
-New project, Open…, Save project, Save as…, a line, Download and Upload….](images/48-topbar-project.png)
+New project, Open…, Save project, Save as…, a line, Download and Upload…, a
+second line, Import… and Export as SVG.](images/48-topbar-project.png)
 
-**Export** beside it does something narrower: "Save this sheet as SVG" — one
-sheet, as a drawing, for another program. It does not carry the layers, the
-material or the machine.
+**Export as SVG**, the last row, does something narrower: "Save this sheet as
+SVG" — one sheet, as a drawing, for another program. It does not carry the
+layers, the material or the machine.
 
 If you leave a design behind, OpenKerf offers it at the next start under **Work
 from an earlier session**: "There is an automatically saved design from {when}.
@@ -308,29 +315,31 @@ shows everything the machine is about to do. You do not have to press anything t
 see it, and it follows your drawing: change a shape and the estimate is worked out
 again.
 
-**Prepare job** in the top bar does not start anything. It switches to that tab and
+**Prepare job**, the one filled button on that tab, does not start anything. It
 arms the job — see "Burning" below.
 
-![The Job tab showing the row "Material" reading "not filled in for this sheet", a yellow warning that the machine is not responding, a second warning that three layers use presets that were not verified, under those a "Show cut path" button and the whole table of layers with mm/s, %, passes and source, and under that a small picture of the sheet with the work in it, "Sheet 1 500 × 300 mm", "work 295 × 176 mm" and a note that two shapes are in a layer that is switched off — the foot of that picture running on under the strip at the bottom of the panel, which carries a green "Start job 1:19" with a narrower arrow button joined to its right-hand end.](images/12-job-preflight.png)
+![The Job tab: the row "Material" reading "not filled in for this sheet", an amber box saying the machine is disconnected, the line that three layers are unverified, then the filled "Prepare job 1:19" with a plain arrow button joined to its right-hand end, and under it a "Show cut path" button, the table of layers with mm/s, %, passes and source, and a small picture of the sheet with "Sheet 1 500 × 300 mm" and "work 295 × 176 mm" under it](images/12-job-preflight.png)
 
 From top to bottom it holds:
 
 - **Material** — the sheet's material, or "not filled in for this sheet";
 - the zero point, when you have set one;
-- a table of the layers with their speed, power, passes and where those numbers
+- the warnings, each in a tinted box with an icon;
+- **Prepare job**, with the estimated time on it;
+- **Show cut path** and a table of the layers with their speed, power, passes and where those numbers
   came from;
 - a picture of the sheet with your work on it, its size, and the size of the work
   itself — plus a note about anything that will be skipped, for example "2 shapes
   are in a layer that is switched off (Fine lines) — dashed grey above. The
   machine skips them.".
 
-The numbers stand above the picture because the strip at the foot of the panel
-stays put while the rest scrolls, and it lies over whatever is last in the column.
-A picture you can scroll to; a warning you cannot afford to scroll to.
+What it burns on and what is wrong with it come before the button; the evidence
+you work down comes after it. A picture you can scroll to; a warning you cannot
+afford to scroll past.
 
 The list **Run through this** — "Lid closed", "Extraction and air assist on",
-"Workpiece is clamped and flat" — comes up in that strip the moment you press
-**Start job**, directly above the **Start now** that fires.
+"Workpiece is clamped and flat" — comes up above the button the moment you press
+**Prepare job**, directly above the **Start now** that fires.
 
 Read the source column. A preset that was not measured on a test grid says so,
 and the panel adds it up: "3 unverified layers · test on a scrap first."
@@ -365,10 +374,10 @@ away — armed or not, running or not.
 > machine cannot move", or, when the server is unreachable, "Running the frame has
 > to wait until the server is back."
 
-Then **Start job**. That first press arms the job: the footer becomes **Cancel**
-and **Start now**, and only **Start now** sends it. No single click burns
-anything. Pressing **Prepare job** in the top bar does the same arming, and takes
-you to the Job tab so you can read the pre-flight before the second press.
+Then **Prepare job** on the Job tab. That first press arms the job: the button
+row becomes **Cancel** and **Start now**, and only **Start now** sends it. No
+single click burns anything, and between the two presses the pre-flight stays on
+screen to read.
 
 **Stop** is in the top bar the whole time, running or not, and it answers to the
 keyboard as well: ⌘ + . on a Mac, Ctrl + . elsewhere. Pressed with nothing
@@ -395,7 +404,10 @@ The bottom status bar reports **Machine unknown** when OpenKerf is unreachable,
 **Machine not connected** when the controller connection is lost, **Connection unknown**
 when the driver cannot report it, or **Connected to the laser** when confirmed.
 Controller loss remains visible while a local job is running or paused. The server's
-own connection is shown separately as **OpenKerf live** or **OpenKerf away**.
+own connection is shown separately, on the far right, as **Server connected** or
+**Server offline**. While the machine connection is not confirmed, the head position
+beside it is set in slanted grey type with "last seen" after it: still readable, but
+no longer a fact.
 
 The machine chip also prioritises connection problems over local job activity.
 It never uses a queued job as evidence that a controller is connected. Job progress
@@ -407,7 +419,7 @@ once the job is done — the stop button stays here." The setup screens carry no
 stop button and no shortcut, so leaving the work area during a job would take both
 off the screen at the one moment you might need them.
 
-You can open the pre-flight with **Prepare job** while disconnected. Final start
+You can arm the pre-flight with **Prepare job** while disconnected. Final start
 is disabled when the driver reports a disconnected machine: "Machine disconnected.
 Switch it on and reconnect before starting." No job is promised to start automatically
 after reconnection.

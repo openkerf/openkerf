@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { t } from '$lib/i18n/index.svelte';
 	import Dialog from './Dialog.svelte';
+	import NumberField from './NumberField.svelte';
+	import Notice from './Notice.svelte';
 
 	let {
 		open = $bindable(),
@@ -114,8 +116,8 @@
 	}
 </script>
 
-<Dialog title={t('clipart.title')} bind:open width="760px">
-	<p class="lead">{t('clipart.lead')}</p>
+<Dialog title={t('clipart.title')} bind:open size="l">
+	<p class="help lead">{t('clipart.lead')}</p>
 
 	<div class="bar">
 		<input
@@ -129,10 +131,9 @@
 		<!-- Form rule v4: the label goes *above* the field, even in a row with a search
 		     box. Before this "Width" was in front of it and "mm" behind, which made this
 		     the only field in the app with a label on the left. -->
-		<label class="w">
-			<span>{t('clipart.width')}</span>
-			<input class="mono" type="number" min="1" max="2000" step="5" bind:value={width} />
-		</label>
+		<div class="w">
+			<NumberField label={t('clipart.width')} bind:value={width} step={5} min={1} max={2000} />
+		</div>
 		<button
 			class="btn primary"
 			disabled={busy || query.trim().length < 2}
@@ -161,13 +162,13 @@
 	</div>
 
 	{#if error}
-		<p class="error" role="alert">{error}</p>
+		<div class="said"><Notice tone="danger" live>{error}</Notice></div>
 	{/if}
 	{#each Object.entries(unavailable) as [source, reason] (source)}
-		<p class="warn">{t('clipart.unavailable', { source: label(source), reason })}</p>
+		<p class="help warn said">{t('clipart.unavailable', { source: label(source), reason })}</p>
 	{/each}
 	{#each notes as note (note)}
-		<p class="warn">{note}</p>
+		<p class="help warn said">{note}</p>
 	{/each}
 
 	<div class="grid">
@@ -193,7 +194,7 @@
 				</figcaption>
 			</figure>
 		{:else}
-			<p class="empty">
+			<p class="help empty">
 				{#if busy}
 					{t('clipart.searching')}
 				{:else if searched}
@@ -225,21 +226,13 @@
 </Dialog>
 
 <style>
-	.lead { margin: 0 0 var(--space-3); font-size: var(--text-xs); color: var(--text-2); line-height: 1.5; }
+	.lead { margin: 0 0 var(--space-3); }
 	/* Align along the bottom, not in the middle: the fields now have a label above them
 	   and the search field does not, so "middle" would set the search button askew. */
 	.bar { display: flex; gap: var(--space-2); align-items: flex-end; }
 	.bar input[type='search'] { flex: 1; }
-	.w { display: grid; gap: 2px; font-size: var(--text-xs); color: var(--text-2); }
-	.w input { width: 7em; }
-	input {
-		font: inherit;
-		padding: 8px 8px;
-		border: 1px solid var(--line);
-		border-radius: var(--radius-field);
-		background: var(--surface-2);
-		color: var(--text-1);
-	}
+	/* Two step buttons and "2000": the stepper needs this much and no more. */
+	.w { width: 11em; flex: none; }
 	.sources {
 		display: flex;
 		gap: var(--space-3);
@@ -247,10 +240,8 @@
 		font-size: var(--text-xs);
 		color: var(--text-2);
 	}
-	.sources label { display: flex; align-items: center; gap: 5px; }
-	.sources input { padding: 0; }
-	.error { font-size: var(--text-xs); color: var(--danger); margin: 0 0 var(--space-2); }
-	.warn { font-size: var(--text-xs); color: var(--warn); margin: 0 0 var(--space-2); }
+	.sources label { display: flex; align-items: center; gap: var(--space-1h); }
+	.said { margin: 0 0 var(--space-2); }
 	.grid {
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
@@ -258,19 +249,21 @@
 		max-height: 52vh;
 		overflow-y: auto;
 	}
-	figure { margin: 0; display: grid; gap: 4px; }
+	figure { margin: 0; display: grid; gap: var(--space-1); }
 	.pick {
 		position: relative;
 		display: grid;
 		place-items: center;
 		aspect-ratio: 1;
-		padding: 8px;
+		padding: var(--space-2);
 		border: 1px solid var(--line);
 		border-radius: var(--radius-field);
 		background: var(--on-color);
 	}
 	.pick:hover:not(:disabled) { border-color: var(--accent); }
-	.pick:disabled { opacity: 0.5; cursor: not-allowed; }
+	/* Off is drained: the raised grey under a grey picture, nothing faded. */
+	.pick:disabled { background: var(--surface-2); cursor: not-allowed; }
+	.pick:disabled img { filter: grayscale(1); }
 	.pick img { max-width: 100%; max-height: 100%; object-fit: contain; }
 	.busy {
 		position: absolute;
@@ -290,7 +283,7 @@
 		white-space: nowrap;
 	}
 	.meta a { color: var(--accent); }
-	.empty { grid-column: 1 / -1; font-size: var(--text-xs); color: var(--text-2); padding: var(--space-5) 0; }
+	.empty { grid-column: 1 / -1; padding: var(--space-6) 0; }
 	.more {
 		display: flex;
 		align-items: center;

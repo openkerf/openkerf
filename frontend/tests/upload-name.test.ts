@@ -90,11 +90,14 @@ test('the field shows capitals even though it no longer stores them', () => {
 	// quietly stops showing the name it will send. That is one line to delete and nothing
 	// else would notice, so it is held here.
 	const source = readFileSync(join(ROOT, 'frontend', 'src', 'lib', 'components', 'JobControls.svelte'), 'utf8');
-	const at = source.indexOf('.pf-uploadrow input {');
-	assert.ok(at > 0, 'the name field has no style block of its own any more');
+	// The capitals are a `style:` on the field itself: a component may not set
+	// `text-transform: uppercase` in its stylesheet (`one-system.test.ts` keeps that for
+	// the section label), and this is not a label but what the machine will show.
+	const at = source.indexOf('class="pf-uploadrow"');
+	assert.ok(at > 0, 'the name field is gone from the upload window');
 	assert.match(
-		source.slice(at, source.indexOf('}', at)),
-		/text-transform:\s*uppercase/,
+		source.slice(at, source.indexOf('/>', at)),
+		/style:text-transform="uppercase"/,
 		'the name field no longer shows the capitals the machine will keep'
 	);
 });

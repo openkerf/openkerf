@@ -96,19 +96,18 @@ test('no component defines a button of its own', () => {
  * it: measured at 1440 on the Layers tab they stood 595.6 px apart on one screen, at
  * 25.9 px / weight 400 against 32 px / weight 500. Scanned with the same rule, the
  * components still to follow are Clipart, CornersDialog, Generators, JobPreview,
- * LanguagePicker, MaterialLibrary, Menu, PhoneView, Series, SheetMaterial, SheetTabs,
+ * LanguagePicker, MaterialLibrary, Menu, Series, SheetMaterial, SheetTabs,
  * StatusBar, TestGridResult, ToolRail and TopBar. Adding a file to the list below is
  * the way to bring one in.
  */
 const PANEL = ['DesignPanel.svelte', 'JobControls.svelte', 'ActionBar.svelte'];
 
 /**
- * Two selectors in these files draw a face and are not the button:
- * `.tag.air` is the pill that reports whether air assist is on — a state, in the
- * shape the other tags in that row have — and `.pf-menu .row` is a row in a menu,
- * which the app's menus draw their own way everywhere.
+ * Selectors in these files that draw a face and are not the button. There are none
+ * left: the air-assist pill is the shared `.chip`, and the Job tab's "other ways to run
+ * this job" menu is the shared `Menu.svelte`. A new entry here needs its reason beside it.
  */
-const NOT_A_BUTTON = ['.tag.air', '.pf-menu .row'];
+const NOT_A_BUTTON: string[] = [];
 
 test('no button in the panel or the action bar is drawn under another name', () => {
 	const FACE = ['border-radius', 'border:', 'background', 'padding'];

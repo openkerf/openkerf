@@ -93,7 +93,7 @@
 			{/if}
 		</div>
 		<div class="action">
-			<button onclick={() => connection.retryNow()}>{t('connection.retryNow')}</button>
+			<button class="btn" onclick={() => connection.retryNow()}>{t('connection.retryNow')}</button>
 			<span class="klok">
 				{#if connection.inSeconds > 0}
 					{t('connection.autoIn', { seconds: connection.inSeconds })}
@@ -116,7 +116,7 @@
 		   message stack already did it. At the old offset this card stood at y 60 while
 		   the action bar runs 48-86: `elementFromPoint` in the middle of all fifteen
 		   action-bar buttons answered with this card. `--topedge-height` is measured in
-		   `+page.svelte` and is zero where there are no bars (phone). */
+		   `+page.svelte` and is zero where there are no bars. */
 		top: calc(var(--topbar-height) + var(--topedge-height, 0px) + var(--space-3));
 		left: calc(var(--rail-width) + var(--space-3));
 		z-index: 60;
@@ -152,42 +152,26 @@
 		display: flex;
 		flex-direction: column;
 		align-items: stretch;
-		gap: 4px;
+		gap: var(--space-1);
 	}
-	.action button {
-		/* 44px tall: this is exactly a button somebody with gloves on, next to a
-		   machine, has to hit first time. */
+	/* The shared button, 44px tall at every width: this is exactly a button somebody
+	   with gloves on, next to a machine, has to hit first time. */
+	.action .btn {
 		min-height: 44px;
 		padding: 0 var(--space-3);
 		white-space: nowrap;
-		font: inherit;
-		font-weight: 600;
-		border: 1px solid var(--line);
-		border-radius: var(--radius-field);
-		background: var(--surface-1);
-		color: var(--text-1);
 	}
-	.action button:hover { background: var(--surface-2); }
 	.klok {
 		text-align: center;
 		color: var(--text-2);
 		font-variant-numeric: tabular-nums;
 	}
-	/*
-	 * Not on the phone. That screen already says it three times under its own steam
-	 * — in the header, below the bed and above the emergency stop — and a floating
-	 * card on top of a fixed bottom bar 390 px wide literally lay across it. The
-	 * "try again" button lives in that bottom bar itself.
-	 */
 	/* Tablet: the same 560 as the alarm below it — at 1024 the right-hand panel
 	   starts at x≈700 and 620 px would cover the panel tabs. This measure should stay
 	   equal to the one in `AlarmCard.svelte`; see the explanation there. */
-	@media (min-width: 768px) and (max-width: 1199px) {
+	@media (max-width: 1199px) {
 		.dropped {
 			width: min(560px, calc(100vw - var(--rail-width) - 2 * var(--space-3)));
 		}
-	}
-	@media (max-width: 767px) {
-		.dropped { display: none; }
 	}
 </style>

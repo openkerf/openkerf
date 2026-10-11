@@ -18,7 +18,7 @@
  * What is measured: the text that is actually visible on the frame button. At 1440 the
  * long form ("Show frame"); at 1024 and at 850 the short one ("Frame"); at 849 and 800
  * none at all — that last row is the deliberate trade documented in the file, and it is
- * held here so that a fix for the tablet cannot silently give the word back to the phone.
+ * held here so that a fix at 1024 cannot silently give the word back at the narrowest widths.
  */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';

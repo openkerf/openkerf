@@ -301,7 +301,8 @@ test('a value in a Layers row reads as text until you point at it', async (t) =>
 		await page.goto(`${BASE}/?tab=layers`, { waitUntil: 'domcontentloaded' });
 		await page.waitForSelector('.layer .val input', { timeout: 20000 });
 		await page.waitForTimeout(500);
-		const rest = await page.$eval('.layer .val', (node) => {
+		// The input itself: since the shared well is drawn on the field, not on a wrapper.
+		const rest = await page.$eval('.layer .val input', (node) => {
 			const style = getComputedStyle(node);
 			return { border: style.borderTopColor, background: style.backgroundColor };
 		});
