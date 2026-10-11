@@ -11,6 +11,11 @@ import time
 
 from meerk40t.core.units import UNITS_PER_MM, Length
 
+from .link import is_ruida, link_for
+
+#: What `connection()` may answer; anything else from a link reads as "unknown".
+STATES = ("connected", "connecting", "disconnected", "unknown")
+
 #: Per machine, the reading last seen and the moment we first saw it.
 #:
 #: Keyed on the device's path, because `StatusReader` is built fresh for every
@@ -117,7 +122,8 @@ class StatusReader:
         somewhere else, and where no source exists at all we say "unknown" instead of
         guessing. A guess at "connected" is the very fault we are repairing.
 
-        `state` is er één van: "connected", "disconnected", "unknown".
+        `state` is er één van: "connected", "disconnected", "unknown" — and, for a
+        Ruida on our own link, "connecting" between asking and knowing.
 
         And it says how long it has read that way, because one reading is not
         enough to tell a machine that is off from one that is between two
@@ -136,44 +142,15 @@ class StatusReader:
         That is the honest thing it can say from here, and it is enough for the
         question it is asked.
         """
-        # Ruida (our target machine) has an explicit property; it is bound to the session
-        # layer and therefore the most reliable source there is.
-        ruida = _attr(device, "connected")
-        if isinstance(ruida, bool):
-            return self._aged(
-                device,
-                {
-                    "state": "connected" if ruida else "disconnected",
-                    "detail": None,
-                },
-            )
-
-        # Lihuiyu (K40 boards): the controller keeps a connection and a readable state
-        # ("connected", "Not Connected", "Unknown"...).
-        controller = _attr(device, "controller")
-        if controller is not None:
-            link = _attr(controller, "connection")
-            if link is not None and hasattr(link, "is_connected"):
-                open_ = _safe(link.is_connected)
-                if isinstance(open_, bool):
-                    return self._aged(
-                        device,
-                        {
-                            "state": "connected" if open_ else "disconnected",
-                            "detail": _attr(controller, "state"),
-                        },
-                    )
-            # Geen verbindingsobject = nog nooit geopend.
-            if hasattr(controller, "connection"):
-                return self._aged(
-                    device,
-                    {
-                        "state": "disconnected",
-                        "detail": _attr(controller, "state"),
-                    },
-                )
-
-        return self._aged(device, {"state": "unknown", "detail": None})
+        # A Ruida from our own link (`link.py`); every other laser from where its family
+        # keeps it, which `EngineLink.connection` reads exactly as this method used to.
+        link = _safe(lambda: link_for(self.kernel, device), None)
+        reading = _safe(link.connection, None) if link is not None else None
+        if not isinstance(reading, dict) or reading.get("state") not in STATES:
+            reading = {"state": "unknown", "detail": None}
+        return self._aged(
+            device, {"state": reading["state"], "detail": reading.get("detail")}
+        )
 
     @staticmethod
     def _aged(device, reading: dict) -> dict:
@@ -203,6 +180,8 @@ class StatusReader:
         Reading only, and defensively: this is a live object of the engine's, on a
         thread of its own, and a snapshot may never raise.
         """
+        if is_ruida(device):
+            return self._our_line(device)
         session = _attr(device, "active_session")
         if session is None:
             return None
@@ -218,6 +197,32 @@ class StatusReader:
             "replies": _attr(session, "replies"),
             "enqs": _attr(session, "enqs"),
             "dropped": _attr(session, "dropped_packets"),
+        }
+
+    def _our_line(self, device) -> dict | None:
+        """
+        The same fields off our own session (`ruida/session.py`), for a Ruida.
+
+        The engine's session on that device is `ClosedSession` and has nothing to say.
+        Ours keeps the counters under the same names, except `probes` for the engine's
+        `enqs` and `dropped` for its `dropped_packets`; its ACK and reply flags are not
+        exposed, so those two read `None`. `None` as a whole while nothing is open.
+        """
+        link = _safe(lambda: link_for(self.kernel, device), None)
+        session = _attr(link, "session")
+        if session is None:
+            return None
+        return {
+            "busy": _attr(session, "busy"),
+            "queued": _attr(session, "queued"),
+            "ack_pending": None,
+            "reply_pending": None,
+            "sends": _attr(session, "sends"),
+            "acks": _attr(session, "acks"),
+            "naks": _attr(session, "naks"),
+            "replies": _attr(session, "replies"),
+            "enqs": _attr(session, "probes"),
+            "dropped": _attr(session, "dropped"),
         }
 
     def bed(self, device) -> dict:
@@ -243,6 +248,19 @@ class StatusReader:
         guaranteed driver method and supplies the state flags; it returns
         ((native_x, native_y), state_major, state_minor).
         """
+        if is_ruida(device):
+            # From our own monitor, in the controller's micrometres — the units
+            # `device.native` gives for the engine's Ruida driver — so the device's own
+            # view turns it into millimetres as before. Not `device.current`: that is the
+            # engine driver's idea of the head, and the engine no longer moves it.
+            link = _safe(lambda: link_for(self.kernel, device), None)
+            native = self._as_pair(_safe(link.position) if link is not None else None)
+            return {
+                "native": native,
+                "mm": self._to_mm(device, native),
+                "state": None,
+            }
+
         native = self._as_pair(_attr(device, "native"))
         scene = self._as_pair(_attr(device, "current"))
         state = None

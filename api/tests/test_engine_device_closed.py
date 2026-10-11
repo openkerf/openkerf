@@ -43,7 +43,7 @@ port our own transport needs.
 **The mechanism** (`test_a_closed_session_keeps_the_device_closed`)
 
 `device.py` imports `RuidaSession` once (`device.py:20`) and constructs it in exactly one
-place (`:409`). Replacing that module attribute with `ClosedSession` below, *before* any
+place (`:409`). Replacing that module attribute with `ClosedSession` (`openkerf_api/ruida/closed.py`), *before* any
 Ruida device activates, keeps everything shut: 0 real sessions, 0 transport opens, no
 socket bound and no handshaker thread, also after `interface = "udp"` + `interface_update`,
 `ruida_connect`, `ruida_disconnect`, `ruida_connect`. The live status monitor made 0
@@ -84,62 +84,11 @@ from meerk40t.ruida.ruidatransport import TransportError
 
 from conftest import _bootstrap
 from openkerf_api.commands import CommandRunner
-
-
-class ClosedSession:
-    """
-    The proposed stand-in for `RuidaSession` on the engine's Ruida device.
-
-    It carries what the device, the controller and our own layer read off
-    `active_session` — `interface` (compared by `interface_update`, `device.py:401`),
-    `connected`, `is_connecting`, `is_busy`, `supports_write_completion`, `set_timeout`,
-    `location` — and opens nothing. `write` raises `ConnectionError` rather than
-    returning quietly, because that is the one exception `RDJob.__call__` drops
-    (`rdjob.py:579`) and the patched `_data_sender` reports (`controller.py:134`).
-    """
-
-    supports_write_completion = True
-    connected = False
-    is_connecting = False
-    is_busy = False
-    is_open = False
-    generation = 0
-    transport = None
-
-    def __init__(self, service):
-        self.interface = service.interface
-        self.writes = 0
-
-    def set_swizzles(self, swizzle, unswizzle):
-        pass
-
-    def open(self):
-        pass
-
-    def connect(self):
-        pass
-
-    def close(self):
-        pass
-
-    def abort_connect(self):
-        pass
-
-    def shutdown(self, *args, **kwargs):
-        pass
-
-    def update_connect_status(self):
-        pass
-
-    def set_timeout(self, seconds):
-        pass
-
-    def location(self):
-        return "closed"
-
-    def write(self, data, *, expected_generation=None):
-        self.writes += 1
-        raise ConnectionError("The engine's Ruida device does not talk to the machine.")
+# Proposed here first, and since phase 2 of the plan installed by our plugin at
+# `register` for every kernel (`openkerf_api/ruida/closed.py`). The measurements of
+# today's behaviour below therefore put the engine's own `RuidaSession` back after
+# `_bootstrap()`, which is where the plugin installs the closed one.
+from openkerf_api.ruida.closed import ClosedSession
 
 
 class _Halt:
@@ -282,6 +231,7 @@ def test_today_activation_opens_a_session_that_outlives_the_device(monkeypatch):
     the transport — 2 per second — through a device switch and a kernel shutdown."""
     opens = Opens(monkeypatch, refuse=True)
     kernel = _bootstrap()
+    monkeypatch.setattr(ruida_device_module, "RuidaSession", ruidasession.RuidaSession)
     device = session = None
     try:
         kernel.console("service device start ruida\n")
@@ -374,6 +324,9 @@ def test_build_job_bytes_and_the_encoders_are_unchanged(monkeypatch):
         if label == "closed":
             monkeypatch.setattr(ruida_device_module, "RuidaSession", ClosedSession)
         kernel = _bootstrap()
+        if label == "today":
+            monkeypatch.setattr(
+                ruida_device_module, "RuidaSession", ruidasession.RuidaSession)
         device = runner = None
         try:
             kernel.console("service device start ruida -i\n")

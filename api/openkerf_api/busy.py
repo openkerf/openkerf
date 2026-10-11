@@ -128,17 +128,39 @@ def the_line_is_in_use(kernel) -> str | None:
     measured, it clears in about two tenths of a second. If a disabled job ever
     becomes reachable, this is the line that has to learn to skip it too.
     """
-    if a_job_is_running(kernel):
-        return "burning"
-    spooler = _spooler(kernel)
-    if spooler is not None:
-        try:
-            if list(spooler.queue):
-                return "queued"
-        except Exception:  # pragma: no cover - the spooler must not break us
-            pass
+    # The line itself first: for a Ruida that is our own link (`link.py`), for every
+    # other laser the engine's spooler, through `EngineLink.line_in_use` and so through
+    # `spooler_use` below. Imported here for the reason `DesignError` is: nothing at the
+    # top of this module imports anything of ours.
+    from .link import link_for
+
+    try:
+        use = link_for(kernel).line_in_use()
+    except Exception:  # pragma: no cover - a link must not break the question
+        use = None
+    if use is not None:
+        return use
     if a_file_is_being_sent(kernel):
         return "uploading"
+    return None
+
+
+def spooler_use(spooler) -> str | None:
+    """`'burning'`, `'queued'` or `None`, read off one engine spooler.
+
+    The engine's half of `the_line_is_in_use`, kept here beside its reasoning and
+    asked by `EngineLink.line_in_use`.
+    """
+    if spooler is None:
+        return None
+    try:
+        queue = list(spooler.queue)
+        if any(job.is_running() for job in queue):
+            return "burning"
+        if queue:
+            return "queued"
+    except Exception:  # pragma: no cover - the spooler must not break us
+        pass
     return None
 
 

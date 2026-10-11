@@ -453,16 +453,25 @@ def test_values_are_json_safe(kernel, manager):
 
 
 def test_connection_settings_appear_even_without_a_choices_sheet(kernel, manager):
-    """Ruida creates `interface` with a bare setting(), so no sheet lists it."""
+    """Ruida creates `address` with a bare setting(), so no sheet lists it.
+
+    Until phase 2 of the own Ruida line this test was about `interface` (USB or UDP).
+    A Ruida's line is OpenKerf's own now and always UDP, so `interface` is no longer
+    offered at all (`machines._essentials`); `address`, made the same bare way, is the
+    setting that carries the mechanism.
+    """
     created = manager.create("ruida-beta", label="Ruida")
     fields = [f for s in manager.settings(created["path"], True) for f in s["fields"]]
     by_attr = {f["attr"]: f for f in fields}
 
-    assert "interface" in by_attr
-    assert by_attr["interface"]["options"] == ["usb", "udp"]
+    assert "address" in by_attr
+    assert by_attr["address"]["options"] is None
+    assert "interface" not in by_attr
 
-    manager.update_settings(created["path"], {"interface": "udp"})
-    assert kernel.device.interface == "udp"
+    manager.update_settings(created["path"], {"address": "10.0.0.7"})
+    assert kernel.device.address == "10.0.0.7"
+    with pytest.raises(MachineError):
+        manager.update_settings(created["path"], {"interface": "usb"})
 
 
 def test_essential_filter_narrows_the_list(kernel, manager):

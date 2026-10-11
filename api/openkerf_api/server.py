@@ -71,6 +71,7 @@ from .testgrid import (
     plan_grid,
     raster_supported,
 )
+from .link import is_ruida, links_for
 from .machine import MachineControl
 from .machines import MachineError, MachineManager
 from .operations import fence_operations
@@ -274,6 +275,10 @@ class ApiServer:
         self.bind = bind
         self.frontend = Path(frontend).expanduser() if frontend else None
         self.reader = StatusReader(kernel)
+        # The lines to the machines: our own for a Ruida, the engine's for the rest. One
+        # per kernel, so the readers and controls built per request find the same line;
+        # the server owns it in the sense that it closes every line when it stops.
+        self.links = links_for(kernel)
         self.document = Document()
         self.commands = CommandRunner(kernel, self.document)
         self.machines = MachineManager(kernel, self.commands)
@@ -3842,6 +3847,9 @@ class ApiServer:
             shutil.rmtree(self._upload_dir, ignore_errors=True)
             self._upload_dir = None
         self._wait_for_the_machine_to_go_quiet()
+        # Our own lines last: the wait above is for the engine's send thread, which a
+        # Ruida no longer has. Bounded and idempotent, see `RuidaLink.close`.
+        self.links.close()
         self.channel("OpenKerf API stopped.")
 
     # How long we wait on shutdown for the machine to finish talking. Long enough for the
@@ -3873,6 +3881,11 @@ class ApiServer:
         import time
 
         device = getattr(self.kernel, "device", None)
+        if is_ruida(device):
+            # The engine's Ruida device is kept closed (`ruida/closed.py`): its
+            # `_data_sender` has nowhere to write, and our own line is closed by
+            # `links.close()` instead.
+            return
         controller = getattr(getattr(device, "driver", None), "controller", None)
         if controller is None:
             return

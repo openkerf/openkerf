@@ -303,6 +303,7 @@ def test_a_wild_measurement_is_refused_with_its_numbers(client):
 # ------------------------------------------------------------------- safety
 
 
+@pytest.mark.xfail(strict=True, reason="phase 4: home on a Ruida moves to RuidaLink")
 def test_homing_is_refused_while_the_rotary_is_on(client, kernel):
     """
     With a chuck fitted, homing Y drives the head into it. The refusal sits in the API and

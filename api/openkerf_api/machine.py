@@ -9,8 +9,6 @@ does not have to assume it stays that way.
 
 import json
 
-import time
-
 from .busy import a_job_is_running, refuse_while_a_file_is_being_sent
 from .commands import CommandRunner
 from .edits import DesignError, _finite
@@ -39,15 +37,16 @@ ORIGIN_KEY = "openkerf_origin"
 # pausing and stopping: ask what this device knows, do not assume.
 FOCUS = "focusz"
 
-# Verbinden en verbreken.
-#
-# Every driver family calls it something different and marks it `hidden=True`: Ruida has
-# `ruida_connect` (`ruida/device.py:448`), lihuiyu, moshi, newly and balor have
-# `usb_connect`. Grbl registers none — it opens its connection itself as soon as data has to
-# go there. So we ask the active device what it knows, in the same order, and a machine that
-# does not know it gets no button either.
-CONNECTS = ("ruida_connect", "usb_connect")
-DISCONNECTS = ("ruida_disconnect", "usb_disconnect")
+# Verbinden en verbreken: a Ruida through our own line, every other laser through the
+# console commands its family registers. Both live in `link.py`; the names are imported
+# here because this is where they were looked for.
+from .link import (  # noqa: E402
+    CONNECTS,
+    DISCONNECTS,
+    is_ruida,
+    links_for,
+    refuse_what_the_link_does_not_carry_yet,
+)
 
 # What `_idle()` says when a job is running, as a sentence and a code.
 #
@@ -120,18 +119,20 @@ class MachineControl:
 
     def connection_capabilities(self) -> dict:
         """A block of its own, not under `motion`: connecting does not move the head."""
+        link = self._link_for_the_machine()
+        if link.kind != "engine":
+            # Our own line always knows how to open and close.
+            return {"connect": True, "disconnect": True}
         return {
-            "connect": self._link_command(CONNECTS) is not None,
-            "disconnect": self._link_command(DISCONNECTS) is not None,
+            "connect": link.command(CONNECTS) is not None,
+            "disconnect": link.command(DISCONNECTS) is not None,
         }
 
     # ------------------------------------------------------------- connection
 
-    def _link_command(self, names) -> str | None:
-        for name in names:
-            if self.runner.supports(name):
-                return name
-        return None
+    def _link_for_the_machine(self):
+        device = getattr(self.kernel, "device", None)
+        return links_for(self.kernel).for_device(device, self.runner)
 
     def _connection(self) -> dict:
         """
@@ -152,21 +153,23 @@ class MachineControl:
         return self._link(DISCONNECTS, "disconnect", "disconnected")
 
     def _link(self, names, verb: str, wanted: str) -> dict:
-        command = self._link_command(names)
+        device = getattr(self.kernel, "device", None)
+        if is_ruida(device):
+            return self._ruida_link(device, verb, wanted)
+
+        link = self._link_for_the_machine()
+        command = link.command(names)
         if command is None:
             raise DesignError(
                 f"This device has no command to {verb}. Grbl, for instance, "
                 "opens its connection itself as soon as work goes to it."
             )
-        output = self.runner.run(command)
+        # `EngineLink` runs the console command and, after a connect, waits for a
+        # session that confirms asynchronously; the state is then read the way the
+        # status bar reads it.
+        getattr(link, verb)()
+        output = link.output
         state = self._connection()
-        session = getattr(self.kernel.device, "active_session", None)
-        if verb == "connect" and getattr(session, "supports_write_completion", False):
-            # open() requests the worker handshake; it no longer reads the UDP socket here.
-            deadline = time.monotonic() + 3.0
-            while state["state"] == "disconnected" and time.monotonic() < deadline:
-                time.sleep(0.02)
-                state = self._connection()
 
         # The engine reports a failed connection only on the channel and then
         # returns quietly (`ruida/device.py:452`). The state afterwards is therefore
@@ -182,6 +185,44 @@ class MachineControl:
                 "The connection is not confirmed; check the machine before trying again."
             )
         return {"connection": state, "output": output}
+
+    def _ruida_link(self, device, verb: str, wanted: str) -> dict:
+        """
+        Our own line to a Ruida (`ruida/link.py`). One line to a controller: connecting
+        this machine closes whatever line another machine still had open — a switch made
+        from the console never passed through `MachineManager.activate`.
+
+        `RuidaLink.connect` waits a bounded time for the first answer and lets the line
+        go if none came, saying which address stayed silent; that sentence is the
+        reason given here. "connecting" after that wait is not a connection.
+        """
+        links = links_for(self.kernel)
+        if verb == "connect":
+            links.only(device)
+        link = links.for_device(device)
+        reading = getattr(link, verb)()
+        state = self._connection()
+        if state.get("state") == wanted:
+            return {"connection": state, "output": []}
+        if verb == "disconnect":
+            raise DesignError(
+                "Disconnecting from the Ruida did not take: the line still reads as "
+                "open. Check the machine before trying again.",
+                code="machine.ruidaStillOpen",
+            )
+        # The link's own sentence: which address stayed silent, or why it was refused.
+        detail = (reading or {}).get("detail") or state.get("detail")
+        if detail:
+            raise DesignError(
+                f"Connecting to the Ruida did not work: {detail}",
+                code="machine.ruidaConnectFailed",
+                values={"detail": detail},
+            )
+        raise DesignError(
+            "Connecting to the Ruida did not work. Is the machine on, and is the "
+            "address in the machine settings right?",
+            code="machine.ruidaSilent",
+        )
 
     def _idle(self, burning=_moving_while_burning) -> None:
         """
@@ -208,6 +249,8 @@ class MachineControl:
         refuse_while_a_file_is_being_sent(self.kernel)
         if a_job_is_running(self.kernel):
             raise burning()
+        # Last, so a file going out or a job burning keeps its own, truer refusal.
+        refuse_what_the_link_does_not_carry_yet(self.kernel)
 
     def _require(self, command: str):
         if not self.runner.supports(command):

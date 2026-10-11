@@ -48,7 +48,8 @@ export type Bed = { width_mm: number | null; height_mm: number | null };
  * "verbonden" te tonen.
  */
 export type Connection = {
-	state: 'connected' | 'disconnected' | 'unknown';
+	/** 'connecting': a Ruida on OpenKerf's own line, between asking and knowing. */
+	state: 'connected' | 'connecting' | 'disconnected' | 'unknown';
 	detail: string | null;
 	/** How long this reading has read the same, in milliseconds. Absent from a server
 	 *  older than the field. Diagnostic only; it does not hide connection loss. */

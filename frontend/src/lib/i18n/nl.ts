@@ -2571,6 +2571,13 @@ export const nl: Catalogue = {
 		'Er loopt een job. Stop die eerst: de motoren loslaten tijdens een brand haalt de aandrijving weg onder een kop die een pad volgt, en de job is verloren.',
 	'api.machine.sendingAFile':
 		'Er wordt een bestand naar de machine gestuurd. Wacht tot het er staat en probeer het dan opnieuw: wat er nu heen gaat belandt midden in dat bestand, en de machine laat daar niets van merken.',
+	'api.machine.notOnTheLineYet':
+		'Dit bereikt een Ruida nog niet. OpenKerf houdt de lijn naar de controller nu zelf, en de kop bewegen, branden en pauzeren over die lijn worden nog gebouwd. Er is niets verstuurd.',
+	'api.machine.ruidaConnectFailed': 'Verbinden met de Ruida is niet gelukt: {detail}',
+	'api.machine.ruidaSilent':
+		'Verbinden met de Ruida is niet gelukt. Staat de machine aan, en klopt het adres in de machine-instellingen?',
+	'api.machine.ruidaStillOpen':
+		'Verbreken van de Ruida is niet gelukt: de lijn leest nog als open. Kijk bij de machine voordat je het opnieuw probeert.',
 	'api.upload.notConnected':
 		'Er is geen verbinding met de machine, dus het bestand kan niet verstuurd worden. Maak eerst verbinding; er is niets verstuurd.',
 	'api.upload.notRuida':

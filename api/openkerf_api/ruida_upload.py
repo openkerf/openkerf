@@ -26,6 +26,7 @@ from meerk40t.ruida.ruidatransport import TransportError, TransportTimeout
 from .busy import sending_a_file, the_line_is_in_use
 from .commands import CommandRunner
 from .edits import DesignError
+from .ruida.closed import ClosedSession
 from .status import _attr
 
 #: The way the engine chops its own jobs (`ruida/controller.py:83`,
@@ -163,7 +164,10 @@ class RuidaUpload:
         deadline = time.monotonic() + self.line_gap_seconds
         while True:
             session = getattr(device, "active_session", None)
-            if session is None:
+            # The engine's session on a Ruida is kept closed (`ruida/closed.py`) and never
+            # connects, so there is nothing to wait the eight seconds for. The upload
+            # moves to our own line in phase 3 of the plan in `link.py`.
+            if session is None or isinstance(session, ClosedSession):
                 break
             if getattr(session, "connected", False):
                 return session

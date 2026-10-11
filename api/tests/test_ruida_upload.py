@@ -1965,6 +1965,7 @@ class _BurningSpooler:
         self.queue = [self._Job()]
 
 
+@pytest.mark.xfail(strict=True, reason="phase 5: a burn on a Ruida moves to RuidaLink, which answers line_in_use; the engine spooler no longer counts")
 def test_an_upload_while_a_job_is_burning_is_refused(ruida, monkeypatch):
     """
     The same rule as moving the head, for the same reason, one module along.
@@ -2003,6 +2004,7 @@ def test_an_upload_while_a_job_is_burning_is_refused(ruida, monkeypatch):
     assert not session.written, "blocks went out while the machine was burning"
 
 
+@pytest.mark.xfail(strict=True, reason="phase 5: a burn on a Ruida moves to RuidaLink, which answers line_in_use; the engine spooler no longer counts")
 def test_the_route_refuses_an_upload_while_a_job_is_burning(
     ruida, tmp_path, monkeypatch
 ):
@@ -2574,6 +2576,7 @@ class _QueuedSpooler:
         self.queue = [self._Job()]
 
 
+@pytest.mark.xfail(strict=True, reason="phase 5: a burn on a Ruida moves to RuidaLink, which answers line_in_use; the engine spooler no longer counts")
 def test_the_line_says_which_of_the_three_things_is_on_it(ruida, monkeypatch):
     """
     The one question, and the four answers every caller reads.

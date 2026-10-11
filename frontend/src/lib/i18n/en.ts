@@ -2769,6 +2769,18 @@ export const en = {
 		'A job is running. Stop it first: releasing the motors during a burn takes the drive out from under a head that is following a path, and the job is lost.',
 	'api.machine.sendingAFile':
 		'A file is being sent to the machine. Wait until it is there and then try again: anything sent now lands in the middle of that file, and the machine gives no sign of it.',
+	// A Ruida's line is OpenKerf's own now (`api/openkerf_api/link.py`). Until it carries
+	// moving, burning and pausing, those are refused rather than sent into the engine's
+	// closed device, where they would seem to work and move nothing.
+	'api.machine.notOnTheLineYet':
+		'This does not reach a Ruida yet. OpenKerf now keeps the line to the controller itself, and moving the head, burning and pausing over that line are still being built. Nothing has been sent.',
+	// `{detail}` is the line's own sentence — which address stayed silent, or why it was
+	// refused — and comes in English: it is measured per attempt, not a constant of ours.
+	'api.machine.ruidaConnectFailed': 'Connecting to the Ruida did not work: {detail}',
+	'api.machine.ruidaSilent':
+		'Connecting to the Ruida did not work. Is the machine on, and is the address in the machine settings right?',
+	'api.machine.ruidaStillOpen':
+		'Disconnecting from the Ruida did not take: the line still reads as open. Check the machine before trying again.',
 	'api.upload.noMachine': 'There is no active machine to send the file to.',
 	'api.upload.notConnected':
 		'There is no connection to the machine, so the file cannot be sent. Connect first; nothing has been sent.',
