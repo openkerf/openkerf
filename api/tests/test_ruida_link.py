@@ -209,7 +209,7 @@ def test_status_position_and_card_id_decode_as_the_engine_does(link, peer):
 @pytest.mark.parametrize("state, word, ours, engines", [
     ("idle", 22, "idle", "Part end"),
     ("busy", 21, "running", "Job running"),
-    ("hold", 23, "running", "Part end"),
+    ("hold", 23, "paused", "Part end"),
     ("moving", MACHINE_STATUS_MOVING, "moving", "Moving"),
 ])
 def test_machine_state_of_each_word(link, peer, state, word, ours, engines):

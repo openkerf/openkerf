@@ -68,31 +68,43 @@ def decode(reply: bytes):
     return decode35(reply[4:9])
 
 
+#: Bit 1 of the status word, beside JOB_RUNNING (bit 0): set together they are a
+#: paused job. The engine calls 0x02 PART_END (`ruida/rdjob.py:233`).
+_HELD = 0x02
+
+
 def machine_state(word: int | None) -> str:
     """
-    "moving", "running" or "idle" from a status word; "unknown" for none.
+    "running", "paused", "moving" or "idle" from a status word; "unknown" for none.
 
-    The bits are the engine's (`ruida/rdjob.py:232-234`) and so is the first test,
-    MOVING (`ruida/controller.py:209`). After that we part ways on purpose:
+    Three sources, none of them complete, and this is the rule that contradicts none:
 
-    - The engine tests PART_END (0x02) before JOB_RUNNING (0x01) and counts PART_END
-      as *not* idle (`:212-214`). The emulator answers 22 (0x16) when idle, which has
-      PART_END set (`ruida/emulator.py:1362-1369`), so the engine's rule would never
-      call it idle. Here PART_END alone is idle.
-    - JOB_RUNNING wins over PART_END. The emulator's 23 (0x17, "hold" in its own
-      mapping) has both; the engine says "Part end", we say "running", because
-      a paused job is still a job on the machine.
+    - **A KH-5030 (RDC6442S)**, measured on 11 October: 0 when idle.
+    - **Ruida Bridge** (github.com/MrkyWtrs/ruida_bridge, `ruida_bridge/app.py`,
+      `decode_status_text`) reads the same address (`DA 00 04 00`) and looks only at
+      the last two bytes of the unswizzled answer, i.e. the low 14 bits of this word
+      as (bits 7-13, bits 0-6): (0, 0) and (12, 0) idle, (8, 1) running, (8, 3)
+      paused — 0, 1536, 1025 and 1027 here.
+    - **The engine's emulator** answers 22 (0x16) idle, 21 (0x15) running and 23
+      (0x17) paused (`ruida/emulator.py:1361-1369`, its own comment "22 ok, 23
+      paused. 21 running").
 
-    "paused" is not returned: no bit the engine knows means paused, and the
-    emulator's 23 is the emulator's choice, not a measured controller's. What a
-    KH-5030 answers while idle, burning and paused is a question for the hardware.
+    So: JOB_RUNNING (0x01) with 0x02 is "paused", JOB_RUNNING alone "running"; the seven
+    words above all fit that. The
+    engine's MOVING bit (0x01000000, `controller.py:209`) is "moving" when no job bit
+    is set: it lies outside Bridge's two bytes, so a job word that also has it stays
+    a job. Everything else is "idle".
+
+    Where we part from the engine's labels (`controller.py:209-217`): it names 0x02
+    "Part end" and never idle, so the emulator's 22 and Bridge's (8, 3) would be
+    neither idle nor paused there; and it tests MOVING before the job bits.
     """
     if word is None:
         return "unknown"
+    if word & MACHINE_STATUS_JOB_RUNNING:
+        return "paused" if word & _HELD else "running"
     if word & MACHINE_STATUS_MOVING:
         return "moving"
-    if word & MACHINE_STATUS_JOB_RUNNING:
-        return "running"
     return "idle"
 
 

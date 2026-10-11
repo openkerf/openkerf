@@ -2572,7 +2572,13 @@ export const nl: Catalogue = {
 	'api.machine.sendingAFile':
 		'Er wordt een bestand naar de machine gestuurd. Wacht tot het er staat en probeer het dan opnieuw: wat er nu heen gaat belandt midden in dat bestand, en de machine laat daar niets van merken.',
 	'api.machine.notOnTheLineYet':
-		'Dit bereikt een Ruida nog niet. OpenKerf houdt de lijn naar de controller nu zelf, en de kop bewegen, branden en pauzeren over die lijn worden nog gebouwd. Er is niets verstuurd.',
+		'Dit bereikt een Ruida nog niet. OpenKerf houdt de lijn naar de controller nu zelf, en branden over die lijn wordt nog gebouwd. Er is niets verstuurd.',
+	'api.machine.notConnected':
+		'Er is geen werkende lijn naar de machine, dus dit heeft haar niet bereikt. Maak eerst verbinding en probeer het dan opnieuw.',
+	'api.machine.unconfirmed':
+		'De machine heeft dit niet op tijd bevestigd, dus het is niet bekend of het is aangekomen. Kijk bij de machine voordat je het opnieuw probeert.',
+	'api.machine.stopUnconfirmed':
+		'De machine heeft het stoppen niet bevestigd. Druk op de stopknop van de machine zelf.',
 	'api.machine.ruidaConnectFailed': 'Verbinden met de Ruida is niet gelukt: {detail}',
 	'api.machine.ruidaSilent':
 		'Verbinden met de Ruida is niet gelukt. Staat de machine aan, en klopt het adres in de machine-instellingen?',

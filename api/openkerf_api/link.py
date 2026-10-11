@@ -8,8 +8,8 @@ a `MachineLink` and do not care which one answers. See the plan in the working r
 `plannen/2026-10-11-eigen-ruida-verbinding.md`.
 
 Phase 2 is connecting and status, phase 3 a file into the controller's memory
-(`send_file`). Sending a job and a realtime command come in the phases after it, as
-methods added here.
+(`send_file`), phase 4 moving the head and the realtime verbs (pause, resume, stop).
+Sending a job comes in phase 5.
 """
 
 from __future__ import annotations
@@ -285,6 +285,185 @@ class EngineLink:
     def close(self) -> None:
         pass
 
+    # -- phase 4: moving and the realtime verbs, through the console as before ----------
+    #
+    # Each runs exactly the console line `machine.py` and `commands.py` ran before these
+    # moved here, and returns its output: a route hands that back as "output". The
+    # console's own failures stay `CommandError`, which the routes answer as before.
+
+    def _console(self, line: str) -> list:
+        return self.runner.run(line)
+
+    def motion_capabilities(self) -> dict:
+        """What the console of the active device knows, asked the way it always was."""
+        knows = self.runner.supports if self.runner is not None else (lambda _n: False)
+        return {
+            "home": knows("home"),
+            "physical_home": knows("physical_home"),
+            "move": knows("move_absolute"),
+            "jog": knows("move_relative"),
+            "frame": knows("move_absolute"),
+            "focus": knows(FOCUS),
+            "lock": knows("lock"),
+            "unlock": knows("unlock"),
+            "pause": knows("pause"),
+            "resume": knows("resume"),
+            "stop": knows("estop") or knows("abort"),
+        }
+
+    def home(self, physical: bool = False) -> list:
+        return self._console("physical_home" if physical else "home")
+
+    def move_to(self, x_mm: float, y_mm: float) -> list:
+        return self._console(f"move_absolute {_mm(x_mm)} {_mm(y_mm)}")
+
+    def move_by(self, dx_mm: float, dy_mm: float) -> list:
+        return self._console(f"move_relative {_mm(dx_mm)} {_mm(dy_mm)}")
+
+    def trace(self, corners) -> list:
+        """
+        The corners one after the other, each with `move_absolute -f`.
+
+        `-f` (force) is the whole repair here. Without that flag `move_absolute` refuses
+        as soon as the spooler is not idle (`core/spoolers.py:243`), and after the first
+        corner the head is of course on its way: measured on a real machine the head
+        went to the top left and the next four corners came back as "Busy Error". With
+        the flag they go into the queue and follow each other neatly. Nothing can jump
+        the queue: that no job is running is checked by the caller.
+        """
+        output: list = []
+        for hx, hy in corners:
+            said = self._console(f"move_absolute -f {_mm(hx)} {_mm(hy)}")
+            output.extend(said if isinstance(said, list) else [said])
+        return output
+
+    def focus(self, dz_mm: float) -> list:
+        return self._console(f"{FOCUS} {_mm(dz_mm)}")
+
+    def lock(self) -> list:
+        return self._console("lock")
+
+    def unlock(self) -> list:
+        return self._console("unlock")
+
+    def _driver_paused(self):
+        """`driver.paused` of the device, or None when nobody says."""
+        try:
+            flag = self.device.driver.paused
+        except Exception:
+            return None
+        return flag if isinstance(flag, bool) else None
+
+    def pause(self) -> list:
+        """
+        Pausing, and nothing else.
+
+        On lihuiyu, ruida *and* grbl `pause` is a *toggle*: if the driver is already
+        paused, the same command resumes (lihuiyu/device.py:844, ruida/device.py:425,
+        grbl/device.py:982). So pressing Pause twice sets the machine burning again, and
+        that is exactly the opposite of what is on the button.
+        """
+        if self._driver_paused() is True:
+            return ["already paused"]
+        return self._console("pause")
+
+    def resume(self) -> list:
+        """
+        Resuming, and checking that it has actually happened.
+
+        Measured on a lihuiyu device: `resume` reports "Lihuiyu Channel Resumed." and
+        the machine stays put. The device registers `resume` twice, first as a realtime
+        resume (device.py:855) and later again as "Resume Controller" (device.py:1045).
+        The second wins, and that starts the controller instead of the driver:
+        `driver.paused` stays True and `hold_work()` holds the work back. So the result
+        is checked: still paused afterwards, and the toggle takes it off. For grbl
+        nothing changes; there the flag is already gone after the first attempt.
+        """
+        if self._driver_paused() is False:
+            return ["not paused"]
+        output = self._console("resume")
+        if self._driver_paused() is True:
+            output = output + self._console("pause")
+        return output
+
+    def stop(self) -> list:
+        """
+        Abort the running job. `estop` is realtime and empties the spooler on the
+        families that register it; `abort` is the fallback.
+        """
+        if self.runner.supports("estop"):
+            return self._console("estop")
+        return self._console("abort")
+
+
+#: Focusing sits on the Ruida (`focusz`), not on every device; asked, not assumed.
+FOCUS = "focusz"
+
+
+def _mm(value: float) -> str:
+    return f"{value:.4f}mm"
+
+
+def busy_notice(output) -> str | None:
+    """
+    The frame's safety net: the console said busy or error while the corners went out.
+
+    Should no longer go off since the corners go into the queue with `-f`; kept because
+    a frame that stopped half-way and said nothing is the check you thought you made.
+    """
+    if any("busy" in str(r).lower() or "error" in str(r).lower() for r in output or []):
+        return (
+            "The machine reported it was busy; the frame may not have run "
+            "all the way. Try again when the head is standing still."
+        )
+    return None
+
+
+def on_the_line(call, *args):
+    """
+    Ask a link one of the phase 4 verbs; a lost or refusing line becomes a refusal.
+
+    Returns what the link returned as a list — the console's output for `EngineLink`,
+    nothing for our own line, which has no console to echo.
+    """
+    from .edits import DesignError
+
+    try:
+        said = call(*args)
+    except TimeoutError as error:
+        raise DesignError(
+            "The machine did not confirm this in time, so it is not known whether it "
+            "arrived. Look at the machine before trying again.",
+            code="machine.unconfirmed",
+        ) from error
+    except ConnectionError as error:
+        raise DesignError(
+            "There is no working line to the machine, so this did not reach it. "
+            "Connect first, then try again.",
+            code="machine.notConnected",
+        ) from error
+    return list(said) if isinstance(said, (list, tuple)) else []
+
+
+def stop_on_the_line(call):
+    """
+    Stop, where a failure has one remedy left: the machine's own button.
+
+    Its own sentence and not `on_the_line`'s, because "try again" is the wrong advice
+    for a stop that did not arrive.
+    """
+    from .edits import DesignError
+
+    try:
+        said = call()
+    except (TimeoutError, ConnectionError) as error:
+        raise DesignError(
+            "Stopping was not confirmed by the machine. Press the stop button on the "
+            "machine itself.",
+            code="machine.stopUnconfirmed",
+        ) from error
+    return list(said) if isinstance(said, (list, tuple)) else []
+
 
 class Links:
     """
@@ -386,24 +565,22 @@ def link_for(kernel, device=None, runner=None):
 
 def refuse_what_the_link_does_not_carry_yet(kernel) -> None:
     """
-    Moving the head, burning, pausing and resuming on a Ruida, until our line carries them.
+    Burning on a Ruida, until our line carries it (phase 5).
 
-    The engine's Ruida device is kept closed (`ruida/closed.py`), so these would go
+    The engine's Ruida device is kept closed (`ruida/closed.py`), so a burn would go
     through the engine into nothing. Measured before this refusal, with the session
     closed: a jog, a home and a move each answered as if done, their bytes refused by
     `ClosedSession.write` 19 times between them, and the move's job stood in the
     spooler as Running for more than 6 s with the burn queued behind it. A press that
-    seems to work and moves nothing is the one answer a laser must not give.
-
-    Stop is not refused: it clears the engine's spooler, which is the way out of
-    exactly that state, and it must stay reachable in one call.
+    seems to work and moves nothing is the one answer a laser must not give. Moving
+    the head, pausing, resuming and stopping go over our own line since phase 4.
     """
     from .edits import DesignError
 
     if is_ruida(_attr(kernel, "device")):
         raise DesignError(
             "This does not reach a Ruida yet. OpenKerf now keeps the line to the "
-            "controller itself, and moving the head, burning and pausing over that "
-            "line are still being built. Nothing has been sent.",
+            "controller itself, and burning over that line is still being built. "
+            "Nothing has been sent.",
             code="machine.notOnTheLineYet",
         )

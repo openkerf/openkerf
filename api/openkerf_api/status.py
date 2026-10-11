@@ -75,7 +75,7 @@ class StatusReader:
             "label": _attr(device, "label"),
             "path": _attr(device, "path"),
             "active": _attr(device, "path") == active_path,
-            "laser_status": _attr(device, "laser_status"),
+            "laser_status": self.laser_status(device),
             "paused": self.paused(device),
             "connection": self.connection(device),
             "line": self.line(device),
@@ -84,8 +84,25 @@ class StatusReader:
             "spooler": self.spooler_snapshot(device),
         }
 
-    @staticmethod
-    def paused(device):
+    #: A Ruida's `machine_state()` in the words the engine's families put in
+    #: `laser_status`, which is what the interface reads (`machineState` in `api.ts`).
+    _LASER_STATUS = {"idle": "idle", "moving": "active", "running": "active",
+                     "paused": "paused"}
+
+    def laser_status(self, device):
+        """
+        The engine families set `device.laser_status` from their controllers (grbl,
+        newly, balor). The engine's Ruida never does, and its driver no longer runs
+        anything since phase 4, so a Ruida answers from our own line; "unknown" there
+        is `None` here.
+        """
+        if is_ruida(device):
+            link = _safe(lambda: link_for(self.kernel, device), None)
+            state = _safe(link.machine_state, "unknown") if link is not None else "unknown"
+            return self._LASER_STATUS.get(state)
+        return _attr(device, "laser_status")
+
+    def paused(self, device):
         """
         Staat de machine stil op verzoek?
 
@@ -101,7 +118,18 @@ class StatusReader:
         lihuiyu/driver.py:325, ruida/driver.py:494, grbl/driver.py:869. No driver or no flag =
         `None`, because claiming "not paused" about a device that does not tell us is the same
         guess we already refuse to make about the connection.
+
+        A Ruida answers from our own line instead: the engine's driver no longer pauses
+        it, so its flag would say False through every pause. `machine_state()` is what
+        the controller last reported; "unknown" there is `None` here, for the same
+        reason as above.
         """
+        if is_ruida(device):
+            link = _safe(lambda: link_for(self.kernel, device), None)
+            state = _safe(link.machine_state, "unknown") if link is not None else "unknown"
+            if state == "unknown":
+                return None
+            return state == "paused"
         driver = _attr(device, "driver")
         if driver is None:
             return None

@@ -2562,14 +2562,29 @@ def test_stopping_stays_reachable_while_a_file_is_being_sent(ruida, monkeypatch)
     here because this test failed after you added that line: the guard is the
     mistake, not the test.
 
-    Recorded rather than run: `estop` on a Ruida is realtime and this suite has
-    no machine. What is asserted is that it gets through the guard.
+    Recorded rather than sent: since phase 4 a Ruida's stop goes to our own line
+    (`RuidaLink.stop`) and this suite has no machine, so a recording link stands in
+    for it. What is asserted is that it gets through the guard.
     """
+    from openkerf_api import link as link_module
     from openkerf_api.busy import sending_a_file
 
-    runner = CommandRunner(ruida)
     reached = []
-    monkeypatch.setattr(runner, "run", lambda *a, **kw: reached.append(a) or [])
+
+    class Recording:
+        kind = "ruida"
+
+        def __init__(self, device):
+            pass
+
+        def stop(self):
+            reached.append("stop")
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(link_module.Links, "_make", lambda self, device: Recording(device))
+    runner = CommandRunner(ruida)
     with sending_a_file(ruida) as claimed:
         assert claimed, "the line was already claimed"
         runner.stop()

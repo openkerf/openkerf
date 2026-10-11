@@ -59,7 +59,7 @@ class FakeLink:
         return self.native
 
     def machine_state(self):
-        return "unknown"
+        return self.machine
 
     def line_in_use(self):
         return self.use
@@ -67,6 +67,57 @@ class FakeLink:
     def close(self):
         self.calls.append("close")
         self.closed = True
+
+    # -- phase 4: the motion verbs, recorded with their millimetres -------------------
+
+    #: What `motion_capabilities()` answers; a test may take one away.
+    caps = dict.fromkeys(
+        ("home", "physical_home", "move", "jog", "frame", "focus", "lock", "unlock",
+         "pause", "resume", "stop"),
+        True,
+    )
+    #: What `machine_state()` answers.
+    machine = "unknown"
+    #: An exception every verb raises instead of recording, when set.
+    fails: BaseException | None = None
+
+    def motion_capabilities(self):
+        return dict(self.caps)
+
+    def _verb(self, *call):
+        if self.fails is not None:
+            raise self.fails
+        self.calls.append(call if len(call) > 1 else call[0])
+
+    def home(self, physical=False):
+        self._verb("home", physical)
+
+    def move_to(self, x_mm, y_mm):
+        self._verb("move_to", x_mm, y_mm)
+
+    def move_by(self, dx_mm, dy_mm):
+        self._verb("move_by", dx_mm, dy_mm)
+
+    def trace(self, corners):
+        self._verb("trace", [tuple(c) for c in corners])
+
+    def focus(self, dz_mm):
+        self._verb("focus", dz_mm)
+
+    def lock(self):
+        self._verb("lock")
+
+    def unlock(self):
+        self._verb("unlock")
+
+    def pause(self):
+        self._verb("pause")
+
+    def resume(self):
+        self._verb("resume")
+
+    def stop(self):
+        self._verb("stop")
 
 
 @pytest.fixture
@@ -286,17 +337,13 @@ def test_the_ruida_settings_sheet_has_no_interface(client):
 # ------------------------------------------- what the line does not carry yet
 
 
-def test_moving_a_ruida_is_refused_until_the_line_carries_it(client):
-    a_ruida(client)
-    for route, body in (
-        ("/api/machine/jog", {"dx_mm": 1, "dy_mm": 0}),
-        ("/api/machine/home", {}),
-        ("/api/job/start", None),
-        ("/api/job/pause", None),
-    ):
-        answer = client.post(route, json=body) if body is not None else client.post(route)
-        assert answer.status_code == 409, (route, answer.text)
-        assert answer.headers["X-OpenKerf-Error"] == "machine.notOnTheLineYet", route
+def test_burning_a_ruida_is_refused_until_the_line_carries_it(client, kernel):
+    """Phase 5 is the burn; until then a start is refused and nothing reaches the line."""
+    path = a_ruida(client)
+    answer = client.post("/api/job/start")
+    assert answer.status_code == 409, answer.text
+    assert answer.headers["X-OpenKerf-Error"] == "machine.notOnTheLineYet"
+    assert [c for c in link_of(kernel, path).calls if c != "close"] == []
 
 
 def test_an_upload_to_a_ruida_is_refused_at_once(kernel):

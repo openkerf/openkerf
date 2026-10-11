@@ -44,8 +44,10 @@ def test_capability_reporting_follows_the_device(kernel, motion):
     kernel.console("service device start ruida -i\n")
     after = motion.capabilities()
 
-    # Movement stays, because the kernel provides it.
-    for shared in ("home", "jog", "move", "unlock"):
+    # Movement stays. Since phase 4 a Ruida's answer is its own line's
+    # (`RuidaLink.motion_capabilities`), not the kernel's console: `unlock` is left out
+    # here because that line says no to it — through the engine it wrote 0 bytes.
+    for shared in ("home", "jog", "move"):
         assert after[shared] == before[shared]
     assert after["focus"] is True, "the Ruida does know focusing"
 

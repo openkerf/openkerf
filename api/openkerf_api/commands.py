@@ -11,7 +11,12 @@ import threading
 from contextlib import contextmanager
 
 from .busy import refuse_while_a_file_is_being_sent
-from .link import refuse_what_the_link_does_not_carry_yet
+from .link import (
+    link_for,
+    on_the_line,
+    refuse_what_the_link_does_not_carry_yet,
+    stop_on_the_line,
+)
 
 ANSI = re.compile(r"\x1b\[[0-9;]*[a-zA-Z]")
 
@@ -181,11 +186,14 @@ class CommandRunner:
         return any(True for _ in self.kernel.find("command", input_type, f"{name}$"))
 
     def capabilities(self) -> dict:
+        # Pause, resume and stop from the machine's link: a Ruida's own line answers
+        # for itself, every other laser's `EngineLink` asks this console as before.
+        motion = self.link().motion_capabilities()
         return {
             "start": self.supports("plan") and self.supports("spool"),
-            "pause": self.supports("pause"),
-            "resume": self.supports("resume"),
-            "stop": self.supports("estop") or self.supports("abort"),
+            "pause": bool(motion.get("pause")),
+            "resume": bool(motion.get("resume")),
+            "stop": bool(motion.get("stop")),
             "clear_queue": self.supports("spool"),
             "load": self.supports("load"),
             # Whether a job can be put in the machine's memory as a file. Reported
@@ -1008,63 +1016,39 @@ class CommandRunner:
         except Exception:  # pragma: no cover - the engine must not break us
             pass
 
-    def _driver_paused(self):
-        """`driver.paused` of the active device, or None when nobody says."""
-        try:
-            flag = self.kernel.device.driver.paused
-        except Exception:
-            return None
-        return flag if isinstance(flag, bool) else None
+    def link(self):
+        """The active machine's link (`link.py`), with this runner as its console."""
+        return link_for(self.kernel, None, self)
 
     def pause(self) -> list[str]:
         """
-        Pausing, and nothing else.
-
-        On lihuiyu, ruida *and* grbl `pause` is a *toggle*: if the driver is already paused,
-        the same command resumes (lihuiyu/device.py:844,
-        ruida/device.py:425, grbl/device.py:982). So pressing Pause twice sets the machine
-        burning again, and that is exactly the opposite of what is on the button.
+        Pausing, and nothing else — `EngineLink.pause` keeps the engine's toggle from
+        turning a second press into a resume.
         """
-        # `RuidaController.pause` is `job.pause_process(output=self.write)`
-        # (`ruida/controller.py:416`) — realtime, straight onto the line an upload is
-        # using, with no spooler in between. And there is nothing to pause during an
-        # upload: `start_job` cannot have run.
+        # A pause is realtime, straight onto the line an upload is using, with no
+        # spooler in between. And there is nothing to pause during an upload:
+        # `start_job` cannot have run.
         refuse_while_a_file_is_being_sent(self.kernel)
-        refuse_what_the_link_does_not_carry_yet(self.kernel)
-        if self._driver_paused() is True:
+        link = self.link()
+        if link.kind != "engine" and link.machine_state() == "paused":
             return ["already paused"]
-        return self.run("pause")
+        return on_the_line(link.pause)
 
     def resume(self) -> list[str]:
         """
-        Resuming, and checking that it has actually happened.
-
-        Measured on a lihuiyu device: `resume` reports "Lihuiyu Channel Resumed." and the
-        machine stays put. The cause is in the engine — the device registers `resume` twice,
-        first as a realtime resume (device.py:855) and later again as "Resume Controller"
-        (device.py:1045). The second wins, and that starts the controller instead of the
-        driver: `driver.paused` stays True and `hold_work()` holds the work back. On a K40 a
-        paused job therefore never got going again — the resume button did nothing, every
-        time.
-
-        We cannot fix that in `meerk40t/`, so we check the result: if the driver is still
-        paused afterwards, we take it off with the toggle. For ruida and grbl nothing changes;
-        there the flag is already gone after the first attempt.
+        Resuming. `EngineLink.resume` checks it has actually happened — a lihuiyu's
+        `resume` leaves the driver paused, see there.
         """
         refuse_while_a_file_is_being_sent(self.kernel)
-        refuse_what_the_link_does_not_carry_yet(self.kernel)
-        if self._driver_paused() is False:
-            return ["not paused"]
-        output = self.run("resume")
-        if self._driver_paused() is True:
-            output = output + self.run("pause")
-        return output
+        return on_the_line(self.link().resume)
 
     def stop(self) -> list[str]:
-        """Abort the running job. estop is realtime; abort is the fallback."""
-        if self.supports("estop"):
-            return self.run("estop")
-        return self.run("abort")
+        """
+        Abort the running job. Never refused here: not while a file is being sent, not
+        while a job burns. It must stay reachable in one call, always — and on a Ruida
+        it goes ahead of anything still queued on our line.
+        """
+        return stop_on_the_line(self.link().stop)
 
     def clear_queue(self) -> list[str]:
         return self.run("spool clear")

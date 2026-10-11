@@ -2770,10 +2770,20 @@ export const en = {
 	'api.machine.sendingAFile':
 		'A file is being sent to the machine. Wait until it is there and then try again: anything sent now lands in the middle of that file, and the machine gives no sign of it.',
 	// A Ruida's line is OpenKerf's own now (`api/openkerf_api/link.py`). Until it carries
-	// moving, burning and pausing, those are refused rather than sent into the engine's
-	// closed device, where they would seem to work and move nothing.
+	// a burn (phase 5), that is refused rather than sent into the engine's closed device,
+	// where it would seem to work and burn nothing.
 	'api.machine.notOnTheLineYet':
-		'This does not reach a Ruida yet. OpenKerf now keeps the line to the controller itself, and moving the head, burning and pausing over that line are still being built. Nothing has been sent.',
+		'This does not reach a Ruida yet. OpenKerf now keeps the line to the controller itself, and burning over that line is still being built. Nothing has been sent.',
+	// A phase 4 verb (move, home, frame, focus, lock, pause, resume) that the line to the
+	// machine did not carry (`link.on_the_line`): a lost or refusing line, or no
+	// acknowledgement in time. Stop has its own sentence, because "try again" is the
+	// wrong advice for a stop.
+	'api.machine.notConnected':
+		'There is no working line to the machine, so this did not reach it. Connect first, then try again.',
+	'api.machine.unconfirmed':
+		'The machine did not confirm this in time, so it is not known whether it arrived. Look at the machine before trying again.',
+	'api.machine.stopUnconfirmed':
+		'Stopping was not confirmed by the machine. Press the stop button on the machine itself.',
 	// `{detail}` is the line's own sentence — which address stayed silent, or why it was
 	// refused — and comes in English: it is measured per attempt, not a constant of ours.
 	'api.machine.ruidaConnectFailed': 'Connecting to the Ruida did not work: {detail}',
