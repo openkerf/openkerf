@@ -33,7 +33,8 @@ What a client sees is what the engine's UDP transport expects from a KH-5030:
 The peer records every datagram it receives (`received`) and every answer it sends
 (`replies`), and can be told to misbehave once: `nak_next()` rejects the next packet
 without processing it, `drop_ack_next()` processes the next packet but loses its ACK
-(any reply data still goes out), and `ignore_next()` loses the next packet altogether.
+(any reply data still goes out), and `ignore_next()` loses the next packet altogether;
+`silent = True` loses every packet until it is set back.
 `swallow_replies(pattern)` stands in for a second program on the controller: memory
 reads are acknowledged as ever, and for each read whose turn in the cycled `pattern` is
 `True` the answer after the ACK is lost (recorded with `sent=False`).
@@ -143,6 +144,9 @@ class RuidaPeer:
         #: Overrides, by the engine's 2-byte address constant (`MEM_MACHINE_STATUS`,
         #: ...), checked before the emulator's own `mem_lookup`.
         self.memory: dict[bytes, int] = {}
+        #: While True every packet is lost as with `ignore_next`: a controller switched
+        #: off or a cable out, for as long as it lasts.
+        self.silent = False
         self.received: list[Received] = []
         self.replies: list[Reply] = []
 
@@ -238,8 +242,9 @@ class RuidaPeer:
     def _handle(self, packet, source):
         destination = source if self.reply_port is None else (source[0], self.reply_port)
         with self._changed:
-            if self._ignore:
-                self._ignore -= 1
+            if self._ignore or self.silent:
+                if not self.silent:
+                    self._ignore -= 1
                 self._record(Received(source, packet, "ignored"))
                 return
             injected_nak = bool(self._nak)

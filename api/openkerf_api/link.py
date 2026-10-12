@@ -526,6 +526,41 @@ def stop_on_the_line(call):
     return list(said) if isinstance(said, (list, tuple)) else []
 
 
+#: For development and tests only: an emulated controller on 127.0.0.1 listens on a port
+#: of its own (`frontend/gauntlet/scratch_server.py --ruida-emulator`). A real Ruida
+#: always uses 50200/40200; leave these unset for one.
+RUIDA_PORT_VARIABLES = {
+    "send_port": "OPENKERF_RUIDA_SEND_PORT",
+    "listen_port": "OPENKERF_RUIDA_LISTEN_PORT",
+}
+
+
+def ruida_ports(environ=None) -> dict:
+    """
+    The ports a new `RuidaLink` uses where the environment says otherwise; `{}` if not.
+
+    Read when a link is made, not at import, so a process that sets them before its
+    first Ruida link gets them. A value that is not a port is refused with a sentence
+    rather than quietly falling back to the real controller's port.
+    """
+    import os
+
+    environ = os.environ if environ is None else environ
+    ports = {}
+    for keyword, name in RUIDA_PORT_VARIABLES.items():
+        raw = str(environ.get(name, "")).strip()
+        if not raw:
+            continue
+        try:
+            port = int(raw)
+        except ValueError:
+            port = -1
+        if not 0 <= port <= 65535:
+            raise ValueError(f"{name} must be a port number from 0 to 65535, not {raw!r}.")
+        ports[keyword] = port
+    return ports
+
+
 class Links:
     """
     The links of one kernel: one `RuidaLink` per Ruida device path, an `EngineLink`
@@ -549,7 +584,7 @@ class Links:
         # never needs.
         from .ruida.link import RuidaLink
 
-        return RuidaLink(device)
+        return RuidaLink(device, **ruida_ports())
 
     def for_device(self, device, runner=None):
         if not is_ruida(device):

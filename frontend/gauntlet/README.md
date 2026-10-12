@@ -58,6 +58,43 @@ Extend the disposable fixture or report the scenario as blocked. Missing control
 failed readiness and API failures are failures, not evidence of a clean screen.
 Documentation helpers that dismiss prompts are unsuitable for warning-state review.
 
+## Emulated Ruida (handbook pictures)
+
+```sh
+rtk proxy env PYTHONPATH=api python frontend/gauntlet/scratch_server.py --ruida-emulator
+OK_SCRATCH_LIBRARY=1 node frontend/gauntlet/docs-library.mjs   # the handbook's library
+node frontend/gauntlet/docs-shots.mjs
+```
+
+Instead of the dummy, the scratch storage gets one Ruida at path `ruida`, labelled
+"KH-5030 (emulated)", bed 500 × 300 mm, address 127.0.0.1, active and connected at
+start — so `docs-shots.mjs`' machine guard passes. Its line is OpenKerf's own
+(`RuidaLink`), to MeerK40t's emulator behind a UDP socket (`api/tests/ruida_peer.py`,
+imported from there) on 127.0.0.1 at a free port, passed through
+`OPENKERF_RUIDA_SEND_PORT`/`OPENKERF_RUIDA_LISTEN_PORT`. The emulator hands what it
+decodes to a stand-in device that runs nothing. The marker gains
+`"emulator": {"ruida": "127.0.0.1:<port>"}` and stays `hardware: false`. The machine
+network scan never probes the network in either mode (USB and serial only).
+
+`/api/status` and `/api/capabilities` are the real ones; `POST /api/gauntlet/state`
+drives the emulator and answers once the line reads the new state back
+(`settled`, `reading`, `machine_state`):
+
+| Field | Values | What the emulator does |
+| --- | --- | --- |
+| `connection` | `connected` | answers again; reconnects the link if it was let go |
+| | `connecting` | stops answering on a live line: the session probes on its own |
+| | `disconnected` | stops answering and reconnects: the link gives up after 3 s with its own sentence |
+| `phase` | `idle`, `running`, `paused` | status word from `peer.state` (idle, busy, hold) |
+| | `moving` | the KH-5030's measured moving word (16975360) |
+| `second_client` | `true`/`false` | loses 2 of every 5 status answers; "Connected, but not alone" after ~7 s, clears in ~5 s |
+| `z_step` | `true`/`false` | as in dummy mode |
+
+There is no `queued`/`done` here: a job phase needs a job on the line, and
+execution and machine-command routes (`/api/machine/*` including connect,
+`/api/job/*`, burns, `/api/series/start`) still return 409. Shot 37 (series run)
+therefore stops `docs-shots.mjs`; run the shots after it by name.
+
 ## Review evidence
 
 Use the authorised browser-control tool for actual browser interaction in an agent

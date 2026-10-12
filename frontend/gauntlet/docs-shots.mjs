@@ -397,7 +397,14 @@ async function open(path = '/', { width = 1440, height = 900, route = null } = {
 	await page.goto(BASE + path, { waitUntil: 'domcontentloaded', timeout: 30000 });
 	// Not `networkidle`: the status connection stays open for as long as the app
 	// runs, so that state never arrives. Wait for the app to have drawn instead.
-	await page.waitForSelector('.statusbar, .setup, .card', { timeout: 20000 });
+	// Any one of them visible: `waitForSelector` takes the first in document order, and
+	// with a Ruida active that is the closed "Operate machine" fold, which Playwright
+	// does not count as visible — the wait then ran out on a page long since drawn.
+	await page
+		.locator('.statusbar, .setup, .card')
+		.filter({ visible: true })
+		.first()
+		.waitFor({ timeout: 20000 });
 	await page.waitForTimeout(900);
 	// The notification prompt floats over the bottom right when it turns up. It is
 	// about this browser profile, not about the app, so it does not belong in the

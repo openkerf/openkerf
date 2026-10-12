@@ -150,6 +150,10 @@ Screenshots are refreshed with `node gauntlet/docs-shots.mjs` (see
 `frontend/gauntlet/README.md`); each shot seeds its own state through the API, so a rerun
 gives the same picture.
 
+Development and tests only: `OPENKERF_RUIDA_SEND_PORT` / `OPENKERF_RUIDA_LISTEN_PORT`
+(read by `Links._make`, `link.ruida_ports`) point a Ruida link at an emulator on 127.0.0.1
+instead of 50200/40200; `scratch_server.py --ruida-emulator` sets them. Never set them for a real controller.
+
 ## Engine findings, measured
 
 The engine is good and it has bugs, and a few of its limits shape our code. Each row below
