@@ -402,6 +402,11 @@ class StatusReader:
             "ended": None,
         }
 
+    #: Where a progress made of the estimate stops until the link says "done". Below
+    #: the interface's `DONE` (0.995 in `api.ts`), so a burn that outlasts its
+    #: estimate never reads as finished while the machine is still at it.
+    ESTIMATE_CAP = 0.99
+
     #: A link's phase in the words `LaserJob.status` uses, which `jobStatusLabel` reads.
     _LINE_STATUS = {"sending": "Running", "running": "Running", "paused": "Paused"}
 
@@ -410,21 +415,38 @@ class StatusReader:
         `job_snapshot`'s fields for a link's `job()`.
 
         `steps_done`/`steps_total` are the file's packets the controller confirmed —
-        what the line can count. `progress` stays `None`: a Ruida burns the file as it
-        arrives and takes it in faster than it burns it, so packets on the line are not
-        work on the material, and a percentage made of them would read 100 % over a
-        burn that has minutes to go. With `None` the interface says nothing rather than
-        something false, and the watchdog does not take a burn whose packets are all in
-        for one that stopped moving. No estimate either: the engine's lives on a
-        `LaserJob`, and this job never becomes one.
+        what the line can count, and nothing more: a Ruida burns the file as it arrives
+        and takes it in far faster than it burns it (12,177 bytes in 13 blocks within
+        0.1 s, then a 77 s burn, on the KH-5030), so packets are not work on the
+        material and no percentage is made of them.
+
+        The progress is the **estimate's**: burning time so far (`running_seconds`,
+        the link's `BurnClock`, which stands still while sending and while paused)
+        over the cut plan's estimate the job was started with (`estimate_seconds`),
+        held at `ESTIMATE_CAP` until the link says "done" — a burn slower than its
+        estimate waits at 99 % rather than reading finished. `progress_basis` says
+        so ("estimate"), for the interface to call the figure an estimate and for
+        the watchdog, which must not take a clock that has reached its cap for a
+        machine that stopped. Without an estimate the progress stays `None`, as
+        before. `elapsed_seconds` is the same burning time, so elapsed, remaining
+        and the bar are one clock; a link that keeps none gives the wall clock
+        since the start.
         """
         phase = job.get("phase")
-        started = job.get("started")
-        end = job.get("finished") or time.time()
-        elapsed = (
-            max(0.0, end - started) if isinstance(started, (int, float)) else None
-        )
         paused = phase == "paused" or device_paused is True
+        ran = job.get("running_seconds")
+        ran = float(ran) if _number(ran) and ran >= 0 else None
+        estimate = job.get("estimate_seconds")
+        estimate = float(estimate) if _number(estimate) and estimate > 0 else None
+        if ran is not None:
+            elapsed = ran
+        else:
+            started = job.get("started")
+            end = job.get("finished") or time.time()
+            elapsed = max(0.0, end - started) if _number(started) else None
+        progress = None
+        if estimate is not None and ran is not None:
+            progress = min(self.ESTIMATE_CAP, ran / estimate)
         return {
             "label": job.get("name") or "",
             "type": "RuidaJob",
@@ -434,11 +456,12 @@ class StatusReader:
             "paused": paused,
             "steps_done": job.get("sent"),
             "steps_total": job.get("total"),
-            "progress": None,
+            "progress": progress,
+            "progress_basis": "estimate" if progress is not None else None,
             "loops_executed": None,
             "loops": 1,
             "elapsed_seconds": elapsed,
-            "estimate_seconds": None,
+            "estimate_seconds": estimate,
         }
 
     def job_snapshot(self, job, device_paused=None) -> dict:
@@ -465,6 +488,9 @@ class StatusReader:
             "steps_done": steps_done,
             "steps_total": steps_total,
             "progress": self._progress(steps_done, steps_total),
+            # The engine counts the steps it executed: a measurement, which the
+            # watchdog may read as standing still (see `line_job_snapshot`).
+            "progress_basis": "steps",
             "loops_executed": _attr(job, "loops_executed"),
             "loops": None if loops is not None and loops == float("inf") else loops,
             "elapsed_seconds": _safe(lambda: job.elapsed_time()),
@@ -478,3 +504,9 @@ class StatusReader:
         if not total:
             return None
         return max(0.0, min(1.0, done / total))
+
+
+def _number(value) -> bool:
+    """A real, finite number — not a bool, not NaN, not infinity."""
+    return (isinstance(value, (int, float)) and not isinstance(value, bool)
+            and value == value and value not in (float("inf"), float("-inf")))

@@ -6,6 +6,8 @@
 		jobBusy,
 		jobPhase,
 		isStalled,
+		pastEstimate,
+		progressFromEstimate,
 		remainingSeconds,
 		transportAllowed,
 		machineName,
@@ -629,6 +631,10 @@
 		return phase === 'done' ? 1 : Math.min(1, Math.max(0, part));
 	});
 	let remaining = $derived(phase === 'done' ? 0 : remainingSeconds(job));
+	/** A Ruida's progress: its burning time over the plan's estimate, said as such.
+	 *  Its step count is packets on the line, not work, and is left out with it. */
+	let estimated = $derived(progressFromEstimate(job));
+	let outrun = $derived(pastEstimate(job));
 
 	/**
 	 * Is the card reporting, or remembering?
@@ -1156,7 +1162,7 @@
 				</div>
 				<div class="now-figures mono">
 					<span class="now-pct">{Math.round(progressPart * 100)}%</span>
-					{#if job?.steps_total}
+					{#if job?.steps_total && !estimated}
 						<span class="now-step">{t('job.steps', { done: job.steps_done ?? 0, total: job.steps_total })}</span>
 					{/if}
 					{#if (job?.loops ?? 1) > 1}
@@ -1165,10 +1171,17 @@
 				</div>
 				<div class="now-time">
 					<span>{t('job.elapsed', { time: formatDuration(job?.elapsed_seconds ?? null) })}</span>
-					{#if remaining !== null}<span class="now-rest"
-							>{t('status.remaining', { remaining: formatDuration(remaining) })}</span
+					{#if outrun}<span class="now-rest"
+							>{t('status.pastEstimate', { total: formatDuration(job?.estimate_seconds ?? null) })}</span
+						>{:else if remaining !== null}<span class="now-rest"
+							>{estimated
+								? t('status.remaining.estimated', { remaining: formatDuration(remaining) })
+								: t('status.remaining', { remaining: formatDuration(remaining) })}</span
 						>{/if}
 				</div>
+				{#if estimated}
+					<p class="help">{t('job.progressEstimated')}</p>
+				{/if}
 			{/if}
 
 			<!-- Stop stands at the start of the row and pause at the end: the button that
@@ -1221,8 +1234,10 @@
 			{/if}
 
 			<!-- As soon as there is anything in the queue: with exactly one job in the row
-			     the queue must still be clearable. -->
-			{#if queued > 0}
+			     the queue must still be clearable. Not on a machine without a queue — a
+			     Ruida holds its one job on the line, and the capabilities say so
+			     (`clear_queue: false`); Stop is what ends it. -->
+			{#if queued > 0 && actions?.clear_queue !== false}
 				<button
 					class="btn wachtrij"
 					disabled={!actions?.clear_queue || queued === 0 || blocked}

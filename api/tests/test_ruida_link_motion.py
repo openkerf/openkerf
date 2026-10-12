@@ -517,3 +517,41 @@ def test_the_card_id_read_stays_out_of_commands(peer):
         assert commands(peer) == []
     finally:
         link.close()
+
+
+def test_a_head_put_somewhere_else_does_not_hold_the_next_move(line, peer, ruida):
+    """
+    The delay the user saw before a frame on a new sheet: the last move's target
+    outlived whatever moved the head next (a job ends at (0, 0) on the KH-5030), so the
+    next move waited the full `ARRIVE_SECONDS` (10 s) for a corner the head would never
+    reach again. Now a head read standing still elsewhere counts as arrived.
+    """
+    follow(peer)
+    connected(line, peer, (0, 0))
+    line.move_to(20, 30)
+    peer.position_um = (0, 0)  # the controller took the head home, as after a job
+    assert line.ARRIVE_SECONDS == 10.0
+
+    started = time.monotonic()
+    line.move_to(50, 50)
+    took = time.monotonic() - started
+
+    assert took < 2.0, took
+
+
+def test_a_target_on_a_half_millimetre_is_reached_by_a_reading_beside_it(line, peer, ruida):
+    """
+    The engine compared whole millimetres: a target of 20.5 mm (20500 µm) and a
+    reading of 20503 µm round to 20 and 21 and never matched. Within half a millimetre
+    is there.
+    """
+    connected(line, peer, (0, 0))
+    line.move_to(20.5, 30.5)
+    peer.position_um = (20503, 30497)
+    line.STILL_SECONDS = 60.0  # only the tolerance may end this wait
+
+    started = time.monotonic()
+    line.move_to(40, 40)
+    took = time.monotonic() - started
+
+    assert took < 2.0, took
