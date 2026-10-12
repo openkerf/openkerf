@@ -27,6 +27,13 @@ export type Job = {
 	steps_done: number | null;
 	steps_total: number | null;
 	progress: number | null;
+	/**
+	 * What `progress` is made of. "steps": the engine counted what it executed, a
+	 * measurement. "estimate": burning time over the cut plan's estimate — a Ruida's,
+	 * whose controller says nothing of how far the head has got
+	 * (`StatusReader.line_job_snapshot`). Absent from a server older than the field.
+	 */
+	progress_basis?: 'steps' | 'estimate' | null;
 	loops_executed: number | null;
 	loops: number | null;
 	elapsed_seconds: number | null;
@@ -376,6 +383,28 @@ export function isStalled(job: Job | null): boolean {
 }
 
 /**
+ * Is this job's progress a clock against an estimate rather than a measurement?
+ *
+ * The one question every surface asks before it shows a Ruida's percentage: the bar
+ * and the status bar to call it an estimate, `totalSeconds` not to divide the clock
+ * by itself, and the watchdog not to read a clock waiting at its cap (99 %) as a
+ * machine that stopped.
+ */
+export function progressFromEstimate(job: Job | null): boolean {
+	return job?.progress_basis === 'estimate' && job.progress !== null;
+}
+
+/**
+ * Has a job timed against its estimate outrun it? Then the bar waits at 99 % until
+ * the machine says done, and "0:00 left" would be a promise the clock cannot keep.
+ */
+export function pastEstimate(job: Job | null): boolean {
+	if (!progressFromEstimate(job)) return false;
+	const total = job?.estimate_seconds;
+	return typeof total === 'number' && (job?.elapsed_seconds ?? 0) >= total;
+}
+
+/**
  * From what progress we believe the measured speed over the model.
  *
  * Below this bound the projection is noise — one slow first movement turns it into
@@ -401,7 +430,14 @@ const GEMETEN_VANAF = 0.1;
 export function totalSeconds(job: Job | null): number | null {
 	if (!job) return null;
 	const elapsed = job.elapsed_seconds ?? 0;
-	if (job.progress !== null && job.progress >= GEMETEN_VANAF && elapsed > 0) {
+	// A progress made of the estimate is elapsed ÷ estimate; dividing the clock by it
+	// again would only give the estimate back, and past the cap a wrong one.
+	if (
+		!progressFromEstimate(job) &&
+		job.progress !== null &&
+		job.progress >= GEMETEN_VANAF &&
+		elapsed > 0
+	) {
 		return elapsed / job.progress;
 	}
 	const model = job.estimate_seconds;

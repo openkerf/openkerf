@@ -4,6 +4,8 @@
 		formatDuration,
 		machineConnection,
 		formatMm,
+		pastEstimate,
+		progressFromEstimate,
 		remainingSeconds,
 		totalSeconds,
 		type Device,
@@ -80,6 +82,9 @@
 	let percent = $derived(job?.progress !== null && job?.progress !== undefined
 		? Math.round(job.progress * 100)
 		: null);
+	// A Ruida's figures are a clock against the plan's estimate; they say so.
+	let estimated = $derived(progressFromEstimate(job));
+	let outrun = $derived(pastEstimate(job));
 
 	let link = $derived(machineConnection(device, connected));
 	let fresh = $derived(link === 'connected');
@@ -187,13 +192,22 @@
 	<!-- During a job "how much longer" is the only number that counts; the total
 	     estimate was there, but you had to subtract it from the clock yourself. -->
 	<span class="time figures">
-		{#if job && remaining !== null}
+		{#if job && outrun}
+			{#if percent !== null}<b class="pct mono">{percent}%</b>{/if}
+			{t('status.pastEstimate', { total: formatDuration(total) })}
+		{:else if job && remaining !== null}
 			{#if percent !== null}<b class="pct mono">{percent}%</b>{/if}
 			<!-- Two whole messages instead of one sentence with a styled tail: the
 			     emphasis survives (how long is left is the number that counts) and
 			     neither half is a fragment a translator cannot place. -->
-			{t('status.remaining', { remaining: formatDuration(remaining) })}
-			<span class="of">{t('status.total', { total: formatDuration(total) })}</span>
+			{estimated
+				? t('status.remaining.estimated', { remaining: formatDuration(remaining) })
+				: t('status.remaining', { remaining: formatDuration(remaining) })}
+			<span class="of"
+				>{estimated
+					? t('status.total.estimated', { total: formatDuration(total) })
+					: t('status.total', { total: formatDuration(total) })}</span
+			>
 		{:else if job}
 			{t('status.estimated', { total: formatDuration(total) })}
 		{:else}

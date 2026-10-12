@@ -548,7 +548,8 @@ outside it a browser cannot receive keystrokes." (On a Mac, ⌘ + . instead of
 Ctrl + .) At 1199 px and below the same sentence stands as a line under the two
 buttons, because there is no hover to read a tooltip with.
 
-**Clear queue (2)** appears as soon as there is anything in the queue.
+**Clear queue (2)** appears as soon as there is anything in the queue — on a machine
+that has a queue; a Ruida has none (see below).
 
 **When the machine is not answering.** The job keeps its state when the link to
 the controller drops, but then its figures are a memory rather than a report. The
@@ -575,14 +576,38 @@ not depend on this.
 ### On a Ruida
 
 A job on a Ruida goes to the machine as one file, streamed over OpenKerf's own line,
-and the controller burns it as it arrives. That changes three things in the block
+and the controller burns it as it arrives. That changes a few things in the block
 above.
 
-- **No bar, no percentage, no time left.** The controller takes the file in faster
-  than it burns it, so the packets it has acknowledged say nothing about how far
-  the head has got: a percentage made of them would read 100 % over a burn with
-  minutes to go. The block shows the phase and leaves out what it cannot know.
-  For the same reason there is no alarm for a counter that stands still.
+- **The bar, the percentage and the time left are an estimate.** The controller
+  takes the file in far faster than it burns it — on the KH-5030 a raster of
+  12,177 bytes was in within 0.1 s and then burned for 77 s — and it does not say
+  how far the head has got, so the packets it has acknowledged count for nothing.
+  What the bar shows instead is the time the burn has run against the time the
+  job's own cut plan said it would take, worked out when you press start. The
+  clock starts when the file is in, and it stands still while the job is paused,
+  so a pause does not eat into the time left. The block says so under the figures:
+  "The percentage is an estimate: the time the burn has run against the time it
+  was expected to take. This machine does not report how far it has got." — and
+  the times read "~0:57 left (estimate)" here and "estimate 1:17" beside it in the
+  status bar. There is no step count, because what the line counts is packets.
+- **A burn slower than its estimate waits at 99 %.** It is not called done until
+  the machine says so (next point), and instead of "0:00 left" the time reads
+  "taking longer than the estimate of 1:17". On a raster that is the usual case:
+  the plan does not count the machine's turns at the end of each line. For
+  scale: a filled 20 × 10 mm at 150 mm/s and 1000 dpi estimates 57 s, and the
+  KH-5030 took 77 s over a raster of that size (its dpi was not noted), so the bar
+  may wait at 99 % for a while.
+- **No alarm for a bar that stands still.** The alarm for a job that stops making
+  progress watches counts the machine reports; this bar is a clock, and a clock
+  waiting at 99 % says nothing about the head. How a Ruida job ended — done,
+  stopped or failed — comes from the line itself.
+- **Pause and Resume work as on any machine**, from the top bar and from the
+  block, and the phase reads **Paused** from what the controller reports.
+- **No Clear queue.** A Ruida holds one job at a time, on the line and not in a
+  queue, so the button is not there; **Stop** is what ends the job. Asking anyway
+  is refused with "This machine has no queue: it holds one job at a time. To end
+  the job on it, press Stop."
 - **Done means the machine said so.** A job counts as finished when the
   controller reports that it is idle again, not when the last packet went out —
   an acknowledged packet is not yet burned — and it does not linger in the queue

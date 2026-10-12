@@ -76,7 +76,7 @@ import logging
 
 from meerk40t.ruida.rdjob import MEM_CURRENT_X, MEM_CURRENT_Y, MEM_MACHINE_STATUS
 
-from ..link import LineTaken, SendInterrupted
+from ..link import BurnClock, LineTaken, SendInterrupted
 from . import encode, framing
 from .monitor import Monitor, machine_state
 from .session import RuidaSession
@@ -162,9 +162,13 @@ def _stopped(job, error: Exception | None) -> str:
 class _Job:
     """One streamed job; every field is read and written under `RuidaLink._lock`."""
 
-    def __init__(self, name: str | None, total: int):
+    def __init__(self, name: str | None, total: int, estimate: float | None = None):
         self.name = name
         self.phase = "sending"
+        #: The cut plan's estimate of the burn, as `start_job` was given it.
+        self.estimate = estimate
+        #: Seconds spent in "running"; moved by every phase change below.
+        self.clock = BurnClock()
         self.sent = 0
         self.total = total
         self.detail: str | None = None
@@ -182,7 +186,8 @@ class _Job:
     def snapshot(self) -> dict:
         return {"name": self.name, "phase": self.phase, "sent": self.sent,
                 "total": self.total, "detail": self.detail, "started": self.started,
-                "finished": self.finished}
+                "finished": self.finished, "estimate_seconds": self.estimate,
+                "running_seconds": self.clock.seconds()}
 
 
 class RuidaLink:
@@ -672,7 +677,8 @@ class RuidaLink:
     #: How often the watcher looks at the monitor's newest status word.
     WATCH_SECONDS = 0.05
 
-    def start_job(self, rd: bytes, name: str | None = None) -> None:
+    def start_job(self, rd: bytes, name: str | None = None,
+                  estimate_seconds: float | None = None) -> None:
         """
         The `MachineLink` contract: stream `rd` on a worker of our own and return as
         soon as it has started. Refused with `ConnectionError` — nothing sent — when
@@ -696,7 +702,7 @@ class RuidaLink:
                 generation = session.generation
                 stopped = threading.Event()
                 self._file_stop = stopped
-                job = _Job(name, len(blocks))
+                job = _Job(name, len(blocks), estimate_seconds)
                 self._job = job
                 thread = threading.Thread(
                     target=self._carry, name="ruida-job", daemon=True,
@@ -729,6 +735,7 @@ class RuidaLink:
             if job.phase in _FINAL:
                 return False
             job.phase = phase
+            job.clock.phase(phase)
             job.detail = detail
             job.finished = time.time()
         job.ended.set()
@@ -738,6 +745,7 @@ class RuidaLink:
         with self._lock:
             if job.phase in _ACTIVE and not job.stopping:
                 job.phase = phase
+                job.clock.phase(phase)
 
     def _carry(self, job, session, monitor, generation, blocks, stopped) -> None:
         """The worker: the stream, then the watch; the file lock goes with it."""

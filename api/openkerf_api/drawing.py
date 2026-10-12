@@ -13,7 +13,7 @@ red shape should land in the cut layer by itself.
 import re
 from contextlib import contextmanager
 
-from .commands import CommandRunner
+from .commands import CommandRunner, plan_seconds
 from .design import _xy, operation_label
 from .edits import DesignError, _finite, _positive
 from .palette import normalise
@@ -3015,22 +3015,11 @@ class Drawing:
     def _plan_estimate_locked(self) -> tuple[float, int]:
         self.runner.run("plan clear copy preprocess validate blob preopt optimize")
         planner = getattr(self.kernel, "planner", None)
-        seconds = 0.0
-        pieces = 0
         try:
             plan = getattr(planner, "default_plan", None)
-            for item in getattr(plan, "plan", []) or []:
-                for name in ("duration_cut", "duration_travel"):
-                    fn = getattr(item, name, None)
-                    if callable(fn):
-                        try:
-                            seconds += float(fn())
-                        except Exception:
-                            pass
-                pieces += 1
+            return plan_seconds(getattr(plan, "plan", []))
         finally:
             self.runner.run("plan clear")
-        return seconds, pieces
 
     # Moving without burning. The engine computes with 100 mm/s as soon as a device
     # states nothing else (core/parameters.py:314).

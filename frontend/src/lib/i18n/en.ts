@@ -144,6 +144,11 @@ export const en = {
 	'status.remaining': '{remaining} left',
 	'status.total': 'total {total}',
 	'status.estimated': '~{total} estimated',
+	// A Ruida's progress is its burning time over the cut plan's estimate (the
+	// controller does not report how far it has got), so its times say so.
+	'status.remaining.estimated': '~{remaining} left (estimate)',
+	'status.total.estimated': 'estimate {total}',
+	'status.pastEstimate': 'taking longer than the estimate of {total}',
 	'status.restart.title': 'The server has restarted',
 	'status.restart.body':
 		'This page still shows the design from before the restart; the engine started empty. Reload to see what is really there.',
@@ -559,6 +564,7 @@ export const en = {
 	'canvas.nodes.failed': 'The nodes of this shape could not be read. Try clicking it again; if it keeps failing, the engine is not answering.',
 	'canvas.trace': 'Trace of the head — measured, including the jumps between shapes.',
 	'canvas.traceProgress': '{percent}% shows as a ring around the head.',
+	'canvas.traceProgressEstimated': '{percent}% (an estimate) shows as a ring around the head.',
 	'canvas.outsideBed': {
 		one: 'One shape lies outside the bed — the head does not reach there.',
 		other: '{n} shapes lie outside the bed — the head does not reach there.'
@@ -721,6 +727,8 @@ export const en = {
 	'job.steps': '{done} / {total} steps',
 	'job.pass': 'pass {n} of {total}',
 	'job.elapsed': '{time} elapsed',
+	'job.progressEstimated':
+		'The percentage is an estimate: the time the burn has run against the time it was expected to take. This machine does not report how far it has got.',
 	'job.clearQueue': 'Clear queue ({n})',
 	'job.queueEmpty': 'The queue is already empty',
 	'job.machineControls': 'Operate machine',
@@ -2802,6 +2810,8 @@ export const en = {
 	'api.job.alreadyOnTheMachine':
 		'A job is already on this machine. Wait until it is done, or stop it; nothing has been sent.',
 	'api.job.notStarted': 'The machine did not take the job: {detail}',
+	'api.job.noQueue':
+		'This machine has no queue: it holds one job at a time. To end the job on it, press Stop.',
 	// A phase 4 verb (move, home, frame, focus, lock, pause, resume) that the line to the
 	// machine did not carry (`link.on_the_line`): a lost or refusing line, or no
 	// acknowledgement in time. Stop has its own sentence, because "try again" is the
