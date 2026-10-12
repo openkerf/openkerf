@@ -15,6 +15,7 @@ phase 5 burning (`start_job`, `job`).
 from __future__ import annotations
 
 import threading
+import time
 import weakref
 from typing import Literal, Protocol
 
@@ -144,23 +145,70 @@ class MachineLink(Protocol):
 
     carries_jobs: bool
 
-    def start_job(self, rd: bytes, name: str | None = None) -> None:
+    def start_job(self, rd: bytes, name: str | None = None,
+                  estimate_seconds: float | None = None) -> None:
         """
         Stream a complete RD file (`CommandRunner.build_job_bytes()`) to the machine, which
         burns it as it arrives. Returns once streaming has *started* — the file goes out on
         a worker of the link's own — or raises `ConnectionError` with a sentence when it
         cannot start (no line, a file or job already on it). Never resumes a stream that a
         reconnect broke.
+
+        `estimate_seconds` is how long the job's own cut plan says the burn takes
+        (`CommandRunner.build_job_bytes`); the link keeps it with the job and hands it
+        back in `job()`, so the estimate belongs to the job it was made for.
         """
 
     def job(self) -> dict | None:
         """
         The job this link last started, or `None` if none:
-        `{"name", "phase", "sent", "total", "detail", "started", "finished"}` where `phase`
-        is "sending" | "running" | "paused" | "done" | "stopped" | "failed", `sent`/`total`
-        count confirmed packets, `started`/`finished` are `time.time()` stamps and
-        `detail` is a sentence for "failed"/"stopped". Never raises.
+        `{"name", "phase", "sent", "total", "detail", "started", "finished",
+        "estimate_seconds", "running_seconds"}` where `phase` is "sending" | "running" |
+        "paused" | "done" | "stopped" | "failed", `sent`/`total` count confirmed packets,
+        `started`/`finished` are `time.time()` stamps, `detail` is a sentence for
+        "failed"/"stopped", `estimate_seconds` is what `start_job` was given and
+        `running_seconds` the time the job has spent in "running" (`BurnClock`). Never
+        raises.
         """
+
+
+class BurnClock:
+    """
+    The seconds a job has spent burning: in phase "running", and nowhere else.
+
+    What a link that carries jobs counts its job's progress against
+    (`StatusReader.line_job_snapshot`). The clock starts at the first "running" — on a
+    Ruida the stream's end, 0.1 s after the start for a 12,177-byte raster on the
+    KH-5030, which is where the controller is already burning — and stands still
+    through "sending" and "paused", so a pause does not eat the estimate. A final
+    phase stops it for good. Not thread-safe on its own: the link changes the phase
+    under its own lock.
+    """
+
+    def __init__(self, clock=None):
+        self._now = clock or time.monotonic
+        self._ran = 0.0
+        self._since: float | None = None
+        self._final = False
+
+    def phase(self, phase: str) -> None:
+        """The job is now in `phase`; only "running" lets the clock run."""
+        if self._final:
+            return
+        now = self._now()
+        if self._since is not None:
+            self._ran += max(0.0, now - self._since)
+            self._since = None
+        if phase == "running":
+            self._since = now
+        elif phase not in JOB_UNDER_WAY:
+            self._final = True
+
+    def seconds(self) -> float:
+        """Burning time so far, in seconds."""
+        if self._since is None:
+            return self._ran
+        return self._ran + max(0.0, self._now() - self._since)
 
 
 #: The phases of `MachineLink.job()` in which the job is still on the line: the machine
@@ -335,7 +383,8 @@ class EngineLink:
     #: spool, exactly as before phase 5; their job is the spooler's, read by `status.py`.
     carries_jobs = False
 
-    def start_job(self, rd: bytes, name: str | None = None) -> None:
+    def start_job(self, rd: bytes, name: str | None = None,
+                  estimate_seconds: float | None = None) -> None:
         raise ConnectionError(
             "The engine's line does not take an RD file; this machine burns through "
             "the spooler. Nothing has been sent.")

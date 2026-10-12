@@ -67,6 +67,42 @@ PLAN_SPOOL = "plan spool"
 PREVIEW_PHASES = ("plan preprocess", "plan validate", "plan blob")
 
 
+def plan_seconds(items) -> tuple[float, int]:
+    """
+    Burn time plus travel time of a built plan, and how many items it holds.
+
+    `duration_cut` + `duration_travel` per item, the sum the exact estimate has always
+    made (`Drawing._plan_estimate_locked`) and the one a Ruida job is timed against
+    (`build_job_bytes`). An item without them — a `ConsoleOperation` such as a Z step —
+    adds nothing; one that breaks adds nothing rather than sinking the sum.
+    """
+    seconds = 0.0
+    pieces = 0
+    for item in items or []:
+        for name in ("duration_cut", "duration_travel"):
+            fn = getattr(item, name, None)
+            if callable(fn):
+                try:
+                    seconds += float(fn())
+                except Exception:
+                    pass
+        pieces += 1
+    return seconds, pieces
+
+
+class JobFile(bytes):
+    """
+    An RD file as `build_job_bytes` makes it, with the cut plan's estimate beside it.
+
+    `seconds` is `plan_seconds` of the very plan the bytes were written from — mutators,
+    rotary and all — so the job on the line is timed against itself and not against a
+    second build that could have read a changed design. `None` when it could not be
+    worked out. Everything else treats it as the bytes it is.
+    """
+
+    seconds: float | None = None
+
+
 class PlanYielded(RuntimeError):
     """A preview build gave the plan up because a job claimed it."""
 
@@ -138,13 +174,17 @@ class CommandRunner:
     def capabilities(self) -> dict:
         # Pause, resume and stop from the machine's link: a Ruida's own line answers
         # for itself, every other laser's `EngineLink` asks this console as before.
-        motion = self.link().motion_capabilities()
+        link = self.link()
+        motion = link.motion_capabilities()
         return {
             "start": self.supports("plan") and self.supports("spool"),
             "pause": bool(motion.get("pause")),
             "resume": bool(motion.get("resume")),
             "stop": bool(motion.get("stop")),
-            "clear_queue": self.supports("spool"),
+            # A link that carries jobs holds one job at a time and has no queue to
+            # clear (`clear_queue`); the spooler's machines keep theirs.
+            "clear_queue": self.supports("spool")
+            and not getattr(link, "carries_jobs", False),
             "load": self.supports("load"),
             # Whether a job can be put in the machine's memory as a file. Reported
             # rather than left to be found out on the button, because it is the one
@@ -272,8 +312,11 @@ class CommandRunner:
             )
         rd = self.build_job_bytes(mutators)
         title = self._job_title(name, burnable)
+        # The plan's own estimate travels with the job: the link keeps it, and the
+        # status counts the burn against it (`StatusReader.line_job_snapshot`).
+        estimate = getattr(rd, "seconds", None)
         try:
-            link.start_job(rd, title)
+            link.start_job(rd, title, estimate_seconds=estimate)
         except (ConnectionError, TimeoutError) as error:
             detail = str(error).strip()
             raise DesignError(
@@ -334,6 +377,11 @@ class CommandRunner:
         The mutators are the same as an ordinary job — tiles, Z steps, series —
         including `_share_pass_settings` afterwards. Without that last one every pass
         gets its own RD layer and the controller says "file invalid".
+
+        Returned as a `JobFile`: the bytes, with `seconds` — `plan_seconds` of this
+        same plan, the sum `/api/job/estimate?exact=1` makes — which a burn on the line
+        hands to the link as the job's estimate. Not `LaserJob._estimate`: that keeps
+        only the last cutcode's `time_at_end_of_burn` (`core/laserjob.py:39-43`).
         """
         from .edits import DesignError
         from meerk40t.core.laserjob import LaserJob
@@ -356,13 +404,18 @@ class CommandRunner:
                 # readily as it runs cutcode. Dropping them here would silently flatten
                 # every pass onto one height.
                 steps = list(plan.plan)
+                # Before the driver walks the plan: what the burn will take, from
+                # the plan itself.
+                seconds, _ = plan_seconds(steps)
                 driver = self._upload_driver_for(device)
                 job = LaserJob("upload", steps, driver=driver)
                 driver.job_start(job)
                 while not job.execute():
                     pass
                 driver.job_finish(job)
-                return driver.controller.job.get_contents()
+                built = JobFile(driver.controller.job.get_contents())
+                built.seconds = seconds if seconds > 0 else None
+                return built
 
     def _upload_driver_for(self, device):
         """
@@ -1030,4 +1083,17 @@ class CommandRunner:
         return stop_on_the_line(self.link().stop)
 
     def clear_queue(self) -> list[str]:
+        """
+        Empty the spooler's queue. Refused on a link that carries jobs (a Ruida): its
+        one job is on the line, not in a queue, and the engine's spooler beside it is
+        empty — so "cleared" would be said over a job that burns on. Stop ends it.
+        """
+        from .edits import DesignError
+
+        if getattr(self.link(), "carries_jobs", False):
+            raise DesignError(
+                "This machine has no queue: it holds one job at a time. To end the "
+                "job on it, press Stop.",
+                code="job.noQueue",
+            )
         return self.run("spool clear")

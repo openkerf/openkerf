@@ -32,14 +32,17 @@ class FakeJobLink(FakeLink):
     def __init__(self, device):
         super().__init__(device)
         self.started: list[tuple[bytes, str | None]] = []
+        #: The `estimate_seconds` each `start_job` was handed, in order.
+        self.estimates: list[float | None] = []
         self.the_job: dict | None = None
         #: Raised by `start_job` instead of starting, when set.
         self.refuses: BaseException | None = None
 
-    def start_job(self, rd, name=None):
+    def start_job(self, rd, name=None, estimate_seconds=None):
         if self.refuses is not None:
             raise self.refuses
         self.started.append((bytes(rd), name))
+        self.estimates.append(estimate_seconds)
         self.the_job = a_job("sending", name=name, sent=0, total=4)
 
     def job(self):
@@ -311,6 +314,101 @@ def test_status_reads_each_phase_in_the_spoolers_shape(client, kernel):
         }
 
 
+def a_timed_job(phase, ran, estimate=100.0):
+    """`a_job` as `RuidaLink.job()` gives it since the estimate travels with it."""
+    job = a_job(phase, sent=13, total=13)
+    job.update(estimate_seconds=estimate, running_seconds=ran)
+    return job
+
+
+def test_the_plan_estimate_travels_with_the_job_to_the_link(client, kernel):
+    """
+    The link is handed the cut plan's own estimate of the very file it streams: the
+    same sum `/api/job/estimate?exact=1` makes (`commands.plan_seconds`). Measured on
+    the 40 × 30 mm rectangle in a cut layer: 7.0 s both ways.
+    """
+    link = a_connected_ruida(client, kernel)
+    a_rectangle(kernel)
+    exact = client.get("/api/job/estimate", params={"exact": True}).json()["seconds"]
+
+    assert client.post("/api/job/start").status_code == 200
+
+    (estimate,) = link.estimates
+    assert estimate is not None and estimate > 0
+    assert round(estimate, 1) == exact
+
+
+def test_progress_is_burning_time_over_the_estimate_in_each_phase(client, kernel):
+    """
+    Progress = `running_seconds` / `estimate_seconds`, capped at 0.99 while the job is
+    on the line; elapsed is the same burning time, so the bar, elapsed and remaining
+    are one clock. "estimate" says what it is made of.
+    """
+    link = a_connected_ruida(client, kernel)
+    for phase, ran, progress, running, paused in (
+        ("sending", 0.0, 0.0, True, False),
+        ("running", 25.0, 0.25, True, False),
+        # Paused: the link's clock stood still, so the figure holds where it was.
+        ("paused", 40.0, 0.40, False, True),
+        ("running", 99.5, 0.99, True, False),
+        # A burn slower than its estimate waits at 99 % until the link says done.
+        ("running", 150.0, 0.99, True, False),
+    ):
+        link.the_job = a_timed_job(phase, ran)
+        (job,) = active_spooler(client)["jobs"]
+        assert job["progress"] == pytest.approx(progress), (phase, ran)
+        assert job["progress_basis"] == "estimate"
+        assert job["elapsed_seconds"] == pytest.approx(ran)
+        assert job["estimate_seconds"] == 100.0
+        assert job["running"] is running and job["paused"] is paused, phase
+
+    link.the_job = a_timed_job("done", 101.0)
+    assert active_spooler(client)["jobs"] == []
+
+
+@pytest.mark.parametrize("estimate", [None, 0, -3, float("nan"), True])
+def test_no_usable_estimate_no_progress(client, kernel, estimate):
+    link = a_connected_ruida(client, kernel)
+    link.the_job = a_timed_job("running", 12.0, estimate=estimate)
+    (job,) = active_spooler(client)["jobs"]
+    assert job["progress"] is None and job["progress_basis"] is None
+    assert job["estimate_seconds"] is None
+    assert job["elapsed_seconds"] == 12.0
+
+
+def test_the_engine_job_says_its_progress_is_counted(client):
+    """The engine's progress stays the steps it executed: `progress_basis` "steps"."""
+    from openkerf_api.status import StatusReader
+
+    class Job:
+        steps_done, steps_total, label, loops, priority = 3, 4, "x", 1, 0
+        status = "Running"
+        def is_running(self):
+            return True
+
+    snap = StatusReader(None).job_snapshot(Job())
+    assert snap["progress"] == 0.75 and snap["progress_basis"] == "steps"
+
+
+def test_a_ruida_has_no_queue_to_clear(client, kernel):
+    """
+    One job on the line at a time: the capabilities say `clear_queue: false` and the
+    route refuses with a sentence rather than "cleared" over a job that burns on.
+    """
+    assert client.get("/api/capabilities").json()["actions"]["clear_queue"] is True
+    link = a_connected_ruida(client, kernel)
+    link.the_job = a_timed_job("running", 5.0)
+    actions = client.get("/api/capabilities").json()["actions"]
+    assert actions["clear_queue"] is False
+    assert actions["pause"] is True and actions["resume"] is True
+
+    answer = refused(client.post("/api/spooler/clear"), "job.noQueue")
+    assert answer.json()["detail"] == (
+        "This machine has no queue: it holds one job at a time. To end the job on "
+        "it, press Stop."
+    )
+
+
 def test_the_engine_spooler_says_nothing_ended(client):
     assert active_spooler(client)["ended"] is None
 
@@ -406,3 +504,69 @@ def test_a_tile_run_burns_tile_by_tile_over_the_line(client, kernel):
     second = client.post("/api/tiling/burn")
     assert second.status_code == 200, second.text
     assert [name for _, name in link.started] == ["Tile 1", "Tile 2"]
+
+
+# ------------------------------------------------- the burning clock of a Ruida job
+
+
+class Ticks:
+    """A clock a test moves by hand."""
+
+    def __init__(self):
+        self.now = 1000.0
+
+    def __call__(self):
+        return self.now
+
+
+def test_the_burn_clock_runs_only_while_running():
+    """Sending and paused do not count; a final phase stops the clock for good."""
+    from openkerf_api.link import BurnClock
+
+    ticks = Ticks()
+    clock = BurnClock(ticks)
+    clock.phase("sending")
+    ticks.now += 0.1
+    assert clock.seconds() == 0.0
+    clock.phase("running")
+    ticks.now += 10
+    assert clock.seconds() == pytest.approx(10)
+    clock.phase("running")  # the watcher says it again every reading
+    ticks.now += 5
+    clock.phase("paused")
+    ticks.now += 30  # a long pause eats nothing
+    assert clock.seconds() == pytest.approx(15)
+    clock.phase("running")
+    ticks.now += 2
+    clock.phase("done")
+    ticks.now += 60
+    clock.phase("running")  # nothing restarts a finished job's clock
+    ticks.now += 60
+    assert clock.seconds() == pytest.approx(17)
+
+
+def test_a_ruida_job_carries_its_estimate_and_its_burning_time(monkeypatch):
+    """`_Job` through `RuidaLink._phase` and `_end`, the only two that move its phase."""
+    import threading
+    import types
+
+    from openkerf_api.ruida import link as ruida_link
+
+    ticks = Ticks()
+    monkeypatch.setattr(ruida_link.time, "monotonic", ticks)
+    owner = types.SimpleNamespace(_lock=threading.RLock())
+    job = ruida_link._Job("Keyrings", 13, 77.0)
+    assert job.snapshot()["estimate_seconds"] == 77.0
+    ticks.now += 0.1  # streaming
+    ruida_link.RuidaLink._phase(owner, job, "running")
+    ticks.now += 20
+    ruida_link.RuidaLink._phase(owner, job, "paused")
+    ticks.now += 50
+    assert job.snapshot()["running_seconds"] == pytest.approx(20)
+    ruida_link.RuidaLink._phase(owner, job, "running")
+    ticks.now += 57
+    ruida_link.RuidaLink._end(owner, job, "done", None)
+    ticks.now += 100
+    snap = job.snapshot()
+    assert snap["phase"] == "done"
+    assert snap["running_seconds"] == pytest.approx(77)

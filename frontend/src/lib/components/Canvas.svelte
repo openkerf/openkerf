@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { currentJob } from '$lib/api';
+	import { currentJob, progressFromEstimate } from '$lib/api';
 	import type { Device } from '$lib/api';
 	import { headTrail } from '$lib/status.svelte';
 	import { origin } from '$lib/control.svelte';
@@ -2990,9 +2990,10 @@
 		     becomes a flex item of its own, and then "62%" sat in a column of its own
 		     next to a broken-off sentence on a tablet (measured at 1024). -->
 		<span
-			>{t('canvas.trace')}{#if progressPart !== null}{' '}{t('canvas.traceProgress', {
-					percent: Math.round(progressPart * 100)
-				})}{/if}</span
+			>{t('canvas.trace')}{#if progressPart !== null}{' '}{t(
+					progressFromEstimate(job) ? 'canvas.traceProgressEstimated' : 'canvas.traceProgress',
+					{ percent: Math.round(progressPart * 100) }
+				)}{/if}</span
 		>
 	</p>
 {/if}

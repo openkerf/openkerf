@@ -18,7 +18,7 @@
  * the laser.
  */
 
-import { currentJob, formatDuration, type Device, type SignalEvent } from './api.ts';
+import { currentJob, formatDuration, progressFromEstimate, type Device, type SignalEvent } from './api.ts';
 import { locale, t, type MessageKey } from './i18n/core.ts';
 
 export type NotifyPermission = 'unsupported' | 'default' | 'granted' | 'denied';
@@ -445,10 +445,14 @@ export class Watchdog {
 			return;
 		}
 		if (!this.#positionSince) this.#positionSince = now;
-		// Only a job that reports progress can be seen to stop making it. A Ruida's
-		// says `null` (`StatusReader.line_job_snapshot`): it takes the whole file in long
-		// before the burn is through, so its counts stand still over a healthy burn.
-		if (job.progress === null) return;
+		// Only a job that *measures* its progress can be seen to stop making it. A
+		// Ruida's is either `null` (no estimate) or a clock against the plan's estimate
+		// (`progressFromEstimate`, `StatusReader.line_job_snapshot`): its packets are all
+		// in long before the burn is through, and its clock moves whether or not the
+		// head does — then waits at 99 % once the burn outruns the estimate. Neither
+		// says the machine stopped, so neither may raise this alarm. A Ruida's ending
+		// comes from the line itself (`ended`, above).
+		if (job.progress === null || progressFromEstimate(job)) return;
 		if (!this.#stallReported && job.running && now - this.#positionSince > STILL_MS) {
 			this.#stallReported = true;
 			this.#set({

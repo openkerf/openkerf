@@ -137,6 +137,9 @@ export const nl: Catalogue = {
 	'status.remaining': 'nog {remaining}',
 	'status.total': 'totaal {total}',
 	'status.estimated': '~{total} geschat',
+	'status.remaining.estimated': 'nog ~{remaining} (geschat)',
+	'status.total.estimated': 'geschat {total}',
+	'status.pastEstimate': 'duurt langer dan de geschatte {total}',
 	'status.restart.title': 'De server is opnieuw gestart',
 	'status.restart.body':
 		'Deze pagina toont nog het ontwerp van vóór de herstart; de engine is leeg begonnen. Herlaad om te zien wat er echt is.',
@@ -524,6 +527,7 @@ export const nl: Catalogue = {
 	'canvas.nodes.failed': 'De knooppunten van deze vorm konden niet gelezen worden. Klik hem nog eens aan; blijft het misgaan, dan antwoordt de engine niet.',
 	'canvas.trace': 'Spoor van de kop — gemeten, inclusief de sprongen tussen de vormen.',
 	'canvas.traceProgress': '{percent}% staat als ring om de kop.',
+	'canvas.traceProgressEstimated': '{percent}% (geschat) staat als ring om de kop.',
 	'canvas.outsideBed': {
 		one: 'Eén vorm ligt buiten het bed — daar komt de kop niet.',
 		other: '{n} vormen liggen buiten het bed — daar komt de kop niet.'
@@ -671,6 +675,8 @@ export const nl: Catalogue = {
 	'job.steps': '{done} / {total} stappen',
 	'job.pass': 'pass {n} van {total}',
 	'job.elapsed': '{time} verstreken',
+	'job.progressEstimated':
+		'Het percentage is een schatting: de tijd dat er gebrand wordt tegen de tijd die ervoor geschat was. Deze machine meldt niet hoe ver ze is.',
 	'job.clearQueue': 'Wachtrij legen ({n})',
 	'job.queueEmpty': 'De wachtrij is al leeg',
 	'job.machineControls': 'Machine bedienen',
@@ -2600,6 +2606,8 @@ export const nl: Catalogue = {
 	'api.job.alreadyOnTheMachine':
 		'Er staat al een job op deze machine. Wacht tot die klaar is, of stop hem; er is niets verstuurd.',
 	'api.job.notStarted': 'De machine heeft de job niet aangenomen: {detail}',
+	'api.job.noQueue':
+		'Deze machine heeft geen wachtrij: ze houdt één job tegelijk. Druk op Stop om de job erop te beëindigen.',
 	'api.machine.notConnected':
 		'Er is geen werkende lijn naar de machine, dus dit heeft haar niet bereikt. Maak eerst verbinding en probeer het dan opnieuw.',
 	'api.machine.unconfirmed':
