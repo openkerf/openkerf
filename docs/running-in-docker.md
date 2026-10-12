@@ -170,7 +170,7 @@ OpenKerf container on another host polling the same controller, only about 60 % 
 the questions got an answer, and every acknowledgement took 30 to 440 ms. With that
 container stopped, 96 of 96 were answered, each within 3 to 5 ms. OpenKerf watches for
 this: when 5 or more of its last 20 acknowledged status questions go unanswered, the
-status bar reads **Connected, but not alone**, with a band underneath saying "Another
+status bar reads **Connected, but not alone**, with a band just above it saying "Another
 program seems to be talking to this laser" and to close the other program. The
 warning goes by itself a few seconds after the other program lets go.
 

@@ -10,7 +10,7 @@ The second half covers what you do to geometry once it is there — combining, o
 
 Pick **Text** in the tool rail and click the bed. The window **Place text** opens, and where you clicked is where the text lands.
 
-![The Place text window over the canvas: a Text field reading "Made on the 5030", a Height (mm) field set to 10 and a Letter spacing field set to 1, an Alignment menu on Left, and below them a font list headed "Font (188 available)" with a search box. Default is picked; the rows below it — Academy Engraved LET, Andale Mono, Apple Braille — each show "Made on the 5030" on the right in that font. At the bottom a link "Font not in the list?" and the buttons Cancel and Place.](images/20-text.png)
+![The Place text window over the canvas: a Text field reading "Made on the 5030", a Height (mm) field set to 10 and a Letter spacing field set to 1, an Alignment menu on Left, and below them a font list headed "Font (186 available)" with a search box. Default is picked; the rows below it — Academy Engraved LET, Andale Mono, Apple Braille — each show "Made on the 5030" on the right in that font. At the bottom a link "Font not in the list?" and the buttons Cancel and Place.](images/20-text.png)
 
 Four fields decide the shape:
 
@@ -90,7 +90,7 @@ Right-click the image and choose **Vectorise** — `Turns the image into paths`.
 
 **Search clipart** in the tool rail opens a search across three collections: Iconify, Wikimedia Commons and Openclipart. Icons are the most usable material on a laser — closed outlines, no gradients — which is why Iconify comes first.
 
-![The Search for clipart window: a search field holding "star", a Width (mm) field set to 60 and a Search button, three ticked source boxes for Iconify (iconen), Wikimedia Commons and Openclipart, a warning line saying Openclipart did not answer in time, with "The rest is there.", and a grid of star thumbnails. Each carries its title and licence — several "Apache 2.0 · source", one "CC BY-SA 4.0 · source", one "Public domain · source".](images/19-clipart.png)
+![The Search for clipart window: a search field holding "star", a Width (mm) field set to 60 and a Search button, three ticked source boxes for Iconify (iconen), Wikimedia Commons and Openclipart, a warning line saying Openclipart gave an unexpected answer, with "The rest is there.", and a grid of star thumbnails. Each carries its title and licence — several "Apache 2.0 · source", one "CC BY-SA 4.0 · source", one "Public domain · source".](images/19-clipart.png)
 
 Type at least two letters and press Enter or **Search**. **Width (mm)** is the size the drawing gets when you insert it; the tooltip on a result reads `Insert at {width} mm wide`. Clicking a thumbnail fetches it, scales it to that width and puts it on the bed.
 
@@ -115,7 +115,7 @@ A second note warns about weight: a drawing built from more than 400 separate pa
 
 **Generators** in the tool rail opens one window with eight tabs. Every tab is a small form on the left and, beside it, the shape that form makes.
 
-![The Generators window over the canvas, on the Repeat tab. Eight tabs across the top: Repeat, Circle, Polygon, Box, QR code, Barcode, Arc text, Living hinge. The form holds Columns 4, Rows 3, Space X (mm) 5 and Space Y (mm) 5, with a teal button reading "Make 12 copies — 175 × 100.0 mm". To the right a preview panel shows the selected rectangle repeated in a 4 by 3 grid, with "175 × 100.0 mm 12 pieces" under it and the warning "This falls outside the sheet."](images/18-generators.png)
+![The Generators window over the canvas, on the Repeat tab. Eight tabs across the top: Repeat, Circle, Polygon, Box, QR code, Barcode, Arc text, Living hinge. The form holds Columns 4, Rows 3, Space X (mm) 5 and Space Y (mm) 5, and a closed fold "Use names from a series". To the right a preview panel shows the selected rectangle repeated in a 4 by 3 grid, with "175 × 100.0 mm 12 pieces" under it. At the foot of the window the size, 175 × 100.0 mm, and a teal button reading "Make 12 copies".](images/18-generators.png)
 
 ### The preview
 
@@ -177,7 +177,7 @@ One thing to know before you use it: the result is a path and no longer text. Th
 
 A field of slits that lets rigid sheet material bend. Cut enough short slits across a piece of plywood and the strips of material left between them twist instead of snapping, and the sheet rolls. The tab says **This pattern bends from top to bottom**. **Bending direction and bridges** opens the fuller explanation and advice to test on a scrap. There is no direction field, because a rotation already exists.
 
-![The Generators window on the Living hinge tab: the Pattern chooser set to Staggered rows, Slit length 8 mm, Gap in a row 3 mm and Between rows 2 mm, the line about what stays behind between them, and a preview of a dense field of short slits captioned with its size and the count of slits and rows.](images/28-hinge.png)
+![The Generators window on the Living hinge tab: the Pattern chooser set to Staggered rows, Slit length 8 mm, Gap in a row 3 mm and Between rows 2 mm, a closed fold "Bending direction and bridges", the area fields, and a preview of a dense field of short slits captioned with its size and the count of slits and rows.](images/28-hinge.png)
 
 **Pattern** picks the slit shape: **Straight slits**, **Staggered rows** or **Wavy slits**. Staggered is the one to start with — every other row is shifted half a pitch, so the bridge in one row sits opposite a slit in the next and the sheet bends evenly instead of hinging on a few lines. Wavy slits put more cut length in the same span and bend more easily; the slit becomes two curves rather than a straight line.
 
@@ -206,7 +206,7 @@ Only on a machine whose Z axis the software can move. Elsewhere the tab is not t
 The focal point of a lens is a plane a few tenths of a millimetre thick, and where it lies depends on the lens, the nozzle, the material thickness and whatever the last person to touch the machine did. The board answers it by measurement: the same short line burned at a series of heights, with the height written under each one. Burn it, look for the thinnest and darkest mark, and set the head at the height beside it.
 
 ![The Generators window on the Focus test tab: Sweep start -2, Sweep end 2 and Marks 9, the
-line about which way a plus moves the head, the step per mark, the size and position fields,
+line about which way a plus moves the head, the mark size and position fields, the ticked "Burn the height under every mark", a closed fold "Read the focus test",
 and a preview of nine short lines side by side captioned with the board size and the step in
 height.](images/33-focus.png)
 

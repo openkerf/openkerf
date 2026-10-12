@@ -89,11 +89,13 @@ drives the emulator and answers once the line reads the new state back
 | | `moving` | the KH-5030's measured moving word (16975360) |
 | `second_client` | `true`/`false` | loses 2 of every 5 status answers; "Connected, but not alone" after ~7 s, clears in ~5 s |
 | `z_step` | `true`/`false` | as in dummy mode |
+| `job` | `null` or `{"ran": s, "estimate": s}` | **simulated**: while `phase` is `running` or `paused`, the link's `job()` answers a job named "Sheet 1 (simulated)" with that burning time and estimate, so the estimate-based progress can be seen; nothing goes to the emulator |
 
 There is no `queued`/`done` here: a job phase needs a job on the line, and
 execution and machine-command routes (`/api/machine/*` including connect,
 `/api/job/*`, burns, `/api/series/start`) still return 409. Shot 37 (series run)
-therefore stops `docs-shots.mjs`; run the shots after it by name.
+is therefore skipped, with a line on the console, and its old picture stays.
+`docs-shots.mjs` takes several filters at once (`docs-shots.mjs 07 50 53`).
 
 ## Review evidence
 

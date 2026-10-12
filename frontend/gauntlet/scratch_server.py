@@ -108,7 +108,8 @@ def bootstrap(root, frontend=None, ruida_emulator=False):
                         "workdir": kernel.os_information["WORKDIR"]}}
     if ruida_emulator:
         marker["emulator"] = {"ruida": f"127.0.0.1:{peer.send_port}"}
-        state = {"connection": "connected", "phase": "idle", "second_client": False, "z_step": False}
+        state = {"connection": "connected", "phase": "idle", "second_client": False, "z_step": False,
+                 "job": None}
     else:
         state = {"connection": "disconnected", "phase": "idle", "z_step": False}
     # Only the disposable drawing planner sees this simulated capability.
@@ -146,6 +147,27 @@ def bootstrap(root, frontend=None, ruida_emulator=False):
                 return True
             time.sleep(0.05)
         return predicate()
+
+    def simulate_job(link):
+        """
+        SIMULATED: a job on the line for the status payload, nothing on the emulator.
+
+        A real job needs `start_job`, which the execution guard refuses here, so the
+        link's `job()` — the one thing `StatusReader` reads for a Ruida's progress — is
+        answered from `state["job"]` (`{"ran": s, "estimate": s}`) while the phase is
+        running or paused, under a name that says it is simulated. The emulator only
+        holds the matching status word. Any other phase, or `job: null`, takes it away.
+        """
+        fake = state.get("job")
+        phase = state["phase"]
+        if fake and phase in ("running", "paused"):
+            snapshot = {"name": "Sheet 1 (simulated)", "phase": phase, "sent": 13, "total": 13,
+                        "detail": None, "started": time.time() - float(fake["ran"]),
+                        "finished": None, "estimate_seconds": float(fake["estimate"]),
+                        "running_seconds": float(fake["ran"])}
+            link.job = lambda: dict(snapshot)
+        else:
+            link.__dict__.pop("job", None)
 
     def drive_emulator(body):
         """
@@ -187,6 +209,8 @@ def bootstrap(root, frontend=None, ruida_emulator=False):
                 peer.memory.pop(MEM_MACHINE_STATUS, None)
             if connected:
                 settled = until(lambda: link.machine_state() == phase, 15) and settled
+        if "job" in body or "phase" in body:
+            simulate_job(link)
         if "second_client" in body:
             peer.swallow_replies(SECOND_CLIENT_PATTERN if body["second_client"] else ())
             if connected:
@@ -196,12 +220,20 @@ def bootstrap(root, frontend=None, ruida_emulator=False):
                 settled = until(warned, 30) and settled
         return {**state, "settled": settled, "reading": reading(), "machine_state": link.machine_state()}
 
+    def valid_job(job):
+        if job is None:
+            return True
+        return (isinstance(job, dict) and set(job) == {"ran", "estimate"}
+                and all(type(job[k]) in (int, float) and job[k] >= 0 for k in job)
+                and job["estimate"] > 0)
+
     def set_state(body: dict = Body(...)):
         if ruida_emulator:
             if (set(body) - state.keys()
                     or body.get("connection", state["connection"]) not in ("connected", "connecting", "disconnected")
                     or body.get("phase", state["phase"]) not in ("idle", "moving", "running", "paused")
-                    or any(type(body.get(k, state[k])) is not bool for k in ("z_step", "second_client"))):
+                    or any(type(body.get(k, state[k])) is not bool for k in ("z_step", "second_client"))
+                    or not valid_job(body.get("job", state["job"]))):
                 raise HTTPException(422, "Unknown emulator fixture state")
             state.update(body)
             return drive_emulator(body)

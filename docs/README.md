@@ -52,65 +52,48 @@ order or looked up when you need them.
 ## How to update these pages
 
 The screenshots are made by a script, not by hand, so that a picture shows the
-same thing next month. It needs an engine of its own — a library and a layer list
-that are not the ones you work in — and it refuses to run without them:
+same thing next month. It runs against a disposable server — its own temporary
+library, layer list, projects and machine configuration, nothing of yours — with
+an **emulated Ruida** in place of a laser:
 
 ```bash
-meerk40t --no-gui -d -e "openkerf -p 8092 -l /tmp/docs/library.db \
-                                  -o /tmp/docs/operations.cfg -f frontend/build"
+# from the repository root, with the frontend built (npm --prefix frontend run build)
+env PYTHONPATH=api python frontend/gauntlet/scratch_server.py --ruida-emulator
 
-cd frontend
-OK_BASE=http://127.0.0.1:8092 node gauntlet/docs-shots.mjs        # all of them
-OK_BASE=http://127.0.0.1:8092 node gauntlet/docs-shots.mjs 07     # only shot 07
+# in another terminal
+OK_SCRATCH_LIBRARY=1 node frontend/gauntlet/docs-library.mjs   # the library the pictures show
+OK_SCRATCH_LIBRARY=1 node frontend/gauntlet/docs-shots.mjs       # all of them
+node frontend/gauntlet/docs-shots.mjs 07 50 53                   # only these
 ```
 
-`-o` is what keeps the run out of your own layer list. That list is keyed to the
-name of the engine and not to the profile, so without it the script reads and
-writes the layers of the app you work in — and photographs them: a run without it
-put a layer of "Engrave, 20 mm/s, 100%" in the pre-flight picture where the script
-seeds "Logo area, 300 mm/s, 30%", with 2:22 on the clock instead of 1:19. Started
-without `-o` the script stops before it touches anything and says so.
+**The machine in the pictures is that emulator**, not a laser. It is a Ruida called
+"KH-5030 (emulated)" with the KH-5030's bed of 500 × 300 mm, on OpenKerf's own line
+to the engine's Ruida emulator on 127.0.0.1, so the top bar of every picture names it
+that way — on purpose: a simulated machine is labelled as one. Where a page reports
+a measurement *on the KH-5030* — a stop acknowledged in 6 ms, a raster burned in
+77 s — that was measured on the real machine, and the pictures beside it only show
+the screens. The server refuses every route that would execute anything (jobs,
+moves, connecting, starting a series run), and the scratch server drives the
+emulator's state for the pictures that need one — connected, a second program on
+the line. One thing in those pictures is simulated outright and said so where it
+appears: the job under way in the picture of a Ruida burning, which carries the name
+"Sheet 1 (simulated)", because a real job is never started to take a photograph.
+The details are in `frontend/gauntlet/README.md`.
 
 Each shot puts the state it needs there itself through the API, so nothing depends
-on what happened to be on the bed. Everything except one thing: **the machine**.
-Every picture has a bed in it and this handbook quotes its size, so the KH-5030 has
-to be the active one — and the script will not make it so. The machine list lives
-in a single `MeerK40t.cfg` for every instance on the computer (CLAUDE.md, the
-`-P/--profile` row), so switching it over here would change which laser your own
-app opens on, and switching back does not undo it: measured, the bed stays behind
-at the other machine's size. So a run against another machine stops with a sentence
-that says which one is active, and activating the KH-5030 is something you do
-yourself. The files land in `docs/images/`.
+on what happened to be on the bed, and a run stops at the first shot that fails.
+The files land in `docs/images/`. Four shots draw a test board, which writes a row
+into the library, so they only run with `OK_SCRATCH_LIBRARY=1`: 41, 42, 43 and 44.
+Without it they are skipped and say so on the console.
 
-Two of them are held back on purpose. The pictures of a test board with a code
-and with a cut-out have to *draw* a board, which writes a row into the library and
-needs a cut preset for the material, so they only run against a library that is
-expendable:
-
-```bash
-# an engine with a library and a layer list of its own, and a dev server in front of it
-meerk40t/.venv/bin/meerk40t --no-gui -d -e "openkerf -p 8092 \
-    -l /tmp/scratch/openkerf-library.db -o /tmp/scratch/operations.cfg"
-cd frontend && OPENKERF_API=http://127.0.0.1:8092 npx vite dev --port 5200
-
-OK_SCRATCH_LIBRARY=1 OK_BASE=http://localhost:5200 node gauntlet/docs-shots.mjs 41
-OK_SCRATCH_LIBRARY=1 OK_BASE=http://localhost:5200 node gauntlet/docs-shots.mjs 42
-OK_SCRATCH_LIBRARY=1 OK_BASE=http://localhost:5200 node gauntlet/docs-shots.mjs 43
-OK_SCRATCH_LIBRARY=1 OK_BASE=http://localhost:5200 node gauntlet/docs-shots.mjs 44
-```
-
-Shot 43 is of the form and not of a board, so it writes no row itself; it needs the
-same expendable library because the cut-out has nothing to report without a material
-that has a cut setting. Shot 44 writes a board, because it is a picture of the line
-that names one — and it wants an *empty* scratch library, since a name already taken
-is minted afresh (correctly: two planks may never share a name) and the picture then
-shows a different word every run. Without the flag the four shots are skipped and say
-so on the console. Two things that scratch engine does *not* get its own copy of,
-because MeerK40t has none: the machine list and the machine's own settings, which
-live in one `MeerK40t.cfg` for every instance (see CLAUDE.md, the `-P/--profile`
-row). So give it the bed and the name the handbook uses before you photograph
-anything — otherwise the pictures show a bed and a machine name that no other page
-does, and that is the one thing you have to put right by hand.
+A few pictures are kept from an earlier run rather than retaken, because the
+disposable server cannot show their state truthfully: the wizard's list of laser
+kinds (02; the scratch engine loads only the Ruida driver, so the model counts would
+be wrong), the name already taken (03; it needs a machine called KH-5030) and a
+series run going (37; starting a run is refused there). Two more wait for a fix to
+the screen itself: the cut path (29), which now numbers the inner square and the one
+around it as "1+1", and print and cut (34), whose block runs past the edge of the
+panel. All five show an older look of the same screens.
 
 What keeps the prose honest is a test:
 

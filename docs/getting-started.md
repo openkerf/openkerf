@@ -77,7 +77,7 @@ machine is not there: **Show all models**.
 "This is how you recognise it in the top bar: “K50/K60-CO2-Laser
 (Ruida-Controller)”." — and otherwise it is the short form, "This is how you
 recognise it in the top bar." Anything you will recognise at a glance will do; the
-name in the pictures here is KH-5030. The buttons are **Back** and **Create**.
+name in the pictures here is KH-5030 (they come from an emulated Ruida, which the top bar calls "KH-5030 (emulated)"; see [How to update these pages](README.md#how-to-update-these-pages)). The buttons are **Back** and **Create**.
 
 OpenKerf catches a name that is already taken before the machine is made. The
 picture below is that moment: under the field it says "There is already a machine
@@ -129,7 +129,16 @@ cheapest moment.
 Then "What does this machine have?" with two boxes: "A Z axis (height-adjustable
 bed or head)" and "Autofocus". Below that a folded section, "More of this
 machine", holds the engine's own fields; you only need those for a mirrored or
-rotated machine. **Skip** and **Save and finish** both go on.
+rotated machine, or to calibrate one. **X Scale Factor** and **Y Scale Factor** are
+the calibration. Each multiplies every X (or Y) on its way to the machine, so burn
+lines a known distance apart along the axis, measure centre to centre, and set the
+factor to what you asked for divided by what you measured. Measured on the KH-5030:
+lines 240 mm apart came out 242 mm apart on both axes, so both factors went to
+240 / 242 = 0.9917, after which the same lines measured 240 mm. Leave them at 1 until
+a measurement says otherwise, and set them in one place only: a controller whose own
+step length is corrected as well would be corrected twice. For
+a Ruida the connection is only its **Address**: it is always reached over the
+network, so there is no interface to choose. **Skip** and **Save and finish** both go on.
 
 **Done.** The last screen says "<machine> is ready." and then the sentence worth
 following literally: "Do the first job with the lid open and without a workpiece —
@@ -298,7 +307,7 @@ the right-hand panel says it plainly when there are none: "No layers yet. A laye
 is an operation — cut, engrave or raster — with a speed and power of its own. Make
 one below; then select a shape to put into it."
 
-![The Layers tab with four layers — Outline, Caption, Fine lines and one more — the first one opened to show its colour swatches, Name, "Kind of operation" as Cut, Engrave, Raster and Dots, and the order buttons Earlier and Later.](images/10-layer-detail.png)
+![The Layers tab with four layers — Outline, Caption, Fine lines and one more — the first one opened to show its Name, "Kind of operation" as Cut, Engrave, Raster and Dots, and the order buttons Earlier and Later.](images/10-layer-detail.png)
 
 **+ Add layer** at the bottom of the list unfolds the four kinds: **Cut**,
 **Engrave**, **Raster**, **Dots**. Each layer row shows its speed in mm/s, its
@@ -334,7 +343,7 @@ again.
 **Prepare job**, the one filled button on that tab, does not start anything. It
 arms the job — see "Burning" below.
 
-![The Job tab: the row "Material" reading "not filled in for this sheet", an amber box saying the machine is disconnected, the line that three layers are unverified, then the filled "Prepare job 1:19" with a plain arrow button joined to its right-hand end, and under it a "Show cut path" button, the table of layers with mm/s, %, passes and source, and a small picture of the sheet with "Sheet 1 500 × 300 mm" and "work 295 × 176 mm" under it](images/12-job-preflight.png)
+![The Job tab: the row "Material" reading "not filled in for this sheet", the line "3 unverified layers · test on a scrap first.", then the filled "Prepare job 1:19" with a plain arrow button joined to its right-hand end, and under it a "Show cut path" button, the table of layers with mm/s, %, passes and source, and a small picture of the sheet with "Sheet 1 500 × 300 mm" and "work 295 × 176 mm" under it](images/12-job-preflight.png)
 
 From top to bottom it holds:
 

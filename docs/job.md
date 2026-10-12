@@ -43,7 +43,7 @@ ever run past the foot of the panel, it stops at the bottom edge rather than
 scrolling away. Explanations that are reasons rather than instructions wait behind
 a **Why?** fold, so they do not push the buttons down on a tablet.
 
-![Job review in an isolated test installation: material and connection warnings, four layers with their settings, the drawing preview, the start button and the collapsed machine section.](images/12-job-preflight.png)
+![The Job tab before a burn: the material row, the line about three unverified layers, the filled "Prepare job 1:19" with its arrow, "Show cut path", the four layers with their settings — "Fine lines" as "does not burn" — the drawing preview with the sheet and work sizes, and the collapsed "Operate machine" and "Messages from the machine".](images/12-job-preflight.png)
 
 ### Time, material and zero point
 
@@ -206,7 +206,7 @@ that was typed: "{name} is in the machine. Start it on the panel." That line goe
 as soon as the name in the field changes, because it is about one file under one
 name. Close the window with its cross or with Escape; the file stays where it is.
 
-![The window Send to the machine: its title across the top with a close cross at the right, under it the line about the file going into the machine and being started on the machine's own panel, and under that the field labelled Name on the machine holding SHEET1 in a typewriter face, with the green Send button beside it.](images/46-job-upload.png)
+![The window Send to the machine: its title across the top with a close cross at the right, under it a closed "Why?" fold that says the file goes into the machine and is started on the machine's own panel, and under that the field labelled Name on the machine holding SHEET1 in a typewriter face, with the green Send button beside it.](images/46-job-upload.png)
 
 #### When it will not go
 
@@ -618,6 +618,8 @@ above.
   packets went and what the machine may have burned; a notification says "The job
   did not finish".
 
+![The Job tab during a burn on a Ruida. The block "The job" reads "Burning" beside the job's name, a bar a little under two thirds full, "63%", "1:15 elapsed" and "~0:45 left (estimate)", then the sentence that the percentage is an estimate, a red Stop and, on the other side, Pause. The top bar reads "Busy" under the machine name with a filled red Stop; the status bar at the foot reads 63%, "~0:45 left (estimate)" and "estimate 2:00", and on the canvas a ring around the head at 0,0 shows the same figure. The job is the documentation server's simulation — 75 s burned of an estimated 120 s — and not a real burn; everything drawn around it is the app's own.](images/53-job-running.png)
+
 A second job cannot start while one is on the machine: "A job is already on this
 machine. Wait until it is done, or stop it; nothing has been sent."
 
@@ -875,11 +877,13 @@ MeerK40t is connected to the same controller, the two lose each other's answers.
 OpenKerf notices that the controller acknowledges its status questions but leaves
 too many of them unanswered — 5 or more of the last 20 — and the status bar then
 reads **Connected, but not alone** instead of **Connected to the laser**, with a
-band under it: "Another program seems to be talking to this laser". Close the other
+band just above it: "Another program seems to be talking to this laser". Close the other
 program; the warning clears by itself a few seconds later, once 1 or fewer of the
 last 20 go unanswered. Questions the controller does not acknowledge at all, as
 while it homes, do not count. See
 [Running in Docker](running-in-docker.md#one-program-per-controller).
+
+![The work area with the warning band across the foot of the canvas, just above the status bar: "Another program seems to be talking to this laser", then the count — 6 of the last 20 status questions acknowledged but not answered — with the advice to close the other program, and a line about how long the controller took to acknowledge. In the status bar, in amber, "Connected, but not alone". The lost answers come from the documentation server's emulator, which drops two of every five, as a KH-5030 did with a second program on it.](images/54-second-client.png)
 
 **When it goes wrong.**
 

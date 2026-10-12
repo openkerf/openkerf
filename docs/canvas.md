@@ -107,6 +107,10 @@ Other ways to select:
 - **Escape**, or a click on the empty bed, clears the selection.
 - A shape can also be reached with the keyboard: tab to it and press Enter or space.
 
+![A box being dragged from left to right on the bed, the mouse not yet let go. Inside a red rounded outline stands the word "Workshop" in orange; the box has a solid teal edge and lies wholly around the word and wholly inside the outline. Let go here and only the word is selected.](images/50-select-window.png)
+
+![The same drawing with a box dragged from right to left, still in progress. Its edge is dashed; it starts outside the red outline, crosses its right-hand side and ends in the last letters of "Workshop". It encloses neither shape, but it touches both, so letting go selects the outline and the word.](images/51-select-crossing.png)
+
 ### A pile under the pointer
 
 Shapes lie on top of each other more often than you would think — a copy that did not
@@ -623,7 +627,9 @@ The row of tabs above the bed is the sheet bar. Each tab carries the sheet's nam
 size (`300×200`); hovering adds the material, if one is filled in. Click a tab to switch to
 that sheet. The **+** at the end adds one ("Add a sheet"). A new sheet starts with the
 layers of the sheet you were on — their kind, colour, name, speed, power and passes — still
-empty, so the next import onto it lands in the layers you already set up.
+empty, so the next import onto it lands in the layers you already set up. It takes that
+sheet's material and thickness as well: the next sheet is usually the next piece of the
+same board; change it in the sheet's editor if it is not.
 
 Click the tab you are already on and a small editor opens under it, with:
 
