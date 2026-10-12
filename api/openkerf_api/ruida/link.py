@@ -500,6 +500,16 @@ class RuidaLink:
     ARRIVE_SECONDS = 10.0
     #: How often that wait looks at the monitor's readings.
     ARRIVE_POLL_SECONDS = 0.02
+    #: Close enough to the last move's target to count as there, in controller units
+    #: (µm). The engine compared whole millimetres, so a target on a half millimetre
+    #: could be missed by a reading a few µm either side and cost the full wait.
+    ARRIVE_TOLERANCE_UM = 500
+    #: A head that stands still somewhere else has arrived as far as the next move is
+    #: concerned: the status word not moving, read at least this long after the send,
+    #: and the position unchanged for as long. Measured on the KH-5030: the moving word
+    #: came 0.17–0.22 s after a move was sent, so 0.5 s does not mistake a move that
+    #: has not started yet for one that ended.
+    STILL_SECONDS = 0.5
     #: `machine.py`'s jog ran `move_relative` without `-f`: the driver's clamp applied.
     CONFINED = True
 
@@ -704,6 +714,9 @@ class RuidaLink:
                 self._file_stop = stopped
                 job = _Job(name, len(blocks), estimate_seconds)
                 self._job = job
+                # A job moves the head and ends where the controller puts it (this
+                # one goes to (0, 0)); the last move's target says nothing any more.
+                self._target = None
                 thread = threading.Thread(
                     target=self._carry, name="ruida-job", daemon=True,
                     args=(job, session, monitor, generation, blocks, stopped))
@@ -738,6 +751,7 @@ class RuidaLink:
             job.clock.phase(phase)
             job.detail = detail
             job.finished = time.time()
+            self._target = None
         job.ended.set()
         return True
 
@@ -913,21 +927,30 @@ class RuidaLink:
     def _settle(self, stops: int) -> tuple[float, float]:
         """
         Where the head is, in controller units, once the last move has been seen to
-        arrive or `ARRIVE_SECONDS` have gone by — the engine's `wait_for_move`, which
-        compares in whole millimetres. Readings older than that move do not count.
+        arrive — within `ARRIVE_TOLERANCE_UM` of its target, or standing still
+        somewhere else (`_standing_still`) — or `ARRIVE_SECONDS` have gone by, the
+        engine's `wait_for_move`. Readings older than that move do not count.
+
+        Why "somewhere else" counts: the target used to outlive whatever moved the head
+        next. After a frame, then a job (which ends at (0, 0) on the KH-5030), the next
+        frame waited the full 10 s for the head to reach the old frame's last corner —
+        the delay the user saw before a frame on a new sheet started.
         """
         with self._lock:
             target, since = self._target, self._target_at
         if target is not None:
             deadline = time.monotonic() + self.ARRIVE_SECONDS
-            want = (round(target[0] / 1000), round(target[1] / 1000))
+            still = {"at": None, "where": None}
             while time.monotonic() < deadline:
                 if self._stops != stops:
                     raise ConnectionError(MOTION_STOPPED)
                 seen = self._fresh_position(since)
-                if seen is not None and (round(seen[0] / 1000),
-                                         round(seen[1] / 1000)) == want:
-                    break
+                if seen is not None:
+                    if (abs(seen[0] - target[0]) <= self.ARRIVE_TOLERANCE_UM
+                            and abs(seen[1] - target[1]) <= self.ARRIVE_TOLERANCE_UM):
+                        break
+                    if self._standing_still(since, seen, still):
+                        break
                 time.sleep(self.ARRIVE_POLL_SECONDS)
             with self._lock:
                 if self._target is target:
@@ -938,6 +961,23 @@ class RuidaLink:
         if position is None:
             raise ConnectionError(NO_POSITION)
         return position
+
+    def _standing_still(self, since: float, seen, still: dict) -> bool:
+        """
+        The head is not going anywhere: a status word read `STILL_SECONDS` or more after
+        the send says it is not moving, and the position has not changed for as long.
+        """
+        now = time.monotonic()
+        if still["where"] != seen:
+            still["where"], still["at"] = seen, now
+            return False
+        if now - still["at"] < self.STILL_SECONDS:
+            return False
+        monitor = self._monitor
+        word = monitor.reading(MEM_MACHINE_STATUS) if monitor is not None else None
+        if word is None or word.at < since + self.STILL_SECONDS:
+            return False
+        return machine_state(word.value) not in ("moving", "running")
 
     def _fresh_position(self, since: float):
         monitor = self._monitor
