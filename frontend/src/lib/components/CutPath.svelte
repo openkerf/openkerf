@@ -25,6 +25,7 @@
 		donePaths,
 		headAt,
 		indexAt,
+		labelBox,
 		stepPath,
 		travelPath,
 		travelShare,
@@ -221,31 +222,10 @@
 	let unit = $derived(frame ? Math.max(frame.w, frame.h) / 400 : 1);
 
 	/**
-	 * The numbers on the drawing, and the same order as text.
-	 *
-	 * The box is the one the `<text>` below really occupies: font-size 9 units, offset
-	 * 3 units right and 3 up, 0.62 of the size per character in IBM Plex Mono and 1.4
-	 * of it in height — measured on a drawn digit, whose box was 10.1 x 22 px, so the
-	 * height is not one em but about 1.3 of it. Numbers that would land on each other
-	 * are folded into the lowest of them (`contourStarts`), which is what the question
-	 * "does it cut inside before outside" needs.
-	 *
-	 * The box claimed is a quarter wider and taller than the ink. With the ink alone two
-	 * labels could stand edge to edge — "3+14" against "18+2" read as one string,
-	 * "3+1418+2", on the gauntlet's caption — so the allowance is the air between two
-	 * labels: a character's width beside a four-character label, a line's gap above.
+	 * The numbers on the drawing, and the same order as text. The box each number
+	 * claims is `labelBox` (in `$lib/cutpath`), which says why it is the size it is.
 	 */
-	const LABEL_AIR = 1.25;
-	let numbers = $derived(
-		contourStarts(steps, {
-			box: {
-				char: unit * 9 * 0.62 * LABEL_AIR,
-				height: unit * 9 * 1.4 * LABEL_AIR,
-				dx: unit * 3,
-				dy: unit * -3
-			}
-		})
-	);
+	let numbers = $derived(contourStarts(steps, { box: labelBox(unit) }));
 	let order = $derived(contourList(steps));
 	let contours = $derived(contourCount(steps));
 	/** How many contours were folded into another number, for the note under the drawing. */

@@ -291,20 +291,22 @@
 <style>
 	/* Above the status bar, across the full width: this is about the whole page and
 	   not about one panel. Not centred at the top — the connection card is already
-	   there, and two cards on top of each other is not a message. */
+	   there, and two cards on top of each other is not a message.
+
+	   In the page's column and not over it: the body is a flex column (work area, then
+	   this, then the bar), so the band takes its own height and the work area gives it
+	   up. It used to be fixed over the bottom of the page, and a second client on the
+	   controller — a warning that stays as long as the other program does — then lay
+	   across the canvas's zoom bar and the foot of the panel, with nothing to dismiss it
+	   by (handbook shot 54). */
 	.restarted {
-		position: fixed;
-		left: 0;
-		right: 0;
-		bottom: var(--statusbar-height);
-		z-index: 70;
+		flex: none;
 		display: flex;
 		align-items: center;
 		gap: var(--space-4);
 		padding: var(--space-2) var(--space-4);
 		border-top: 1px solid var(--warn-edge);
 		background: var(--warn-tint);
-		box-shadow: var(--lift-2);
 		font-size: var(--text-xs);
 		color: var(--text-1);
 	}

@@ -330,7 +330,7 @@ Three ways in, and they are the same window:
 All three carry the same explanation: "See in what order the machine burns, where
 the head travels without burning, and how the time builds up".
 
-![The Cut path window. On the bed, a red square with a smaller red square inside it, a second red square to its right, an engraved bar below them, dashed grey lines running from one to the next, and the numbers 1, 2, 3 and 4 — the 1 on the inner square, the 2 on the one around it. The first two are drawn in solid red, the other two faint; a filled dot sits on the left edge of square 2. Under the drawing a Play button, a scrubber at 0:40 of 1:19, the line "The replay runs 4 times faster than the machine.", and four figures: On the clock 1:19, Burning 1,270 mm, Travelling 352.7 mm · 4%, Contours 4.](images/29-cutpath.png)
+![The Cut path window. On the bed, a red square with a smaller red square inside it, a second red square to its right, an engraved bar below them, dashed grey lines running from one to the next, and the numbers 1, 2, 3 and 4 — the 1 on the inner square, the 2 on the one around it. The first two are drawn in solid red, the other two faint; a filled dot sits on the left edge of square 2. Under the drawing a Play button, a scrubber at 0:38 of 1:15, the line "The replay runs 4 times faster than the machine.", and four figures: On the clock 1:15, Burning 1,230 mm, Travelling 359.7 mm · 5%, Contours 4.](images/29-cutpath.png)
 
 ### What the picture means
 
@@ -358,7 +358,7 @@ certain crowd they are left off altogether: "There are 240 contours, too many to
 number on the drawing. Play the path to see the order."
 
 That list is **The order, in words (4 contours)**, folded shut under the figures.
-One sentence per contour — "1: Outline, 40 × 40 mm, starting at 60, 60." — with
+One sentence per contour — "1: Outline, 30 × 30 mm, starting at 65, 65." — with
 "walked 3 times" on the end when the layer has passes. It is the only form of the
 answer a screen reader can read, and on a crowded drawing it is the readable one
 for everybody.
@@ -369,8 +369,8 @@ The dashed grey lines are the head moving with the laser off, from the end of on
 contour to the start of the next. The legend calls them "Moving without burning".
 
 They are the reason to open this window at all. Travel costs time and produces
-nothing, and the figure to watch is beside the millimetres: **Travelling 352.7 mm ·
-4%** — the share of the clock spent not burning. A third of the clock spent
+nothing, and the figure to watch is beside the millimetres: **Travelling 359.7 mm ·
+5%** — the share of the clock spent not burning. A third of the clock spent
 travelling is an ordering problem, and no drawing says that as quickly as one
 percentage.
 
@@ -412,7 +412,7 @@ a rounding:
 > area at all."
 
 So the two clocks are put side by side rather than left to be discovered: "On this
-design this window says 1:19 and the start button says 1:09." Where they disagree
+design this window says 1:15 and the start button says 1:07." Where they disagree
 badly, this one is the one to believe — and a raster layer is where they disagree
 badly.
 
@@ -780,7 +780,7 @@ It works in three steps.
    than the internal offset because that is a number you can check with a ruler.
 
 ![The Job panel scrolled to the machine controls: under Zero point of the work, the block
-Print and cut showing "2.5, 1.2 mm — mark 1 has moved that far, and the sheet lies 0.3° out",
+Print and cut with "2.5, 1.2 mm · 0.3°" on its heading, showing "2.5, 1.2 mm — mark 1 has moved that far, and the sheet lies 0.3° out",
 the sentence about the zero point staying out of it, and the buttons Mark 1 again, Mark 2
 again and Forget the alignment.](images/34-printcut.png)
 
@@ -883,7 +883,7 @@ last 20 go unanswered. Questions the controller does not acknowledge at all, as
 while it homes, do not count. See
 [Running in Docker](running-in-docker.md#one-program-per-controller).
 
-![The work area with the warning band across the foot of the canvas, just above the status bar: "Another program seems to be talking to this laser", then the count — 6 of the last 20 status questions acknowledged but not answered — with the advice to close the other program, and a line about how long the controller took to acknowledge. In the status bar, in amber, "Connected, but not alone". The lost answers come from the documentation server's emulator, which drops two of every five, as a KH-5030 did with a second program on it.](images/54-second-client.png)
+![The work area with the warning band in a strip of its own under the canvas and its colour strip, just above the status bar, the canvas having moved up to make room for it: "Another program seems to be talking to this laser", then the count — 6 of the last 20 status questions acknowledged but not answered — with the advice to close the other program, and a line about how long the controller took to acknowledge. In the status bar, in amber, "Connected, but not alone". The lost answers come from the documentation server's emulator, which drops two of every five, as a KH-5030 did with a second program on it.](images/54-second-client.png)
 
 **When it goes wrong.**
 
