@@ -35,7 +35,7 @@ The window shows the four steps of the loop across the top: **Set up**, **Burn**
 window; steps 3 and 4 are the block underneath it, headed **Steps 3 and 4 — photo and
 preset**.
 
-![The Test grid window over the canvas: the four numbered steps across the top, the form on the left with Material, Operation, Thickness, Square, Passes and the two axis choices, and on the right a preview of a four-by-four board with power percentages above it and speeds beside it, above the button "Draw the grid", which carries the number of squares and the size the board will be](images/16-testgrid.png)
+![The Test grid window over the canvas: the four numbered steps across the top, a one-line lead, a closed fold of saved recipes, the form on the left with Material, Operation and the two ranges — Speed (mm/s) from 5 to 25 in 4 rows, Power (%) from 40 to 80 in 4 columns — and the closed fold "Layout and extras" that holds thickness, square, gap and passes; on the right a preview of a four-by-four board with power percentages above it and speeds beside it. At the foot "Suggest a range" and the button "Draw the grid", which carries the number of squares and the size the board will be](images/16-testgrid.png)
 
 **Without a token.** A read-only session cannot draw a board. The window then says:
 
@@ -577,7 +577,7 @@ photo has not been set, so the outline is approximate — align the grid for an 
 Without a photo there is nothing to show: *There is no photo of this grid yet. Without a
 photo there is nothing to read the choice off.*
 
-![The material library with a preset unfolded: 3 mm, Cut, 16 mm/s, 75%, a green Verified badge, the lines Source "Verified", "Burned and judged on a test grid", Machine KH-5030, Test grid with the board's number and the square that was picked, Air assist on, and to the right, in place of the photograph, the line that there is no photo of this grid yet with "Add a photo" under it](images/15-library-preset.png)
+![The material library with a preset unfolded: 3 mm, Cut, 16 mm/s, 75%, a green Verified badge, the lines Source "Verified", "Burned and judged on a test grid", Machine KH-5030 (emulated), Test grid with the board's number and the square that was picked, Air assist on, and to the right, in place of the photograph, the line that there is no photo of this grid yet with "Add a photo" under it](images/15-library-preset.png)
 
 The other badges say the opposite in one word, and what each of them means is in
 [The material library](library.md#where-the-numbers-come-from). That is the point

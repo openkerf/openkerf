@@ -4,6 +4,7 @@ import { scratchFetch as fetch, assertScratch } from './scratch.mjs';
  *
  *   node gauntlet/docs-shots.mjs            # everything
  *   node gauntlet/docs-shots.mjs 07         # only the shots whose name contains "07"
+ *   node gauntlet/docs-shots.mjs 07 08 12   # several; a run stops at the first failure
  *
  * Same idea as `i-shots.mjs`, different purpose. That one photographs every screen
  * twice to compare two languages; this one photographs each screen once, in
@@ -31,7 +32,8 @@ await assertScratch(BASE);
 // machine. It was an absolute path with a home directory in it, which in a public
 // repository is both a name nobody needs and a script that only runs here.
 const OUT = new URL('../../docs/images', import.meta.url).pathname;
-const only = process.argv[2] ?? null;
+const filters = process.argv.slice(2);
+const only = filters.length ? filters : null;
 
 mkdirSync(OUT, { recursive: true });
 
@@ -397,7 +399,14 @@ async function open(path = '/', { width = 1440, height = 900, route = null } = {
 	await page.goto(BASE + path, { waitUntil: 'domcontentloaded', timeout: 30000 });
 	// Not `networkidle`: the status connection stays open for as long as the app
 	// runs, so that state never arrives. Wait for the app to have drawn instead.
-	await page.waitForSelector('.statusbar, .setup, .card', { timeout: 20000 });
+	// Any one of them visible: `waitForSelector` takes the first in document order, and
+	// with a Ruida active that is the closed "Operate machine" fold, which Playwright
+	// does not count as visible — the wait then ran out on a page long since drawn.
+	await page
+		.locator('.statusbar, .setup, .card')
+		.filter({ visible: true })
+		.first()
+		.waitFor({ timeout: 20000 });
 	await page.waitForTimeout(900);
 	// The notification prompt floats over the bottom right when it turns up. It is
 	// about this browser profile, not about the app, so it does not belong in the
@@ -455,7 +464,7 @@ async function shot(name, page, { selector = null, pad = 0, fullPage = false } =
 	console.log('  ✓', name);
 }
 
-const wanted = (name) => !only || name.includes(only);
+const wanted = (name) => !only || only.some((part) => name.includes(part));
 
 /** Open, photograph, close — the shape almost every shot has. */
 async function scene(name, path, options = {}, step = null) {
@@ -835,8 +844,11 @@ await scene('18-generators.png', `/?tab=design&select=${ELEMENTS[3] ?? ''}`, {},
 await scene('19-clipart.png', '/?tab=design', {}, async (page) => {
 	await page.locator(TOOL.clipart).click();
 	await page.waitForSelector(DIALOG, { timeout: 10000 });
-	await page.locator(`${DIALOG} .bar input[type="search"]`).fill('star');
-	await page.locator(`${DIALOG} .bar button`).first().click();
+	const search = page.locator(`${DIALOG} .bar input[type="search"]`);
+	await search.fill('star');
+	// Enter, as the window itself says: the first button in the bar is now the width
+	// field's minus, so "the first button" no longer searched.
+	await search.press('Enter');
 	await page.waitForTimeout(6000);
 });
 
@@ -1601,7 +1613,13 @@ if (wanted('36')) {
 if (wanted('37')) {
 	const text = await seedSeries();
 	if (!text) throw new Error('37: no text on the bed to read the list');
-	await api('POST', '/api/series/start');
+	// The scratch server refuses `/api/series/start` with the other execution routes, so
+	// there is no run to photograph there; a picture without one would be of the wrong
+	// state under the right name. Skipped, and said, so the old picture stays.
+	const started = await api('POST', '/api/series/start').catch(() => null);
+	if (!started) {
+		console.log('  – 37-series-run.png skipped: this server refuses /api/series/start');
+	} else {
 	// Twice, because the picture is of a run in the middle and not of one that has
 	// just begun: the third plate is the first that has a before and an after.
 	await api('POST', '/api/series/advance');
@@ -1669,6 +1687,7 @@ if (wanted('37')) {
 	// A run left going would refuse the ordinary Burn button in the next person's
 	// browser, with a sentence about a series they never started.
 	await api('POST', '/api/series/stop');
+	}
 }
 
 /**
@@ -1875,6 +1894,10 @@ if (wanted('39')) {
 			await page.locator(TOOL.library).click();
 			await page.waitForSelector(DIALOG, { timeout: 10000 });
 			await page.waitForTimeout(2600);
+			// The offer lives in the fold "Find starting points" under the search and the
+			// filters, closed until you open it; the button is inside.
+			await page.locator(`${DIALOG} details.starter-disclosure > summary`).click();
+			await page.waitForTimeout(400);
 			await page.getByRole('button', { name: 'Show what would suit this laser' }).click();
 			await page.waitForTimeout(1200);
 		}
@@ -2105,7 +2128,7 @@ if (wanted('41') || wanted('42') || wanted('43') || wanted('44')) {
 			// paragraph in the handbook. Nothing here writes a board; the preview route only
 			// plans.
 			const material = await birchWithCutSetting();
-			await scene('43-board-extras.png', '/?tab=design', { selector: '.schakelaars' }, async (page) => {
+			await scene('43-board-extras.png', '/?tab=design', { selector: '.schakelaars', height: 1250 }, async (page) => {
 				await page.locator(TOOL.testgrid).click();
 				await page.waitForSelector(DIALOG, { timeout: 10000 });
 				const picker = page
@@ -2113,6 +2136,11 @@ if (wanted('41') || wanted('42') || wanted('43') || wanted('44')) {
 					.first();
 				await picker.selectOption(String(material.id));
 				await page.waitForTimeout(1200);
+				// The switches sit in the fold "Layout and extras", closed unless something in
+				// it is refused.
+				const fold = page.locator(`${DIALOG} details.layout-options`);
+				if (!(await fold.evaluate((node) => node.open))) await fold.locator(':scope > summary').click();
+				await page.waitForTimeout(300);
 				// `setChecked` and not `check`: 41 and 42 leave boards on this material whose
 				// settings the form adopts, so either switch may already be on.
 				await page.locator('.schakelaars label:has-text("QR code") input').setChecked(true);
@@ -2168,6 +2196,173 @@ if (wanted('41') || wanted('42') || wanted('43') || wanted('44')) {
 				}
 			);
 		}
+	}
+}
+
+// ═══════════════════════════ 11. selecting, removing a layer, a Ruida at work
+
+/**
+ * The machine state a shot asked for, through the emulator, and back to rest afterwards.
+ *
+ * `POST /api/gauntlet/state` answers once our own line reads the new state back, so the
+ * picture is taken of what the line says and not of a guess. A job on the line is the
+ * scratch server's one simulated thing (`state.job`, `scratch_server.py`); everything else
+ * is the emulator answering.
+ */
+async function machineState(body) {
+	const answer = await api('POST', '/api/gauntlet/state', body);
+	if (!answer?.settled) throw new Error(`the emulator did not settle on ${JSON.stringify(body)}`);
+	return answer;
+}
+const AT_REST = { connection: 'connected', phase: 'idle', second_client: false, job: null };
+
+/**
+ * A text inside a red outline: the case the drag box got wrong before 11 October, when a
+ * box around the text took the outline as well. One outline in a cut layer, the word in an
+ * engrave layer, and nothing else, so the box in the picture is the only thing happening.
+ */
+async function seedTextInOutline() {
+	await clear();
+	const cut = await api('POST', '/api/design/operations', {
+		type: 'cut',
+		label: 'Outline',
+		speed: 12,
+		power_percent: 65
+	});
+	const engrave = await api('POST', '/api/design/operations', {
+		type: 'engrave',
+		label: 'Name',
+		speed: 250,
+		power_percent: 22
+	});
+	const put = async (shape, layer) => {
+		const made = await api('POST', '/api/design/elements', shape);
+		const id = made?.ids?.[0];
+		if (id && layer?.id) {
+			// Out of every layer, the one the engine makes for the text's own colour included.
+			const now = await api('GET', '/api/design');
+			for (const op of (now?.operations ?? []).filter((o) => !o.grid))
+				await api('POST', '/api/design/unassign', { ids: [id], operation_id: op.id });
+			await api('POST', '/api/design/assign', { ids: [id], operation_id: layer.id });
+		}
+		return id;
+	};
+	const outline = await put(
+		{ type: 'rect', x_mm: 60, y_mm: 60, width_mm: 220, height_mm: 110, corner_radius_mm: 10 },
+		cut
+	);
+	const text = await put(
+		{ type: 'text', x_mm: 95, y_mm: 128, text: 'Workshop', font_size_mm: 34 },
+		engrave
+	);
+	await api('POST', '/api/design/operations/prune');
+	return { outline, text };
+}
+
+/**
+ * A drag box caught half way: the mouse is down and moving, not yet let go, so the box is
+ * on screen with its edge — solid for a window, dashed for a crossing box. The corners are
+ * worked out from where the browser draws the two shapes, never from millimetres and a
+ * zoom that might change.
+ */
+async function dragHalfway(page, mode) {
+	await page.keyboard.press('3');
+	await page.waitForTimeout(1000);
+	const box = async (id) => page.locator(`[data-el="${id}"]`).first().boundingBox();
+	const ids = await page.evaluate(() => [...new Set([...document.querySelectorAll('[data-el]')].map((n) => n.getAttribute('data-el')))]);
+	const boxes = (await Promise.all(ids.map(box))).filter(Boolean);
+	// The outline is the larger of the two, the word the smaller.
+	boxes.sort((a, b) => b.width * b.height - a.width * a.height);
+	const [outline, word] = boxes;
+	if (!outline || !word) throw new Error(`${mode}: the outline and the word are not both on the bed`);
+	let from;
+	let to;
+	if (mode === 'window') {
+		// Left to right, wholly around the word and wholly inside the outline.
+		from = { x: word.x - 14, y: word.y - 14 };
+		to = { x: word.x + word.width + 14, y: word.y + word.height + 14 };
+	} else {
+		// Right to left, from outside the outline across its right-hand edge into the
+		// last letters: the box touches both, though it holds neither.
+		from = { x: outline.x + outline.width + 16, y: word.y + word.height * 0.25 };
+		to = { x: word.x + word.width * 0.7, y: word.y + word.height * 0.85 };
+	}
+	await page.mouse.move(from.x, from.y);
+	await page.mouse.down();
+	const steps = 12;
+	for (let i = 1; i <= steps; i++) {
+		await page.mouse.move(from.x + ((to.x - from.x) * i) / steps, from.y + ((to.y - from.y) * i) / steps);
+		await page.waitForTimeout(20);
+	}
+	await page.locator('.band').first().waitFor({ timeout: 5000 });
+	await page.waitForTimeout(300);
+}
+
+for (const [name, mode] of [
+	['50-select-window.png', 'window'],
+	['51-select-crossing.png', 'crossing']
+]) {
+	if (!wanted(name)) continue;
+	await seedTextInOutline();
+	// A shorter window than the rest: the picture is about a box and two shapes, and the
+	// panel beside them says nothing until the mouse is let go.
+	await scene(name, '/?tab=design', { height: 760 }, async (page) => {
+		await dragHalfway(page, mode);
+	});
+}
+
+/**
+ * Removing a layer that still holds shapes: the question under the row, with the layer the
+ * app proposes for them already chosen. "Fine lines" holds two rectangles, and the proposal
+ * is the other engrave layer. Nothing is pressed — "Move and remove" would change the
+ * drawing, and the picture is of the question.
+ */
+if (wanted('52')) {
+	await seed();
+	await scene('52-layer-remove.png', '/?tab=layers', { selector: '.panel' }, async (page) => {
+		await page.getByRole('button', { name: 'More for Fine lines' }).click();
+		await page.getByRole('menuitem', { name: /^Remove layer/ }).click();
+		await page.locator('.confirm.drop-ask').waitFor({ timeout: 5000 });
+		await page.locator('.confirm.drop-ask').scrollIntoViewIfNeeded();
+		await page.waitForTimeout(400);
+	});
+}
+
+/**
+ * A Ruida job under way, with its progress made of the estimate.
+ *
+ * The emulator holds the running status word; the job on the line is the scratch server's
+ * simulation (75 s burned of an estimated 120 s, named "Sheet 1 (simulated)"), because a
+ * real one needs `/api/job/start`, which a documentation run never presses. What the panel,
+ * the canvas and the status bar make of that job is the app's own rendering.
+ */
+if (wanted('53')) {
+	await seed();
+	await machineState({ connection: 'connected', phase: 'running', job: { ran: 75, estimate: 120 } });
+	try {
+		await scene('53-job-running.png', '/?tab=job', {}, async (page) => {
+			await page.waitForTimeout(2500);
+		});
+	} finally {
+		await machineState(AT_REST);
+	}
+}
+
+/**
+ * "Connected, but not alone": the emulator loses two of every five status answers, the way
+ * a KH-5030 did with a second program on it, until our own line raises the warning. The
+ * state call returns once the line has said so.
+ */
+if (wanted('54')) {
+	await seed();
+	await machineState({ second_client: true });
+	try {
+		await scene('54-second-client.png', '/?tab=design', {}, async (page) => {
+			await page.locator('.secondclient').waitFor({ timeout: 20000 });
+			await page.waitForTimeout(800);
+		});
+	} finally {
+		await machineState(AT_REST);
 	}
 }
 

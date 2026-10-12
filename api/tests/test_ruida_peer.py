@@ -285,3 +285,18 @@ def test_shutdown_leaves_no_thread_and_frees_the_port():
     assert peer._socket.fileno() == -1
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as again:
         again.bind((LOCALHOST, port))
+
+
+def test_a_silent_peer_loses_every_packet_until_it_speaks_again(job, client):
+    """`silent = True` is a controller switched off: nothing answers, for as long as it
+    lasts, and the first packet after it is answered as ever."""
+    move = frame(job, a_move(job))
+    with ruida_peer() as peer:
+        peer.silent = True
+        for _ in range(3):
+            client.sendto(move, (LOCALHOST, peer.send_port))
+        assert answers(client, job) == []
+        peer.silent = False
+        client.sendto(move, (LOCALHOST, peer.send_port))
+        assert [a for a, _ in answers(client, job)] == [ACK]
+        assert [e.action for e in peer.received] == ["ignored"] * 3 + ["ack"]

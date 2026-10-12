@@ -172,7 +172,7 @@ whole-list version **The layers are already in burn order**.
 
 ## Speed, power and passes
 
-![An opened layer showing its colour swatches, name, kind of operation and the further settings underneath.](images/10-layer-detail.png)
+![The first layer, "Outline", opened: under its speed, power and passes the Name field, Kind of operation with Cut chosen out of Cut, Engrave, Raster and Dots, a closed fold "About operation types", Order with Earlier and Later, and a red "Remove layer…".](images/10-layer-detail.png)
 
 The three fields are labelled **Speed**, **Power** and **Passes** in the row itself: adjusting a value next to a
 running machine should not cost a submenu. Speed is in mm/s and goes down to
@@ -186,6 +186,12 @@ the same way at that width; its own tooltip carries it in full.
 
 Changing speed or power also writes the memory for that layer's colour, so the
 strip under the bed reports the new figures at once.
+
+On a Ruida every layer burns at its own speed, the first one included. The engine
+wrote the first layer of a job at its default of 10 mm/s — measured in the file: all
+465 cuts of a 150 mm/s raster layer at 10 mm/s — and OpenKerf now gives the
+controller each layer's speed itself. A raster burned at 150 mm/s on the KH-5030
+afterwards came out evenly light.
 
 Open the fold for **Name**, **Kind of operation**, and fabrication settings. Click the coloured chip for the ten colour swatches and the colour memory.
 
@@ -333,6 +339,8 @@ nothing moves. Removing
 everything is **Remove all layers…** in the **List** menu, which asks **Throw away
 all {n} layers?** and says in the same breath what stays — the shapes on the bed,
 in no layer after this, and any test grids.
+
+![The Layers tab with the question under the row "Fine lines", which holds two shapes: "“Fine lines” holds 2 shapes. Move them to another layer before this one goes?", a "Move to" list with "Caption" chosen — the other engrave layer, since no layer has the same colour — and the buttons "Cancel" and "Move and remove". Under a rule: "Removing without moving leaves 2 shapes in no layer; they will not burn." and a red "Remove only".](images/52-layer-remove.png)
 
 ## Making a layer
 

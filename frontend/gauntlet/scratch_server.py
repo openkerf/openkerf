@@ -1,6 +1,14 @@
-"""Hardware-free disposable API for UI checks; never loads driver plugins."""
+"""Hardware-free disposable API for UI checks.
+
+Default: the dummy driver only, with simulated status. `--ruida-emulator`: a Ruida
+device (path `ruida`) on OpenKerf's own line to the engine's emulator on 127.0.0.1
+(`api/tests/ruida_peer.py`), so the interface's real Ruida code paths can be seen.
+Either way nothing leaves this computer.
+"""
 import argparse
+import os
 import signal
+import sys
 import tempfile
 import time
 from pathlib import Path
@@ -11,7 +19,32 @@ from fastapi import Body, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 
-def bootstrap(root, frontend=None):
+#: The status words a KH-5030 gave on 11 October (CLAUDE.md, "Pending hardware
+#: validation"); "moving" has no `peer.state` of its own in the emulator.
+KH5030_MOVING_WORD = 16975360
+
+#: `second_client`: 2 of every 5 status answers lost, the ~40 % measured with a second
+#: program on the controller (CLAUDE.md, "One program per Ruida controller").
+SECOND_CLIENT_PATTERN = (True, False, True, False, False)
+
+
+def start_ruida_peer():
+    """The emulator peer on 127.0.0.1 at a free port; the API's Ruida links go there."""
+    tests = str(Path(__file__).resolve().parents[2] / "api" / "tests")
+    if tests not in sys.path:
+        sys.path.insert(0, tests)
+    from ruida_peer import RuidaPeer
+
+    peer = RuidaPeer(host="127.0.0.1", send_port=0).start()
+    # Read by `Links._make` for every Ruida link this process makes.
+    os.environ["OPENKERF_RUIDA_SEND_PORT"] = str(peer.send_port)
+    os.environ["OPENKERF_RUIDA_LISTEN_PORT"] = "0"
+    return peer
+
+
+def bootstrap(root, frontend=None, ruida_emulator=False):
+    """The kernel, the server and the marker. With `ruida_emulator` the server carries
+    the running peer as `server.gauntlet_peer`; whoever bootstraps closes it."""
     root = Path(root).resolve()
     if not root.is_relative_to(Path(tempfile.gettempdir()).resolve()) and not root.is_relative_to(Path("/tmp").resolve()):
         raise ValueError("Scratch storage must be in the temporary directory")
@@ -23,25 +56,62 @@ def bootstrap(root, frontend=None):
     from meerk40t.extra import cag, hershey, param_functions, vectrace
     from meerk40t.fill import fills
     from meerk40t.image import imagetools
-    for module in (basedevice, dummydevice, core, imagetools, vectrace, param_functions, fills, cag, hershey, svg_io):
+    modules = [basedevice, dummydevice, core, imagetools, vectrace, param_functions, fills, cag, hershey, svg_io]
+    peer = None
+    if ruida_emulator:
+        # Before any Ruida device exists: the engine's own session must never be made
+        # (`ruida/closed.py`), exactly as our plugin does at `register`.
+        from openkerf_api.ruida.closed import install as keep_the_engine_ruida_closed
+        from openkerf_api.ruida_speed import install as repair_ruida_speed
+        keep_the_engine_ruida_closed()
+        repair_ruida_speed()
+        from meerk40t.extra import coolant
+        from meerk40t.ruida import plugin as ruida_plugin
+        # coolant before the driver: the Ruida service claims a coolant channel at init.
+        modules += [coolant, ruida_plugin]
+        peer = start_ruida_peer()
+    for module in modules:
         kernel.add_plugin(module.plugin)
     kernel(partial=True)
     from openkerf_api.rasterizer import register
     register(kernel)
-    kernel.console("service device start dummy 0\n")
-    kernel.device.label = "Desktop review (simulated)"
+    if ruida_emulator:
+        kernel.console("service device start -i ruida\n")
+        if getattr(kernel.device, "path", None) != "ruida":
+            peer.close()
+            raise RuntimeError("The scratch Ruida did not become the active machine at path 'ruida'")
+        kernel.device.label = "KH-5030 (emulated)"
+        kernel.device.address = "127.0.0.1"
+    else:
+        kernel.console("service device start dummy 0\n")
+        kernel.device.label = "Desktop review (simulated)"
     kernel.device.bedwidth, kernel.device.bedheight = "500mm", "300mm"
     kernel.device.realize()
     server = ApiServer(kernel, port=8092, bind="127.0.0.1", frontend=frontend,
                        library_path=root / "library.db", operations_path=root / "operations.cfg",
                        projects=root / "projects")
-    # Let the normal library profile flow recognize this isolated dummy device.
+    server.gauntlet_peer = peer
+    # Let the normal library profile flow recognize this isolated device.
     server.machines._mark_configured(kernel.device)
+    # Searching the network sends a Ruida probe to every address on the subnet, a real
+    # controller included. The scratch server looks at USB and serial only.
+    from openkerf_api.machines import MachineScanner
+    def scan(network=True, seconds=2.0):
+        found = MachineScanner(server.machines.catalog()).scan(network=False, seconds=seconds)
+        if network:
+            found["notes"].append("Network not searched: the scratch server never probes the local network.")
+        return found
+    server.machines.scan = scan
     marker = {"marker": "openkerf-gauntlet-v1", "isolated": True, "hardware": False,
               "paths": {"kernel": str(kernel._config_file), "operations": str(root / "operations.cfg"),
                         "library": str(root / "library.db"), "projects": str(root / "projects"),
                         "workdir": kernel.os_information["WORKDIR"]}}
-    state = {"connection": "disconnected", "phase": "idle", "z_step": False}
+    if ruida_emulator:
+        marker["emulator"] = {"ruida": f"127.0.0.1:{peer.send_port}"}
+        state = {"connection": "connected", "phase": "idle", "second_client": False, "z_step": False,
+                 "job": None}
+    else:
+        state = {"connection": "disconnected", "phase": "idle", "z_step": False}
     # Only the disposable drawing planner sees this simulated capability.
     server.drawing.z_step_supported = lambda: state["z_step"]
     marker["state"] = state
@@ -67,9 +137,106 @@ def bootstrap(root, frontend=None):
             device["spooler"] = {"present": True, "idle": not jobs, "queue_length": len(jobs), "jobs": jobs}
         return payload
 
-    server._status_payload = visual_status
+    if not ruida_emulator:
+        server._status_payload = visual_status
+
+    def until(predicate, seconds):
+        deadline = time.monotonic() + seconds
+        while time.monotonic() < deadline:
+            if predicate():
+                return True
+            time.sleep(0.05)
+        return predicate()
+
+    def simulate_job(link):
+        """
+        SIMULATED: a job on the line for the status payload, nothing on the emulator.
+
+        A real job needs `start_job`, which the execution guard refuses here, so the
+        link's `job()` — the one thing `StatusReader` reads for a Ruida's progress — is
+        answered from `state["job"]` (`{"ran": s, "estimate": s}`) while the phase is
+        running or paused, under a name that says it is simulated. The emulator only
+        holds the matching status word. Any other phase, or `job: null`, takes it away.
+        """
+        fake = state.get("job")
+        phase = state["phase"]
+        if fake and phase in ("running", "paused"):
+            snapshot = {"name": "Sheet 1 (simulated)", "phase": phase, "sent": 13, "total": 13,
+                        "detail": None, "started": time.time() - float(fake["ran"]),
+                        "finished": None, "estimate_seconds": float(fake["estimate"]),
+                        "running_seconds": float(fake["ran"])}
+            link.job = lambda: dict(snapshot)
+        else:
+            link.__dict__.pop("job", None)
+
+    def drive_emulator(body):
+        """
+        Put the emulator where `body` says and wait until our own line reads it back:
+        the connection first, then the machine's phase, then the second-client warning,
+        so a script that photographs next sees the state it asked for. `settled` says
+        whether every wait ended in time.
+        """
+        link = server.links.for_device(kernel.device)
+        reading = link.connection
+        settled = True
+        connection = body.get("connection")
+        if connection == "connected":
+            peer.silent = False
+            if reading()["state"] == "disconnected":
+                link.connect()
+        elif connection == "connecting":
+            # A line that was up and then hears nothing: the session probes on its own.
+            if reading()["state"] == "disconnected":
+                peer.silent = False
+                link.connect()
+            peer.silent = True
+        elif connection == "disconnected":
+            # Connecting to a controller that does not answer: the link lets it go after
+            # its bounded wait, with its own sentence naming the silent address.
+            peer.silent = True
+            link.disconnect()
+            link.connect()
+        if connection is not None:
+            settled = until(lambda: reading()["state"] == connection, 15)
+        connected = reading()["state"] == "connected"
+        if "phase" in body:
+            from meerk40t.ruida.rdjob import MEM_MACHINE_STATUS
+            phase = body["phase"]
+            peer.state = {"idle": "idle", "moving": "idle", "running": "busy", "paused": "hold"}[phase]
+            if phase == "moving":
+                peer.memory[MEM_MACHINE_STATUS] = KH5030_MOVING_WORD
+            else:
+                peer.memory.pop(MEM_MACHINE_STATUS, None)
+            if connected:
+                settled = until(lambda: link.machine_state() == phase, 15) and settled
+        if "job" in body or "phase" in body:
+            simulate_job(link)
+        if "second_client" in body:
+            peer.swallow_replies(SECOND_CLIENT_PATTERN if body["second_client"] else ())
+            if connected:
+                # Raising needs 5 of the last 20 reads lost, clearing 1 or fewer; each
+                # lost read waits out the session's reply time: seconds, not a moment.
+                warned = lambda: (reading().get("warning") is not None) == body["second_client"]
+                settled = until(warned, 30) and settled
+        return {**state, "settled": settled, "reading": reading(), "machine_state": link.machine_state()}
+
+    def valid_job(job):
+        if job is None:
+            return True
+        return (isinstance(job, dict) and set(job) == {"ran", "estimate"}
+                and all(type(job[k]) in (int, float) and job[k] >= 0 for k in job)
+                and job["estimate"] > 0)
 
     def set_state(body: dict = Body(...)):
+        if ruida_emulator:
+            if (set(body) - state.keys()
+                    or body.get("connection", state["connection"]) not in ("connected", "connecting", "disconnected")
+                    or body.get("phase", state["phase"]) not in ("idle", "moving", "running", "paused")
+                    or any(type(body.get(k, state[k])) is not bool for k in ("z_step", "second_client"))
+                    or not valid_job(body.get("job", state["job"]))):
+                raise HTTPException(422, "Unknown emulator fixture state")
+            state.update(body)
+            return drive_emulator(body)
         if set(body) - state.keys() or body.get("connection", state["connection"]) not in ("connected", "disconnected", "unknown") or body.get("phase", state["phase"]) not in ("idle", "queued", "running", "paused", "done") or type(body.get("z_step", state["z_step"])) is not bool:
             raise HTTPException(422, "Unknown visual fixture state")
         state.update(body)
@@ -103,7 +270,9 @@ def bootstrap(root, frontend=None):
         app.router.routes.insert(0, APIRoute("/api/gauntlet", lambda: marker, methods=["GET"]))
         app.router.routes.insert(0, APIRoute("/api/gauntlet/state", set_state, methods=["POST"]))
         app.router.routes.insert(0, APIRoute("/api/gauntlet/alarm", alarm, methods=["POST"]))
-        app.router.routes.insert(0, APIRoute("/api/capabilities", capabilities, methods=["GET"]))
+        if not ruida_emulator:
+            # With the emulator the real capabilities of the Ruida link answer.
+            app.router.routes.insert(0, APIRoute("/api/capabilities", capabilities, methods=["GET"]))
 
         @app.middleware("http")
         async def refuse_execution(request: Request, call_next):
@@ -124,13 +293,16 @@ def bootstrap(root, frontend=None):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--frontend", default=str(Path(__file__).resolve().parents[1] / "build"))
+    parser.add_argument("--ruida-emulator", action="store_true",
+                        help="a Ruida at path 'ruida' on the emulator on 127.0.0.1 instead of the dummy")
     args = parser.parse_args()
     root = Path(tempfile.mkdtemp(prefix="openkerf-gauntlet-", dir="/tmp"))
-    kernel, server, marker = bootstrap(root, args.frontend)
+    kernel, server, marker = bootstrap(root, args.frontend, ruida_emulator=args.ruida_emulator)
     signal.signal(signal.SIGTERM, lambda *_: (_ for _ in ()).throw(KeyboardInterrupt()))
     try:
         server.start()
-        print(f"Scratch UI: http://127.0.0.1:8092 | storage: {root}", flush=True)
+        emulated = f" | Ruida emulator: {marker['emulator']['ruida']}" if args.ruida_emulator else ""
+        print(f"Scratch UI: http://127.0.0.1:8092 | storage: {root}{emulated}", flush=True)
         while server._thread.is_alive():
             time.sleep(0.5)
     except KeyboardInterrupt:
@@ -141,4 +313,8 @@ if __name__ == "__main__":
         try:
             server.stop()
         finally:
-            kernel()
+            try:
+                kernel()
+            finally:
+                if server.gauntlet_peer is not None:
+                    server.gauntlet_peer.close()
