@@ -1449,7 +1449,7 @@
 			     selection. -->
 			{#if control.capabilities?.motion?.move}
 				<details class="fold machine-group card inset origin printcut" class:gezet={cut?.aligned === true} open={Boolean(cut?.aligned || cut?.lapsed || cutMarks.length)}>
-					<summary>{t('job.printcut')}{#if cut?.aligned}<span class="group-value"><span class="badge">{t('job.printcut.pose', { angle: i18n.number(Math.round((cut.angle_deg ?? 0) * 100) / 100) })}</span></span>{:else}<span class="group-value">{cutMarks.length ? `${cut?.marks.filter((m) => m.measured).length ?? 0} / 2` : t('job.state.off')}</span>{/if}</summary>
+					<summary>{t('job.printcut')}{#if cut?.aligned}<span class="group-value"><span class="badge mono">{size(cut.offset_mm?.x_mm ?? 0)}, {size(cut.offset_mm?.y_mm ?? 0)} mm · {i18n.number(Math.round((cut.angle_deg ?? 0) * 100) / 100)}°</span></span>{:else}<span class="group-value">{cutMarks.length ? `${cut?.marks.filter((m) => m.measured).length ?? 0} / 2` : t('job.state.off')}</span>{/if}</summary>
 					{#if cut?.aligned}
 						<p class="originPoint">
 							<span class="mono"
@@ -2025,8 +2025,15 @@
 	.machinevouw > summary .group-value {
 		margin-left: 0;
 	}
+	/* One column no wider than the panel. Left to `auto`, the column took the min-content
+	   of its widest child: the print-and-cut summary once carried its whole sentence in a
+	   badge that may not wrap (311 px), and every row in here — the jog pad, the step
+	   sizes, "Forget the alignment" — ran 26 px past a panel of 359 px at every viewport,
+	   clipped where the reader could not scroll to it. The summary now carries the value,
+	   like the zero point's, and the sentence stays in the body below it. */
 	.motion {
 		display: grid;
+		grid-template-columns: minmax(0, 1fr);
 		gap: var(--space-2);
 	}
 	.pad {

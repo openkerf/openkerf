@@ -19,6 +19,7 @@ import {
 	endOf,
 	headAt,
 	indexAt,
+	labelBox,
 	startOf,
 	stepPath,
 	travelPath,
@@ -310,6 +311,32 @@ test('numbers that stand clear of each other are all drawn', () => {
 	assert.equal(
 		marks.every((m) => m.more === 0),
 		true
+	);
+});
+
+test('on a 500 mm bed an inner square needs 21 mm to keep its own number', () => {
+	// Handbook shot 29: a square at 40,40 with a smaller one inside it. The window's
+	// unit is a 400th of its frame, and the frame is the 500 mm bed plus 3 % a side.
+	// With 20 mm between the two starting corners the outer square's number folded into
+	// the inner one's ("1+1") once the label claimed a quarter more air; 25 mm keeps
+	// both. Pinned so a change to the box shows up here and not in a picture.
+	const unit = (500 * 1.06) / 400;
+	const box = labelBox(unit);
+	assert.ok(Math.abs(box.height - 20.87) < 0.01, `box height ${box.height}`);
+	const nested = (gap: number) => [
+		...square(40 + gap, 'L1', 0),
+		...square(40, 'L1', 4)
+	];
+	assert.deepEqual(
+		contourStarts(nested(20), { box }).map((m) => [m.n, m.more]),
+		[[1, 1]]
+	);
+	assert.deepEqual(
+		contourStarts(nested(25), { box }).map((m) => [m.n, m.more]),
+		[
+			[1, 0],
+			[2, 0]
+		]
 	);
 });
 

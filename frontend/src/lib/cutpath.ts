@@ -255,6 +255,29 @@ export type NumberBox = {
 };
 
 /**
+ * The box a number on the cut-path drawing claims, for a drawing whose unit is `unit` mm.
+ *
+ * The ink is the `<text>` the window draws: font-size 9 units, offset 3 units right and
+ * 3 up, 0.62 of the size per character in IBM Plex Mono and 1.4 of it in height —
+ * measured on a drawn digit, whose box was 10.1 x 22 px, so the height is not one em but
+ * about 1.3 of it. Numbers whose boxes meet are folded into the lowest of them
+ * (`contourStarts`), which is what the question "does it cut inside before outside"
+ * needs.
+ *
+ * The box claimed is a quarter wider and taller than the ink. With the ink alone two
+ * labels could stand edge to edge — "3+14" against "18+2" read as one string,
+ * "3+1418+2", on the gauntlet's caption — so the allowance is the air between two
+ * labels: a character's width beside a four-character label, a line's gap above. The
+ * price is paid in millimetres, at every viewport alike: on a 500 mm bed (a unit of
+ * 1.325 mm) a box is 20.9 mm tall, so two contours starting 20 mm apart on a diagonal
+ * fold into "1+1" where they did not before the air was added.
+ */
+export function labelBox(unit: number): NumberBox {
+	const AIR = 1.25;
+	return { char: unit * 9 * 0.62 * AIR, height: unit * 9 * 1.4 * AIR, dx: unit * 3, dy: unit * -3 };
+}
+
+/**
  * The contours of the design, in the order they are cut, one entry each.
  *
  * A contour here is **one continuous burn**: the head arrives somewhere, burns

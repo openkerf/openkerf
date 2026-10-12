@@ -1140,9 +1140,14 @@ if (wanted('29')) {
 		const id = made?.ids?.[0];
 		if (id && layer?.id) {
 			// New shapes are filed by colour, so out of everything first and then into
-			// the layer this picture needs — the same dance as `seed()`.
-			for (const op of [cut?.id, engrave?.id])
-				if (op) await api('POST', '/api/design/unassign', { ids: [id], operation_id: op });
+			// the layer this picture needs — the same dance as `seedHero()`. Out of *every*
+			// layer, not only these two: on the first run after a server start the engine
+			// had filed each shape in a layer of its own as well, and the window showed
+			// every contour twice — 8 contours and 2,540 mm burning, where this drawing has
+			// 4 and 1,270 mm.
+			const now = await api('GET', '/api/design');
+			for (const op of (now?.operations ?? []).filter((o) => !o.grid))
+				await api('POST', '/api/design/unassign', { ids: [id], operation_id: op.id });
 			await api('POST', '/api/design/assign', { ids: [id], operation_id: layer.id });
 		}
 		return id;
@@ -1151,9 +1156,13 @@ if (wanted('29')) {
 	// folded into its neighbour when the two would overlap, and at this bed (500 mm, so
 	// a digit is about 16 mm tall on the drawing) an inner square 12 mm inside its outer
 	// one gave "1+1" in one spot instead of a 1 and a 2 — true, and useless as a picture
-	// of the order. 20 mm between the two starting corners keeps them apart.
+	// of the order. 20 mm between the two starting corners kept them apart until the
+	// window claimed a quarter more air around each label (`LABEL_AIR` in CutPath.svelte,
+	// on purpose): the box is now 9 x 1.4 x 1.25 units tall, a unit being 1/400 of the
+	// frame (530 mm here), so 20.9 mm, and 20 mm folded into "1+1" again — at every
+	// viewport alike, since the box is in millimetres. 25 mm clears it.
 	await put({ type: 'rect', x_mm: 40, y_mm: 40, width_mm: 80, height_mm: 80 }, cut);
-	await put({ type: 'rect', x_mm: 60, y_mm: 60, width_mm: 40, height_mm: 40 }, cut);
+	await put({ type: 'rect', x_mm: 65, y_mm: 65, width_mm: 30, height_mm: 30 }, cut);
 	await put({ type: 'rect', x_mm: 180, y_mm: 40, width_mm: 80, height_mm: 80 }, cut);
 	await put({ type: 'rect', x_mm: 40, y_mm: 160, width_mm: 220, height_mm: 15 }, engrave);
 	await api('POST', '/api/design/operations/prune');
